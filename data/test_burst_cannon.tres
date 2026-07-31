@@ -5,13 +5,14 @@
 
 [resource]
 script = ExtResource("1_spec")
-display_name = "Test Autocannon"
+display_name = "Test 5-Round Cannon"
 weapon_family = 0
 fire_effect_id = &"cannon_heavy"
 fire_rate = 2.0
 resource_type = 1
 resource_cost = 1.0
-magazine_capacity = 30
+magazine_capacity = 5
+reload_duration = 10.0
 effective_range = 2000.0
 max_range = 2000.0
 base_spread_degrees = 0.5

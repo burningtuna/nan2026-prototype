@@ -9,3 +9,6 @@ extends Resource
 @export var penetration := 0.0
 @export var splash_radius := 0.0
 @export var color := Color("ffd37a")
+@export var lifetime := 0.0
+@export var homing := false
+@export var homing_turn_speed_degrees := 0.0

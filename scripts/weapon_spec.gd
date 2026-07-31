@@ -19,7 +19,8 @@ enum ResourceType {
 @export var fire_rate := 2.0
 @export var resource_type := ResourceType.AMMO
 @export var resource_cost := 1.0
-@export var ammo_capacity := 30
+@export var magazine_capacity := 30
+@export var reload_duration := 0.0
 @export var effective_range := 140.0
 @export var max_range := 220.0
 @export var base_spread_degrees := 0.5
@@ -30,6 +31,9 @@ enum ResourceType {
 @export var visual_recoil_limit := 3.0
 @export var muzzle_flash_color := Color("fff1b5")
 @export var muzzle_flash_duration := 0.06
+@export var preparation_time := 0.0
+@export_range(0.0, 1.0) var preparation_move_speed_multiplier := 1.0
+@export_range(0.0, 1.0) var preparation_turn_speed_multiplier := 1.0
 @export var projectile: ProjectileSpec
 
 

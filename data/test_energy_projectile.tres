@@ -6,8 +6,8 @@
 [resource]
 script = ExtResource("1_spec")
 projectile_scene = ExtResource("2_scene")
-speed = 2000.0
-collision_radius = 1.0
-damage = 10.0
-damage_type = &"kinetic"
-color = Color(1, 0.827451, 0.478431, 1)
+speed = 4000.0
+collision_radius = 1.25
+damage = 14.0
+damage_type = &"energy"
+color = Color(0.333333, 0.811765, 1, 1)

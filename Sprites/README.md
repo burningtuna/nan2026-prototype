@@ -49,7 +49,7 @@ Every anchor mask has the same dimensions as its art PNG. Anchor masks are metad
 | `#0000FF` | Muzzle |
 | `#00FFFF` | Boost exhaust |
 
-Marker pixels must use exact opaque RGBA colors without antialiasing. Transparent pixels do not count as collision or target area.
+Marker pixels must use exact opaque RGBA colors without antialiasing. Outer transparent padding is excluded from each part's collision boundary; transparent holes inside that boundary remain hittable.
 
 ## Regeneration
 

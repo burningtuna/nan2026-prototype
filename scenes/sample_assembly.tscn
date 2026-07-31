@@ -29,7 +29,7 @@ offset_right = 390.0
 offset_bottom = 49.0
 theme_override_colors/font_color = Color(0.568627, 0.666667, 0.713726, 1)
 theme_override_font_sizes/font_size = 10
-text = "TWO RANDOM-MOVING AI UNITS / AUTO TARGET + FIRE"
+text = "AI1 CLOSE + EVADE PREP / AI2 HOLD 2000 + ATTACK"
 
 [node name="AgentStatus" type="Label" parent="UI"]
 offset_left = 12.0
@@ -52,3 +52,12 @@ grow_vertical = 0
 theme_override_colors/font_color = Color(0.501961, 1, 0.619608, 1)
 theme_override_font_sizes/font_size = 10
 text = "CAMERA: CALCULATING FRAME"
+
+[node name="ImpactStatus" type="Label" parent="UI"]
+offset_left = 12.0
+offset_top = 67.0
+offset_right = 390.0
+offset_bottom = 85.0
+theme_override_colors/font_color = Color(0.78, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 10
+text = "HITS: WAITING FOR IMPACT"

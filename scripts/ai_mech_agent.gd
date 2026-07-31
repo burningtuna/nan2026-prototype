@@ -1,9 +1,14 @@
 class_name AiMechAgent
 extends Node2D
 
+enum MovementType {
+	AGGRESSIVE,
+	RANGE_KEEPER,
+}
+
 const AnchorMap := preload("res://scripts/sprite_anchor_map.gd")
-const TEST_CANNON := preload("res://data/test_cannon.tres")
 const MUZZLE_FLASH_SCENE := preload("res://scenes/muzzle_flash.tscn")
+const PART_HITBOX := preload("res://scripts/part_hitbox.gd")
 
 const BODY_ART := "res://Sprites/Body-0001.png"
 const BODY_ANCHORS := "res://Sprites/Body-0001.anchors.png"
@@ -23,13 +28,47 @@ const BOOST_FRAMES := [
 
 @export var cruise_speed := 70.0
 @export var acceleration := 180.0
-@export var upper_turn_speed_degrees := 120.0
+@export var upper_turn_speed_degrees := 67.5
+@export var weapon_traverse_limit_degrees := 30.0
 @export var linked_fire_stagger := 0.12
-@export var reload_duration := 2.0
+@export var dash_speed := 140.0
+@export var dash_duration := 0.5
+@export var dash_cooldown := 1.0
+@export var fire_rate_multiplier := 1.0
+@export var weapon_range_multiplier := 1.0
+@export var movement_type := MovementType.AGGRESSIVE
+@export var preferred_range := 2000.0
+@export var evasion_range := 1500.0
 
 var opponent: AiMechAgent
 var velocity := Vector2.ZERO
 var shot_count := 0
+var dash_count := 0
+var homing_adjustment_count := 0
+var hitbox_count := 0
+var hit_count := 0
+var last_hit_part: StringName = &""
+var last_hit_aspect: StringName = &""
+var aspect_hit_counts := {
+	&"FRONT": 0,
+	&"SIDE": 0,
+	&"REAR": 0,
+}
+var landed_hits := {
+	WeaponSpec.WeaponFamily.BALLISTIC: 0,
+	WeaponSpec.WeaponFamily.MISSILE: 0,
+	WeaponSpec.WeaponFamily.ENERGY: 0,
+}
+var fired_shots := {
+	WeaponSpec.WeaponFamily.BALLISTIC: 0,
+	WeaponSpec.WeaponFamily.MISSILE: 0,
+	WeaponSpec.WeaponFamily.ENERGY: 0,
+}
+var missile_approaches := {
+	&"LEFT": 0,
+	&"RIGHT": 0,
+	&"REAR": 0,
+}
 
 var arena := Rect2(-360.0, -220.0, 720.0, 440.0)
 var projectile_layer: Node2D
@@ -39,12 +78,30 @@ var head_aim_node: Node2D
 var arm_aim_nodes: Array[Node2D] = []
 var boost_sprites: Array[AnimatedSprite2D] = []
 var weapons: Array[WeaponRuntime] = []
+var weapon_aim_valid: Array[bool] = []
 var movement_direction := Vector2.ZERO
+var maneuver_side := 1.0
+var evading := false
+var evasion_count := 0
+var reload_evasion_count := 0
+var reload_evasion_active := false
 var direction_time_remaining := 0.0
+var dash_decision_time_remaining := 0.0
+var dash_time_remaining := 0.0
+var dash_cooldown_remaining := 0.0
+var dash_direction := Vector2.ZERO
 var linked_fire_cooldown := 0.0
-var reload_time_remaining := 0.0
 var next_weapon_index := 0
 var rng := RandomNumberGenerator.new()
+var weapon_specs: Array[WeaponSpec] = []
+var preparing_weapon_index := -1
+var preparation_time_remaining := 0.0
+var preparation_started_count := 0
+var preparation_completed_count := 0
+var preparation_cancelled_count := 0
+var preparation_prediction_blocked_count := 0
+var aim_blocked_count := 0
+var range_blocked_count := 0
 
 
 func setup(
@@ -52,7 +109,8 @@ func setup(
 	shot_parent: Node2D,
 	movement_arena: Rect2,
 	random_seed: int,
-	team_color: Color
+	team_color: Color,
+	loadout: Array[WeaponSpec]
 ) -> void:
 	name = agent_name
 	projectile_layer = shot_parent
@@ -60,10 +118,12 @@ func setup(
 	rng.seed = random_seed
 	modulate = team_color
 	scale = Vector2.ONE * 4.0
+	weapon_specs = loadout
 
 
 func set_opponent(target: AiMechAgent) -> void:
 	opponent = target
+	_choose_direction()
 
 
 func ammo_remaining() -> int:
@@ -71,6 +131,94 @@ func ammo_remaining() -> int:
 	for weapon in weapons:
 		total += weapon.ammo
 	return total
+
+
+func register_hit(part_name: StringName, incoming_direction: Vector2) -> StringName:
+	hit_count += 1
+	last_hit_part = part_name
+	last_hit_aspect = _classify_hit_aspect(incoming_direction)
+	aspect_hit_counts[last_hit_aspect] = aspect_hit_counts.get(last_hit_aspect, 0) + 1
+	return last_hit_aspect
+
+
+func torso_forward() -> Vector2:
+	if upper_body == null:
+		return Vector2.UP
+	return -upper_body.global_transform.y.normalized()
+
+
+func aspect_hits(aspect: StringName) -> int:
+	return aspect_hit_counts.get(aspect, 0)
+
+
+func _classify_hit_aspect(incoming_direction: Vector2) -> StringName:
+	var direction_to_attacker := -incoming_direction.normalized()
+	var forward_dot := torso_forward().dot(direction_to_attacker)
+	if forward_dot >= cos(PI * 0.25):
+		return &"FRONT"
+	if forward_dot <= -cos(PI * 0.25):
+		return &"REAR"
+	return &"SIDE"
+
+
+func register_landed_hit(family: WeaponSpec.WeaponFamily) -> void:
+	landed_hits[family] = landed_hits.get(family, 0) + 1
+
+
+func landed_hits_for(family: WeaponSpec.WeaponFamily) -> int:
+	return landed_hits.get(family, 0)
+
+
+func fired_shots_for(family: WeaponSpec.WeaponFamily) -> int:
+	return fired_shots.get(family, 0)
+
+
+func register_homing_adjustment() -> void:
+	homing_adjustment_count += 1
+
+
+func register_missile_approach(approach: StringName) -> void:
+	missile_approaches[approach] = missile_approaches.get(approach, 0) + 1
+
+
+func is_preparing_attack() -> bool:
+	return preparing_weapon_index >= 0
+
+
+func preparation_label() -> String:
+	if preparing_weapon_index < 0:
+		return "--"
+	return "%s %.1f" % [weapons[preparing_weapon_index].spec.display_name, preparation_time_remaining]
+
+
+func maximum_weapon_range() -> float:
+	var maximum_range := 0.0
+	for weapon in weapons:
+		maximum_range = maxf(maximum_range, weapon.spec.max_range * weapon_range_multiplier)
+	return maximum_range
+
+
+func is_reloading_ballistic() -> bool:
+	for weapon in weapons:
+		if weapon.spec.weapon_family == WeaponSpec.WeaponFamily.BALLISTIC and weapon.is_reloading():
+			return true
+	return false
+
+
+func reload_count_for(family: WeaponSpec.WeaponFamily) -> int:
+	var count := 0
+	for weapon in weapons:
+		if weapon.spec.weapon_family == family:
+			count += weapon.reload_count
+	return count
+
+
+func reload_completed_count_for(family: WeaponSpec.WeaponFamily) -> int:
+	var count := 0
+	for weapon in weapons:
+		if weapon.spec.weapon_family == family:
+			count += weapon.reload_completed_count
+	return count
 
 
 func _ready() -> void:
@@ -83,7 +231,9 @@ func _ready() -> void:
 	add_child(upper_body)
 
 	_build_mech()
+	maneuver_side = -1.0 if rng.randi_range(0, 1) == 0 else 1.0
 	_choose_direction()
+	dash_decision_time_remaining = rng.randf_range(0.5, 1.5)
 
 
 func _physics_process(delta: float) -> void:
@@ -91,17 +241,26 @@ func _physics_process(delta: float) -> void:
 	_aim_at_opponent(delta)
 	_update_weapons(delta)
 	_update_boost_effect()
+	queue_redraw()
 
 
 func _draw() -> void:
 	draw_circle(Vector2.ZERO, 13.0, Color(0.2, 0.34, 0.42, 0.75), false, 0.25)
 	draw_circle(Vector2.ZERO, 17.0, Color(0.12, 0.22, 0.28, 0.65), false, 0.25)
+	if preparing_weapon_index >= 0:
+		var spec := weapons[preparing_weapon_index].spec
+		var progress := 1.0 - preparation_time_remaining / maxf(
+			spec.preparation_time * weapon_range_multiplier,
+			0.001
+		)
+		draw_arc(Vector2.ZERO, 20.0, -PI * 0.5, -PI * 0.5 + TAU * progress, 24, Color("ffd34d"), 1.0)
 
 
 func _update_random_movement(delta: float) -> void:
 	direction_time_remaining -= delta
 	if direction_time_remaining <= 0.0:
 		_choose_direction()
+	_update_strategy_direction()
 
 	var margin := 45.0
 	var safe_arena := arena.grow(-margin)
@@ -109,66 +268,166 @@ func _update_random_movement(delta: float) -> void:
 		movement_direction = (arena.get_center() - position).normalized()
 		direction_time_remaining = minf(direction_time_remaining, 0.6)
 
-	var target_velocity := movement_direction * cruise_speed
+	var turn_multiplier := 1.0
+	var move_multiplier := 1.0
+	if preparing_weapon_index >= 0:
+		var preparation_spec := weapons[preparing_weapon_index].spec
+		turn_multiplier = preparation_spec.preparation_turn_speed_multiplier
+		move_multiplier = preparation_spec.preparation_move_speed_multiplier
+
+	var desired_rotation := movement_direction.angle() + PI * 0.5
+	upper_body.rotation = rotate_toward(
+		upper_body.rotation,
+		desired_rotation,
+		deg_to_rad(upper_turn_speed_degrees) * turn_multiplier * delta
+	)
+	lower_body.rotation = upper_body.rotation
+	var forward := torso_forward()
+	var alignment := maxf(forward.dot(movement_direction), 0.0)
+	var target_velocity := forward * cruise_speed * move_multiplier * alignment
 	velocity = velocity.move_toward(target_velocity, acceleration * delta)
-	position += velocity * delta
+	var movement_step := velocity * delta
+	dash_cooldown_remaining = maxf(dash_cooldown_remaining - delta, 0.0)
+	if dash_time_remaining > 0.0:
+		var dash_step := minf(delta, dash_time_remaining)
+		movement_step += dash_direction * dash_speed * dash_step
+		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
+	else:
+		dash_decision_time_remaining -= delta
+		if (
+			dash_decision_time_remaining <= 0.0
+			and dash_cooldown_remaining <= 0.0
+			and preparing_weapon_index < 0
+			and alignment >= cos(deg_to_rad(10.0))
+		):
+			_start_random_dash()
+	position += movement_step
 	position = position.clamp(arena.position, arena.end)
 
-	if velocity.length_squared() > 4.0:
-		lower_body.rotation = velocity.angle() + PI * 0.5
-
-
 func _choose_direction() -> void:
-	var random_angle := rng.randf_range(-PI, PI)
-	movement_direction = Vector2.from_angle(random_angle)
 	direction_time_remaining = rng.randf_range(0.8, 2.2)
+	if rng.randf() < 0.35:
+		maneuver_side *= -1.0
+	if not is_instance_valid(opponent):
+		movement_direction = Vector2.from_angle(rng.randf_range(-PI, PI))
+
+
+func _update_strategy_direction() -> void:
+	if not is_instance_valid(opponent):
+		return
+	var target_vector := opponent.global_position - global_position
+	var distance := target_vector.length()
+	if distance <= 1.0:
+		return
+	var toward_target := target_vector / distance
+	var orbit_direction := toward_target.rotated(PI * 0.5 * maneuver_side)
+
+	if movement_type == MovementType.AGGRESSIVE:
+		var should_evade := opponent.is_preparing_attack()
+		if should_evade and not evading:
+			evasion_count += 1
+			dash_decision_time_remaining = 0.0
+		evading = should_evade
+		if evading:
+			movement_direction = (orbit_direction - toward_target * 0.35).normalized()
+		elif distance > maximum_weapon_range() * 0.85:
+			movement_direction = toward_target
+		else:
+			movement_direction = orbit_direction
+		return
+
+	if is_reloading_ballistic():
+		if not reload_evasion_active:
+			reload_evasion_count += 1
+		reload_evasion_active = true
+		evading = true
+		movement_direction = (-toward_target + orbit_direction * 0.35).normalized()
+		return
+	reload_evasion_active = false
+	if is_preparing_attack():
+		evading = false
+		return
+	if _has_ready_weapon_in_range(distance):
+		evading = false
+		movement_direction = toward_target
+		return
+	var should_evade := distance < evasion_range
+	if should_evade and not evading:
+		evasion_count += 1
+	evading = should_evade
+	if distance < evasion_range:
+		movement_direction = (-toward_target + orbit_direction * 0.25).normalized()
+	elif distance > preferred_range * 1.05:
+		movement_direction = toward_target
+	elif distance < preferred_range * 0.95:
+		movement_direction = -toward_target
+	else:
+		movement_direction = orbit_direction
 
 	var center_pull := arena.get_center() - position
 	if center_pull.length() > minf(arena.size.x, arena.size.y) * 0.35:
 		movement_direction = (movement_direction + center_pull.normalized() * 0.8).normalized()
 
 
-func _aim_at_opponent(delta: float) -> void:
+func _start_random_dash() -> void:
+	dash_direction = torso_forward()
+	dash_time_remaining = dash_duration
+	dash_cooldown_remaining = dash_cooldown
+	dash_decision_time_remaining = rng.randf_range(1.2, 3.2)
+	dash_count += 1
+
+
+func _aim_at_opponent(_delta: float) -> void:
 	if not is_instance_valid(opponent):
 		return
 
-	var target_vector := opponent.global_position - upper_body.global_position
-	if target_vector.length_squared() <= 4.0:
-		return
-
-	upper_body.global_rotation = rotate_toward(
-		upper_body.global_rotation,
-		target_vector.angle() + PI * 0.5,
-		deg_to_rad(upper_turn_speed_degrees) * delta
-	)
-
 	var head_vector := opponent.global_position - head_aim_node.global_position
-	head_aim_node.global_rotation = head_vector.angle() + PI * 0.5
+	var head_target_rotation := wrapf(
+		head_vector.angle() + PI * 0.5 - upper_body.global_rotation,
+		-PI,
+		PI
+	)
+	var traverse_limit := deg_to_rad(weapon_traverse_limit_degrees)
+	head_aim_node.rotation = head_target_rotation if absf(head_target_rotation) <= traverse_limit else 0.0
+
+	weapon_aim_valid.clear()
 	for aim_node in arm_aim_nodes:
 		var arm_vector := opponent.global_position - aim_node.global_position
-		aim_node.global_rotation = arm_vector.angle()
+		var desired_local_rotation := wrapf(arm_vector.angle() - upper_body.global_rotation, -PI, PI)
+		var traverse_delta := angle_difference(-PI * 0.5, desired_local_rotation)
+		var aim_is_valid := absf(traverse_delta) <= traverse_limit
+		aim_node.rotation = desired_local_rotation if aim_is_valid else -PI * 0.5
+		weapon_aim_valid.append(aim_is_valid)
 
 
 func _update_weapons(delta: float) -> void:
 	for weapon in weapons:
 		weapon.tick(delta)
 	linked_fire_cooldown = maxf(linked_fire_cooldown - delta, 0.0)
-
-	if reload_time_remaining > 0.0:
-		reload_time_remaining = maxf(reload_time_remaining - delta, 0.0)
-		if reload_time_remaining <= 0.0:
-			for weapon in weapons:
-				weapon.ammo = weapon.spec.ammo_capacity
+	if preparing_weapon_index >= 0:
+		preparation_time_remaining = maxf(preparation_time_remaining - delta, 0.0)
+		if preparation_time_remaining <= 0.0:
+			_finish_preparation()
 		return
 
-	if ammo_remaining() <= 0:
-		reload_time_remaining = reload_duration
-		return
 	_try_fire_linked_group()
 
 
+func _has_ready_weapon_in_range(distance: float) -> bool:
+	for weapon in weapons:
+		if weapon.can_fire() and distance <= weapon.spec.max_range * weapon_range_multiplier:
+			return true
+	return false
+
+
 func _try_fire_linked_group() -> void:
-	if linked_fire_cooldown > 0.0 or weapons.is_empty() or not is_instance_valid(opponent):
+	if (
+		linked_fire_cooldown > 0.0
+		or weapons.is_empty()
+		or not is_instance_valid(opponent)
+		or dash_time_remaining > 0.0
+		or (movement_type == MovementType.RANGE_KEEPER and is_reloading_ballistic())
+	):
 		return
 
 	for offset in weapons.size():
@@ -176,10 +435,86 @@ func _try_fire_linked_group() -> void:
 		var weapon := weapons[weapon_index]
 		if not weapon.can_fire():
 			continue
-		_fire_weapon(weapon)
+		if global_position.distance_to(opponent.global_position) > weapon.spec.max_range * weapon_range_multiplier:
+			range_blocked_count += 1
+			continue
+		if weapon_index >= weapon_aim_valid.size() or not weapon_aim_valid[weapon_index]:
+			aim_blocked_count += 1
+			continue
+		if weapon.spec.preparation_time > 0.0:
+			if not _can_complete_preparation(weapon_index):
+				preparation_prediction_blocked_count += 1
+				continue
+			_start_preparation(weapon_index)
+		else:
+			_fire_weapon(weapon)
 		next_weapon_index = (weapon_index + 1) % weapons.size()
 		linked_fire_cooldown = linked_fire_stagger
 		return
+
+
+func _start_preparation(weapon_index: int) -> void:
+	preparing_weapon_index = weapon_index
+	preparation_time_remaining = weapons[weapon_index].spec.preparation_time * weapon_range_multiplier
+	preparation_started_count += 1
+
+
+func _can_complete_preparation(weapon_index: int) -> bool:
+	var weapon_spec := weapons[weapon_index].spec
+	var duration := weapon_spec.preparation_time * weapon_range_multiplier
+	if duration <= 0.0 or not is_instance_valid(opponent):
+		return true
+
+	var future_self_position := global_position + velocity * weapon_spec.preparation_move_speed_multiplier * duration
+	var future_target_position := opponent.global_position + opponent.velocity * duration
+	var future_aim_vector := future_target_position - future_self_position
+	if future_aim_vector.length_squared() <= 1.0:
+		return true
+
+	var desired_torso_rotation := movement_direction.angle() + PI * 0.5
+	var turn_amount := (
+		deg_to_rad(upper_turn_speed_degrees)
+		* weapon_spec.preparation_turn_speed_multiplier
+		* duration
+	)
+	var future_torso_rotation := rotate_toward(
+		upper_body.global_rotation,
+		desired_torso_rotation,
+		turn_amount
+	)
+	var future_local_aim := wrapf(
+		future_aim_vector.angle() - future_torso_rotation,
+		-PI,
+		PI
+	)
+	var future_traverse := absf(angle_difference(-PI * 0.5, future_local_aim))
+
+	var possible_target_displacement := (
+		opponent.cruise_speed * duration
+		+ opponent.dash_speed * opponent.dash_duration
+	)
+	var target_distance := maxf(future_aim_vector.length(), 1.0)
+	var maneuver_margin := asin(clampf(possible_target_displacement / target_distance, 0.0, 0.95))
+	var fixed_margin := deg_to_rad(2.0)
+	var traverse_limit := deg_to_rad(weapon_traverse_limit_degrees)
+	return future_traverse + maneuver_margin + fixed_margin <= traverse_limit
+
+
+func _finish_preparation() -> void:
+	var weapon_index := preparing_weapon_index
+	preparing_weapon_index = -1
+	preparation_time_remaining = 0.0
+	if (
+		weapon_index < 0
+		or weapon_index >= weapons.size()
+		or weapon_index >= weapon_aim_valid.size()
+		or not weapon_aim_valid[weapon_index]
+		or not weapons[weapon_index].can_fire()
+	):
+		preparation_cancelled_count += 1
+		return
+	_fire_weapon(weapons[weapon_index])
+	preparation_completed_count += 1
 
 
 func _fire_weapon(weapon: WeaponRuntime) -> void:
@@ -191,13 +526,16 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 	if aim_vector.length_squared() <= 1.0:
 		aim_vector = muzzle.global_transform.x
 
-	var spread_degrees := weapon.spec.spread_at_distance(aim_vector.length())
+	var spread_degrees := weapon.spec.spread_at_distance(
+		aim_vector.length() / maxf(weapon_range_multiplier, 0.001)
+	)
 	var shot_seed := rng.randi()
 	var spread_angle := deg_to_rad(rng.randf_range(-spread_degrees, spread_degrees))
 	var launch_direction := aim_vector.normalized().rotated(spread_angle)
 	_spawn_projectile(weapon, muzzle.global_position, launch_direction, shot_seed, spread_degrees)
 	_spawn_muzzle_flash(weapon.spec, muzzle.global_position, launch_direction)
 	shot_count += 1
+	fired_shots[weapon.spec.weapon_family] = fired_shots.get(weapon.spec.weapon_family, 0) + 1
 
 
 func _spawn_projectile(
@@ -212,11 +550,13 @@ func _spawn_projectile(
 	projectile.configure(
 		projectile_spec,
 		direction,
-		weapon.spec.max_range,
+		weapon.spec.max_range * weapon_range_multiplier,
 		self,
 		weapon.part_name,
 		shot_seed,
-		spread_degrees
+		spread_degrees,
+		weapon.spec.weapon_family,
+		opponent
 	)
 	projectile_layer.add_child(projectile)
 	projectile.global_position = spawn_position
@@ -243,6 +583,7 @@ func _build_mech() -> void:
 	var body_sprite := _create_sprite(BODY_ART, 3)
 	body_sprite.name = "BodySprite"
 	upper_body.add_child(body_sprite)
+	_attach_hitbox(body_sprite, &"Body", 3)
 
 	var backpack_socket := AnchorMap.one(body_map, &"backpack_socket")
 	_attach_static_part(upper_body, "Backpack", BACKPACK_ART, BACKPACK_ANCHORS, backpack_socket, 1)
@@ -255,12 +596,12 @@ func _build_mech() -> void:
 	head_aim_node = _attach_rotating_head(upper_body, head_socket, 5)
 
 	var left_arm_socket := AnchorMap.one(body_map, &"left_arm_socket")
-	var left_arm := _attach_aiming_arm(upper_body, "LeftArm", left_arm_socket, 4)
+	var left_arm := _attach_aiming_arm(upper_body, "LeftArm", left_arm_socket, 4, weapon_specs[0])
 	arm_aim_nodes.append(left_arm["aim"] as Node2D)
 	weapons.append(left_arm["weapon"] as WeaponRuntime)
 
 	var right_arm_socket := AnchorMap.one(body_map, &"right_arm_socket")
-	var right_arm := _attach_aiming_arm(upper_body, "RightArm", right_arm_socket, 4)
+	var right_arm := _attach_aiming_arm(upper_body, "RightArm", right_arm_socket, 4, weapon_specs[1])
 	arm_aim_nodes.append(right_arm["aim"] as Node2D)
 	weapons.append(right_arm["weapon"] as WeaponRuntime)
 
@@ -284,6 +625,7 @@ func _attach_static_part(
 	sprite.name = "%sSprite" % part_name
 	sprite.position = -mount
 	part_root.add_child(sprite)
+	_attach_hitbox(sprite, StringName(part_name), z_index_value)
 
 	return {
 		"root": part_root,
@@ -296,7 +638,8 @@ func _attach_aiming_arm(
 	parent: Node2D,
 	part_name: String,
 	socket_position: Vector2,
-	z_index_value: int
+	z_index_value: int,
+	weapon_spec: WeaponSpec
 ) -> Dictionary:
 	var anchor_map := AnchorMap.load_map(ARM_ANCHORS)
 	var mount := AnchorMap.one(anchor_map, &"mount")
@@ -316,6 +659,7 @@ func _attach_aiming_arm(
 	sprite.name = "%sSprite" % part_name
 	sprite.position = -aim_pivot
 	aim_node.add_child(sprite)
+	_attach_hitbox(sprite, StringName(part_name), z_index_value)
 
 	var muzzles: Array[Marker2D] = []
 	var muzzle_positions := AnchorMap.many(anchor_map, &"muzzle")
@@ -327,7 +671,7 @@ func _attach_aiming_arm(
 		muzzles.append(muzzle)
 
 	var weapon := WeaponRuntime.new()
-	weapon.setup(TEST_CANNON, sprite, muzzles, StringName(part_name))
+	weapon.setup(weapon_spec, sprite, muzzles, StringName(part_name), fire_rate_multiplier)
 	return {
 		"aim": aim_node,
 		"weapon": weapon,
@@ -346,7 +690,16 @@ func _attach_rotating_head(parent: Node2D, socket_position: Vector2, z_index_val
 	sprite.name = "HeadSprite"
 	sprite.position = -mount
 	aim_node.add_child(sprite)
+	_attach_hitbox(sprite, &"Head", z_index_value)
 	return aim_node
+
+
+func _attach_hitbox(sprite: Sprite2D, part_name: StringName, priority: int) -> void:
+	var hitbox = PART_HITBOX.new()
+	hitbox.name = "%sHitbox" % part_name
+	hitbox.setup(self, part_name, sprite.texture, priority)
+	sprite.add_child(hitbox)
+	hitbox_count += 1
 
 
 func _attach_boosts(legs: Dictionary) -> void:

@@ -483,7 +483,8 @@ WeaponSpec
 - fire_rate
 - resource_type
 - resource_cost
-- ammo_capacity
+- magazine_capacity
+- reload_duration
 - effective_range
 - max_range
 - base_spread_degrees
@@ -495,7 +496,7 @@ WeaponSpec
 - projectile
 ```
 
-좌우 팔은 탄약, 재사용 대기시간과 반동 상태를 공유하지 않는다. 잔탄 백팩은 각 팔의 최대 탄약을 독립적으로 보정한다.
+좌우 팔은 탄창 잔탄, 재장전, 재사용 대기시간과 반동 상태를 공유하지 않는다. `magazine_capacity`만큼 발사하면 `reload_duration` 동안 해당 무기로 공격할 수 없고, 재장전 완료 후 탄창을 다시 채운다. 잔탄 백팩은 각 팔의 탄창 또는 예비 탄약을 독립적으로 보정한다.
 
 총구는 팔 앵커 마스크의 파란색 `#0000FF` 픽셀로 정의하며 다연장 무기는 여러 총구를 가질 수 있다. 발사 시 탄환과 이펙트는 고정 총구 위치에서 생성되고, 반동은 팔 스프라이트만 로컬 뒤쪽으로 밀어내는 시각 효과로 처리한다. 총구와 파츠 충돌 영역은 반동에 따라 움직이지 않는다.
 
