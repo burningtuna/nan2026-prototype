@@ -1,6 +1,6 @@
 # Sprite Test Set
 
-This directory contains the first top-down test mech set for `DIRECTIVE//12`. The head, torso, weapons and backpack are the primary visible surfaces; the legs read as rear ground-thruster pods rather than walking limbs.
+This directory contains the first top-down test mech set for `DIRECTIVE//12`. The head, torso, weapons and backpack are the primary visible surfaces. Standard biped legs use a GTA2-like top view and sit mostly beneath the torso; heavy, quadruped and special legs may extend beyond the torso silhouette.
 
 ## Art Files
 
@@ -14,6 +14,9 @@ This directory contains the first top-down test mech set for `DIRECTIVE//12`. Th
 | `Boost-0001.png` | 4×6 | Down |
 | `Boost-0002.png` | 4×6 | Down |
 | `Boost-0003.png` | 4×6 | Down |
+| `Dash-0001.png` | 4×9 | Down |
+| `Dash-0002.png` | 4×9 | Down |
+| `Dash-0003.png` | 4×9 | Down |
 
 The cannon arm is shared by both arm slots. Rotate it around its aim pivot instead of drawing directional variants. The head is an armored crown seen from above and intentionally has no front-facing face or eyes.
 
@@ -25,6 +28,10 @@ The cannon arm is shared by both arm slots. Rotate it around its aim pivot inste
 | Armor | `#AC3232` |
 | Armor shadow | `#582525` |
 | Armor highlight | `#D95757` |
+| Dash core | `#FFFFFF` |
+| Dash glow | `#BDEBFF` |
+| Dash flame | `#55BFFF` |
+| Dash tail | `#2474C6` |
 
 ## Anchor Masks
 
@@ -52,12 +59,15 @@ Run the generator from the project root:
 bash Sprites/generate_test_set.sh
 ```
 
-The generator intentionally does not overwrite `Body-0001.png`, `Body-0001.anchors.png`, or `Head-0001.anchors.png`. These are hand-authored assembly references. The head mount pixel also acts as the head aiming pivot.
+The generator does not overwrite any existing sprite unless `FORCE_SPRITES=1` is set. This protects hand-edited art and anchor masks. The head mount pixel also acts as the head aiming pivot.
 
 ## Godot Sample
 
 Run the project or open `res://scenes/sample_assembly.tscn`.
 
 - Move the mouse to aim both cannon arms and rotate the head fire-control unit.
-- Press `Space` to toggle the leg boost animation.
+- Use `WASD` to move and turn the lower body in eight directions.
+- Hold `Space` while moving to engage high-output boost.
+- Press `Z` or `C` to dash along the torso's left or right axis without changing lower-body facing.
+- The upper body follows the lower body or mouse aim at 30 degrees per second.
 - The scene reads every `.anchors.png` file at runtime and assembles the mech without hard-coded part offsets.

@@ -7,11 +7,19 @@ readonly BLACK="#000000"
 readonly RED="#AC3232"
 readonly DARK_RED="#582525"
 readonly HIGHLIGHT="#D95757"
+readonly DASH_WHITE="#FFFFFF"
+readonly DASH_LIGHT="#BDEBFF"
+readonly DASH_BLUE="#55BFFF"
+readonly DASH_DARK="#2474C6"
 
 render() {
     local output="$1"
     local size="$2"
     shift 2
+
+    if [[ -e "${SCRIPT_DIR}/${output}" && "${FORCE_SPRITES:-0}" != "1" ]]; then
+        return
+    fi
 
     magick -size "$size" xc:none +antialias "$@" -depth 8 "PNG32:${SCRIPT_DIR}/${output}"
 }
@@ -64,6 +72,26 @@ render "Boost-0003.png" "4x6" \
     -fill "$HIGHLIGHT" -draw "point 1,1 point 2,1" \
     -fill "$RED" -draw "rectangle 0,2 3,2 rectangle 1,3 2,3" \
     -fill "$DARK_RED" -draw "point 1,4 point 2,4 point 2,5"
+
+# Short, high-output lateral dash exhaust. The default direction is down and
+# the scene rotates it to the side opposite the dash movement.
+render "Dash-0001.png" "4x9" \
+    -fill "$DASH_WHITE" -draw "point 1,0 point 2,0 point 1,1 point 2,1" \
+    -fill "$DASH_LIGHT" -draw "point 1,2 point 2,2 point 1,3 point 2,3" \
+    -fill "$DASH_BLUE" -draw "point 1,4 point 2,4 point 1,5 point 2,5" \
+    -fill "$DASH_DARK" -draw "point 1,6 point 2,6 point 2,7"
+
+render "Dash-0002.png" "4x9" \
+    -fill "$DASH_WHITE" -draw "rectangle 1,0 2,2" \
+    -fill "$DASH_LIGHT" -draw "point 0,2 point 3,2 rectangle 1,3 2,4" \
+    -fill "$DASH_BLUE" -draw "rectangle 1,5 2,6" \
+    -fill "$DASH_DARK" -draw "point 1,7 point 2,7 point 1,8"
+
+render "Dash-0003.png" "4x9" \
+    -fill "$DASH_WHITE" -draw "rectangle 1,0 2,1" \
+    -fill "$DASH_LIGHT" -draw "rectangle 0,2 3,3" \
+    -fill "$DASH_BLUE" -draw "rectangle 1,4 2,6" \
+    -fill "$DASH_DARK" -draw "point 1,7 point 2,7 point 2,8"
 
 # Anchor mask palette:
 # red parent mount, orange head socket, lime legs socket, yellow left arm,
