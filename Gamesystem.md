@@ -476,6 +476,8 @@ AI 칩은 조건과 행동을 처리하고 인지 칩은 조건에 필요한 값
 
 무기 정의는 변경되지 않는 `WeaponSpec`, 전투 중 상태는 좌우 팔별 `WeaponRuntime`, 생성되는 탄환은 `ProjectileSpec`으로 분리한다.
 
+`ProjectileSpec.visual_texture`는 탄환에 사용할 공용 시각 에셋을 선택하고 `visual_scale`은 해당 에셋의 표시 크기를 조절한다. 표시 크기는 `collision_radius`와 독립적이며 밸런스 판정을 바꾸지 않는다. 현재 테스트 무장은 동일 탄환 에셋을 사용하고 고연사형 `1.0x`, 표준형 `1.6x`, 중화기 `2.5x`로 위력 단계를 구분한다.
+
 ```text
 WeaponSpec
 - weapon_family

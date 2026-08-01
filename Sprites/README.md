@@ -11,6 +11,7 @@ This directory contains the first top-down test mech set for `DIRECTIVE//12`. Th
 | `Legs-0001.png` | 12×12 | Up |
 | `Arm-Cannon-0001.png` | 24×12 | Right (`+X`) |
 | `Backpack-Generator-0001.png` | 24×12 | Up |
+| `Projectile-0001.svg` | 6×3 | Right (`+X`) |
 | `Boost-0001.png` | 4×6 | Down |
 | `Boost-0002.png` | 4×6 | Down |
 | `Boost-0003.png` | 4×6 | Down |

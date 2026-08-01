@@ -295,9 +295,6 @@ func _physics_process(delta: float) -> void:
 
 
 func _draw() -> void:
-	draw_set_transform(Vector2(2.0, 5.0), 0.0, Vector2(1.0, 0.42))
-	draw_circle(Vector2.ZERO, 15.0, Color(0.01, 0.02, 0.025, 0.32))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	draw_circle(Vector2.ZERO, 13.0, Color(0.2, 0.34, 0.42, 0.75), false, 0.25)
 	draw_circle(Vector2.ZERO, 17.0, Color(0.12, 0.22, 0.28, 0.65), false, 0.25)
 	if preparing_weapon_index >= 0:
@@ -473,7 +470,7 @@ func _start_random_dash() -> void:
 
 
 func _aim_at_opponent(delta: float) -> void:
-	if not is_instance_valid(opponent):
+	if not player_controlled and not is_instance_valid(opponent):
 		return
 	var target_position := _aim_target_position()
 
@@ -546,9 +543,13 @@ func _try_fire_linked_group() -> void:
 	if (
 		linked_fire_cooldown > 0.0
 		or weapons.is_empty()
-		or not is_instance_valid(opponent)
+		or (not player_controlled and not is_instance_valid(opponent))
 		or dash_time_remaining > 0.0
-		or (movement_type == MovementType.RANGE_KEEPER and is_reloading_ballistic())
+		or (
+			not player_controlled
+			and movement_type == MovementType.RANGE_KEEPER
+			and is_reloading_ballistic()
+		)
 	):
 		return
 
@@ -557,7 +558,11 @@ func _try_fire_linked_group() -> void:
 		var weapon := weapons[weapon_index]
 		if not weapon.can_fire():
 			continue
-		if global_position.distance_to(opponent.global_position) > weapon.spec.max_range * weapon_range_multiplier:
+		if (
+			not player_controlled
+			and global_position.distance_to(opponent.global_position)
+			> weapon.spec.max_range * weapon_range_multiplier
+		):
 			range_blocked_count += 1
 			continue
 		if weapon_index >= weapon_aim_valid.size() or not weapon_aim_valid[weapon_index]:
@@ -688,11 +693,14 @@ func _can_execute_weapon(weapon_index: int) -> bool:
 		weapon_index < 0
 		or weapon_index >= weapons.size()
 		or weapon_index >= weapon_aim_valid.size()
-		or not is_instance_valid(opponent)
 		or dash_time_remaining > 0.0
 		or not weapon_aim_valid[weapon_index]
 		or not weapons[weapon_index].can_fire()
 	):
+		return false
+	if player_controlled:
+		return true
+	if not is_instance_valid(opponent):
 		return false
 	if movement_type == MovementType.RANGE_KEEPER and is_reloading_ballistic():
 		return false
@@ -930,4 +938,15 @@ func _create_sprite(texture_path: String, z_index_value: int) -> Sprite2D:
 	sprite.centered = true
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.z_index = z_index_value
+	var shadow := Sprite2D.new()
+	shadow.name = "SilhouetteShadow"
+	shadow.texture = sprite.texture
+	shadow.centered = true
+	shadow.position = Vector2(2.0, 5.0)
+	shadow.modulate = Color(0.01, 0.02, 0.025, 0.32)
+	shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	shadow.z_as_relative = false
+	shadow.z_index = 0
+	shadow.show_behind_parent = true
+	sprite.add_child(shadow)
 	return sprite

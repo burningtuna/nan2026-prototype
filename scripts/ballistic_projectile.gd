@@ -227,5 +227,26 @@ func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> void:
 
 
 func _draw() -> void:
+	var shadow_offset := Vector2(1.5, 2.0).rotated(-global_rotation)
+	if spec.visual_texture != null:
+		var visual_size := spec.visual_texture.get_size() * spec.visual_scale
+		if weapon_family != WeaponSpec.WeaponFamily.ENERGY:
+			draw_texture_rect(
+				spec.visual_texture,
+				Rect2(-visual_size * 0.5 + shadow_offset, visual_size),
+				false,
+				Color(0.01, 0.02, 0.025, 0.38)
+			)
+		draw_texture_rect(
+			spec.visual_texture,
+			Rect2(-visual_size * 0.5, visual_size),
+			false,
+			spec.color
+		)
+		return
+	if weapon_family != WeaponSpec.WeaponFamily.ENERGY:
+		draw_set_transform(shadow_offset, 0.0, Vector2.ONE * spec.visual_scale)
+		draw_rect(Rect2(-2.0, -0.5, 4.0, 1.0), Color(0.01, 0.02, 0.025, 0.38))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * spec.visual_scale)
 	draw_rect(Rect2(-2.0, -0.5, 4.0, 1.0), spec.color)
 	draw_circle(Vector2(1.5, 0.0), 1.0, Color.WHITE)

@@ -208,7 +208,21 @@ func _update_camera(delta: float, snap := false) -> void:
 	else:
 		target_zoom = maxf(target_zoom, initial_camera_zoom)
 
-	camera.global_position = (minimum_position + maximum_position) * 0.5
+	var desired_camera_position := (minimum_position + maximum_position) * 0.5
+	var visible_half_extent := viewport_size / target_zoom * 0.5
+	var player_safe_extent := (visible_half_extent - framing_margin).max(Vector2.ZERO)
+	var player_position: Vector2 = camera_subjects[0].global_position
+	desired_camera_position.x = clampf(
+		desired_camera_position.x,
+		player_position.x - player_safe_extent.x,
+		player_position.x + player_safe_extent.x
+	)
+	desired_camera_position.y = clampf(
+		desired_camera_position.y,
+		player_position.y - player_safe_extent.y,
+		player_position.y + player_safe_extent.y
+	)
+	camera.global_position = desired_camera_position
 	if snap or target_zoom < camera.zoom.x:
 		camera.zoom = Vector2.ONE * target_zoom
 	else:
