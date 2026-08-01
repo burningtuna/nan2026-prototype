@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ProjectileSpec" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/projectile_spec.gd" id="1_spec"]
+[ext_resource type="PackedScene" path="res://scenes/ballistic_projectile.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spec")
+projectile_scene = ExtResource("2_scene")
+speed = 2500.0
+collision_radius = 1.0
+damage = 14.0
+damage_type = &"kinetic"
+penetration = 4.0
+color = Color(1, 0.827451, 0.478431, 1)

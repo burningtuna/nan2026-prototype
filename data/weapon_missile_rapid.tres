@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="WeaponSpec" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_spec.gd" id="1_spec"]
+[ext_resource type="Resource" path="res://data/projectile_missile_rapid.tres" id="2_projectile"]
+
+[resource]
+script = ExtResource("1_spec")
+display_name = "Wasp Micro-Missile Pod"
+weapon_family = 1
+fire_effect_id = &"rocket"
+fire_rate = 6.0
+resource_type = 1
+resource_cost = 1.0
+magazine_capacity = 120
+reload_duration = 5.0
+effective_range = 750.0
+max_range = 1000.0
+traverse_limit_degrees = 50.0
+launch_offset_degrees = 20.0
+base_spread_degrees = 1.5
+max_spread_degrees = 5.0
+spread_curve = 1.2
+visual_recoil_distance = 0.2
+visual_recoil_recovery = 20.0
+visual_recoil_limit = 1.0
+muzzle_flash_color = Color(1, 0.741176, 0.25098, 1)
+muzzle_flash_duration = 0.04
+projectile = ExtResource("2_projectile")

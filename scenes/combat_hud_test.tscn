@@ -1,0 +1,95 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat_hud_test.gd" id="1_screen"]
+[ext_resource type="PackedScene" path="res://scenes/sample_assembly.tscn" id="2_battle"]
+[ext_resource type="Script" path="res://scripts/game_hud.gd" id="3_hud"]
+[ext_resource type="Script" path="res://scripts/combat_overlay.gd" id="4_overlay"]
+[ext_resource type="Texture2D" path="res://Sprites/Hud-Sidebar-0001.svg" id="5_hud_frame"]
+
+[sub_resource type="StyleBoxFlat" id="StyleSidebar"]
+bg_color = Color(0.0352941, 0.0627451, 0.0823529, 1)
+border_width_right = 1
+border_color = Color(0.203922, 0.356863, 0.419608, 1)
+
+[node name="CombatHudTest" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_screen")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.0196078, 0.0313725, 0.0392157, 1)
+
+[node name="Sidebar" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 144.0
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleSidebar")
+
+[node name="HudStack" type="Control" parent="Sidebar"]
+layout_mode = 2
+
+[node name="HudFrame" type="TextureRect" parent="Sidebar/HudStack"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("5_hud_frame")
+expand_mode = 1
+
+[node name="GameHud" type="Control" parent="Sidebar/HudStack"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("3_hud")
+
+[node name="CombatContainer" type="SubViewportContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 145.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+
+[node name="CombatViewport" type="SubViewport" parent="CombatContainer"]
+handle_input_locally = false
+size = Vector2i(335, 270)
+render_target_update_mode = 4
+
+[node name="SampleAssembly" parent="CombatContainer/CombatViewport" instance=ExtResource("2_battle")]
+two_vs_two = true
+enable_player_control = true
+randomize_loadouts = true
+
+[node name="OverlayLayer" type="CanvasLayer" parent="CombatContainer/CombatViewport"]
+layer = 20
+
+[node name="CombatOverlay" type="Control" parent="CombatContainer/CombatViewport/OverlayLayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("4_overlay")

@@ -51,6 +51,8 @@ Every anchor mask has the same dimensions as its art PNG. Anchor masks are metad
 
 Marker pixels must use exact opaque RGBA colors without antialiasing. Outer transparent padding is excluded from each part's collision boundary; transparent holes inside that boundary remain hittable.
 
+The muzzle marker defines spawn position only. Projectile direction is calculated from the logical aim direction, `WeaponSpec.launch_offset_degrees`, and spread; muzzle flashes use the same result. A positive launch offset rotates clockwise in screen coordinates, and a negative offset rotates counterclockwise. Guided weapons may therefore launch sideways before steering toward their target or first waypoint without requiring a directional muzzle marker.
+
 ## Regeneration
 
 Run the generator from the project root:
@@ -58,6 +60,27 @@ Run the generator from the project root:
 ```bash
 bash Sprites/generate_test_set.sh
 ```
+
+Front-view wireframe parts use the same socket and `mount` anchor names with
+view-specific coordinates. Their grayscale RGBA art is tinted at runtime for
+healthy, damaged, critical and destroyed states.
+
+```bash
+bash Sprites/generate_wireframe_set.sh
+```
+
+Generated wireframe art and anchor masks are stored under `Sprites/Wireframe/`.
+The wireframe is a static status schematic; it does not use top-down arm aim or
+movement animation.
+
+Stage environment tiles are generated separately:
+
+```bash
+bash Sprites/generate_environment_tiles.sh
+```
+
+The stage 1-3 test floor is a seamless 128x128 lightly stained steel deck stored under
+`Sprites/Environment/`.
 
 The generator does not overwrite any existing sprite unless `FORCE_SPRITES=1` is set. This protects hand-edited art and anchor masks. The head mount pixel also acts as the head aiming pivot.
 

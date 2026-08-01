@@ -2,15 +2,41 @@ extends Node2D
 
 const AI_MECH := preload("res://scripts/ai_mech_agent.gd")
 const TEST_CANNON := preload("res://data/test_cannon.tres")
-const TEST_BURST_CANNON := preload("res://data/test_burst_cannon.tres")
+const TEST_SHOTGUN := preload("res://data/test_shotgun.tres")
 const TEST_MISSILE := preload("res://data/test_missile.tres")
 const TEST_ENERGY_CANNON := preload("res://data/test_energy_cannon.tres")
+const STEEL_FLOOR_TILE := preload("res://Sprites/Environment/Stage-01-Steel-Floor.png")
+const RANDOM_ARM_WEAPONS := [
+	preload("res://data/weapon_ballistic_rapid.tres"),
+	preload("res://data/weapon_ballistic_standard.tres"),
+	preload("res://data/weapon_ballistic_heavy.tres"),
+	preload("res://data/weapon_energy_rapid.tres"),
+	preload("res://data/weapon_energy_standard.tres"),
+	preload("res://data/weapon_energy_heavy.tres"),
+	preload("res://data/weapon_missile_rapid.tres"),
+	preload("res://data/weapon_missile_standard.tres"),
+	preload("res://data/weapon_missile_heavy.tres"),
+	preload("res://data/weapon_scatter_rapid.tres"),
+	preload("res://data/weapon_scatter_standard.tres"),
+	preload("res://data/weapon_scatter_heavy.tres"),
+]
+const RANDOM_BACKPACK_WEAPONS := [
+	preload("res://data/weapon_ballistic_heavy.tres"),
+	preload("res://data/weapon_energy_heavy.tres"),
+	preload("res://data/weapon_missile_rapid.tres"),
+	preload("res://data/weapon_missile_standard.tres"),
+	preload("res://data/weapon_missile_heavy.tres"),
+	preload("res://data/weapon_scatter_heavy.tres"),
+]
 
 @export var arena := Rect2(-5000.0, -5000.0, 10000.0, 10000.0)
 @export var framing_margin := Vector2(72.0, 58.0)
-@export var minimum_zoom := 0.18
+@export var minimum_zoom := 0.14
 @export var maximum_zoom := 1.8
 @export var zoom_in_smoothing := 3.0
+@export var two_vs_two := false
+@export var enable_player_control := false
+@export var randomize_loadouts := false
 
 @onready var camera: Camera2D = $DynamicCamera
 @onready var projectile_layer: Node2D = $Projectiles
@@ -26,10 +52,14 @@ var observed_max_distance := 0.0
 var observed_min_zoom := INF
 var observed_max_zoom := 0.0
 var framing_failed := false
+var loadout_rng := RandomNumberGenerator.new()
+var initial_camera_zoom := 0.0
 
 
 func _ready() -> void:
 	smoke_test_enabled = OS.get_cmdline_user_args().has("--camera-smoke")
+	if randomize_loadouts:
+		loadout_rng.randomize()
 	_spawn_agents()
 	camera.enabled = true
 	_update_camera(0.0, true)
@@ -45,20 +75,17 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	draw_rect(arena.grow(500.0), Color("111820"))
-	for x in range(int(arena.position.x), int(arena.end.x) + 1, 32):
-		draw_line(Vector2(x, arena.position.y), Vector2(x, arena.end.y), Color("18232d"))
-	for y in range(int(arena.position.y), int(arena.end.y) + 1, 32):
-		draw_line(Vector2(arena.position.x, y), Vector2(arena.end.x, y), Color("18232d"))
-	draw_rect(arena, Color("324552"), false, 2.0)
+	draw_texture_rect(STEEL_FLOOR_TILE, arena.grow(500.0), true)
+	draw_rect(arena, Color("485960"), false, 2.0)
 
-	if agents.size() == 2:
-		draw_dashed_line(agents[0].position, agents[1].position, Color("37505e"), 1.0, 8.0)
+	if agents.size() >= 2:
 		var direction_line_width := 2.0 / maxf(camera.zoom.x, 0.001)
 		for agent in agents:
+			if agent.player_controlled:
+				continue
 			var forward: Vector2 = agent.torso_forward()
 			var direction_color := Color("ffd34d") if agent.is_preparing_attack() else Color(0.25, 1.0, 0.35, 0.9)
-			var traverse_limit := deg_to_rad(agent.weapon_traverse_limit_degrees)
+			var traverse_limit := deg_to_rad(agent.maximum_weapon_traverse_limit_degrees())
 			for side in [-1.0, 1.0]:
 				var traverse_edge := forward.rotated(traverse_limit * side)
 				draw_line(
@@ -76,13 +103,24 @@ func _draw() -> void:
 
 
 func _spawn_agents() -> void:
+	var first_loadout: Array[WeaponSpec] = [TEST_CANNON, TEST_MISSILE]
+	var second_loadout: Array[WeaponSpec] = [TEST_ENERGY_CANNON, TEST_SHOTGUN, TEST_MISSILE]
 	var colors := [Color("8fe5ff"), Color("ff9b8f")]
 	var starts := [Vector2(-1000.0, 0.0), Vector2(1000.0, 0.0)]
-	var first_loadout: Array[WeaponSpec] = [TEST_CANNON, TEST_MISSILE]
-	var second_loadout: Array[WeaponSpec] = [TEST_ENERGY_CANNON, TEST_BURST_CANNON]
-	for index in 2:
+	var agent_count := 2
+	if two_vs_two:
+		colors = [Color("71d9e8"), Color("8faeff"), Color("ff776d"), Color("ffb05f")]
+		starts = [
+			Vector2(-1000.0, -260.0),
+			Vector2(-1000.0, 260.0),
+			Vector2(1000.0, -260.0),
+			Vector2(1000.0, 260.0),
+		]
+		agent_count = 4
+	for index in agent_count:
 		var agent = AI_MECH.new()
-		if index == 0:
+		var uses_close_range_build := index == 0 or (two_vs_two and index == 1)
+		if uses_close_range_build:
 			agent.fire_rate_multiplier = 0.5
 			agent.weapon_range_multiplier = 0.5
 			agent.movement_type = AiMechAgent.MovementType.AGGRESSIVE
@@ -95,9 +133,24 @@ func _spawn_agents() -> void:
 			agent.movement_type = AiMechAgent.MovementType.RANGE_KEEPER
 			agent.preferred_range = 2000.0
 			agent.evasion_range = 1500.0
-		var loadout := first_loadout if index == 0 else second_loadout
+		var first_enemy_index := 2 if two_vs_two else 1
+		agent.team_id = 0 if index < first_enemy_index else 1
+		agent.player_controlled = two_vs_two and enable_player_control and index == 0
+		var loadout := (
+			_random_weapon_loadout()
+			if randomize_loadouts
+			else first_loadout if uses_close_range_build else second_loadout
+		)
+		var agent_name := "AI-%02d" % (index + 1)
+		if two_vs_two:
+			agent_name = ["PLAYER", "ALLY-01", "ENEMY-01", "ENEMY-02"][index]
+		if randomize_loadouts:
+			var weapon_names: Array[String] = []
+			for weapon_spec in loadout:
+				weapon_names.append(weapon_spec.display_name)
+			print_verbose("%s LOADOUT: %s" % [agent_name, " / ".join(weapon_names)])
 		agent.setup(
-			"AI-%02d" % (index + 1),
+			agent_name,
 			projectile_layer,
 			arena,
 			1200 + index * 7919,
@@ -108,17 +161,41 @@ func _spawn_agents() -> void:
 		add_child(agent)
 		agents.append(agent)
 
-	agents[0].set_opponent(agents[1])
-	agents[1].set_opponent(agents[0])
+	if two_vs_two:
+		var allies := [agents[0], agents[1]]
+		var enemies := [agents[2], agents[3]]
+		for ally in allies:
+			ally.set_opponents(enemies)
+		for enemy in enemies:
+			enemy.set_opponents(allies)
+	else:
+		agents[0].set_opponent(agents[1])
+		agents[1].set_opponent(agents[0])
+
+
+func _random_weapon_loadout() -> Array[WeaponSpec]:
+	var result: Array[WeaponSpec] = []
+	for _arm_slot in 2:
+		result.append(RANDOM_ARM_WEAPONS[loadout_rng.randi_range(0, RANDOM_ARM_WEAPONS.size() - 1)])
+	result.append(
+		RANDOM_BACKPACK_WEAPONS[
+			loadout_rng.randi_range(0, RANDOM_BACKPACK_WEAPONS.size() - 1)
+		]
+	)
+	return result
 
 
 func _update_camera(delta: float, snap := false) -> void:
-	if agents.size() < 2:
+	var camera_subjects := _camera_subjects()
+	if camera_subjects.is_empty():
 		return
 
-	var first_position: Vector2 = agents[0].global_position
-	var second_position: Vector2 = agents[1].global_position
-	var separation: Vector2 = (second_position - first_position).abs()
+	var minimum_position: Vector2 = camera_subjects[0].global_position
+	var maximum_position := minimum_position
+	for agent in camera_subjects:
+		minimum_position = minimum_position.min(agent.global_position)
+		maximum_position = maximum_position.max(agent.global_position)
+	var separation := maximum_position - minimum_position
 	var required_size: Vector2 = separation + framing_margin * 2.0
 	var viewport_size := get_viewport_rect().size
 	var target_zoom := clampf(
@@ -126,13 +203,40 @@ func _update_camera(delta: float, snap := false) -> void:
 		minimum_zoom,
 		maximum_zoom
 	)
+	if initial_camera_zoom <= 0.0:
+		initial_camera_zoom = target_zoom
+	else:
+		target_zoom = maxf(target_zoom, initial_camera_zoom)
 
-	camera.global_position = (first_position + second_position) * 0.5
+	camera.global_position = (minimum_position + maximum_position) * 0.5
 	if snap or target_zoom < camera.zoom.x:
 		camera.zoom = Vector2.ONE * target_zoom
 	else:
 		var blend := 1.0 - exp(-zoom_in_smoothing * delta)
 		camera.zoom = Vector2.ONE * lerpf(camera.zoom.x, target_zoom, blend)
+
+
+func _camera_subjects() -> Array[AiMechAgent]:
+	var result: Array[AiMechAgent] = []
+	var player: AiMechAgent
+	for agent in agents:
+		if is_instance_valid(agent) and agent.player_controlled:
+			player = agent
+			break
+	if player == null and not agents.is_empty() and is_instance_valid(agents[0]):
+		player = agents[0]
+	if player == null:
+		return result
+
+	result.append(player)
+	for agent in agents:
+		if (
+			is_instance_valid(agent)
+			and agent != player
+			and agent.team_id != player.team_id
+		):
+			result.append(agent)
+	return result
 
 
 func _update_status() -> void:
@@ -170,7 +274,7 @@ func _update_smoke_test(delta: float) -> void:
 	observed_min_zoom = minf(observed_min_zoom, camera.zoom.x)
 	observed_max_zoom = maxf(observed_max_zoom, camera.zoom.x)
 	var visible_half_extent := get_viewport_rect().size / camera.zoom * 0.5
-	for agent in agents:
+	for agent in _camera_subjects():
 		var occupied_extent: Vector2 = (agent.global_position - camera.global_position).abs() + Vector2.ONE * 32.0
 		if occupied_extent.x > visible_half_extent.x or occupied_extent.y > visible_half_extent.y:
 			framing_failed = true
@@ -212,7 +316,10 @@ func _update_smoke_test(delta: float) -> void:
 		agents[0].preparation_prediction_blocked_count
 		+ agents[1].preparation_prediction_blocked_count
 	)
-	var rocket_reloads: int = agents[0].reload_count_for(WeaponSpec.WeaponFamily.MISSILE)
+	var rocket_reloads: int = (
+		agents[0].reload_count_for(WeaponSpec.WeaponFamily.MISSILE)
+		+ agents[1].reload_count_for(WeaponSpec.WeaponFamily.MISSILE)
+	)
 	var burst_reloads: int = agents[1].reload_count_for(WeaponSpec.WeaponFamily.BALLISTIC)
 	var burst_reload_completions: int = agents[1].reload_completed_count_for(WeaponSpec.WeaponFamily.BALLISTIC)
 	var missile_paths: int = (
@@ -225,6 +332,8 @@ func _update_smoke_test(delta: float) -> void:
 	)
 	var passed: bool = (
 		ballistic_shots + missile_shots + energy_shots > 0
+		and agents[1].fired_shots_for(WeaponSpec.WeaponFamily.BALLISTIC) > 0
+		and agents[1].projectile_count > agents[1].shot_count
 		and missile_shots > 0
 		and agents[0].dash_count > 0
 		and agents[1].dash_count > 0

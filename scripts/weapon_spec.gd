@@ -23,6 +23,10 @@ enum ResourceType {
 @export var reload_duration := 0.0
 @export var effective_range := 140.0
 @export var max_range := 220.0
+@export_range(0.0, 180.0) var traverse_limit_degrees := 30.0
+@export_range(-180.0, 180.0) var launch_offset_degrees := 0.0
+@export_range(1, 32, 1) var projectiles_per_shot := 1
+@export_range(0.0, 180.0) var volley_arc_degrees := 0.0
 @export var base_spread_degrees := 0.5
 @export var max_spread_degrees := 4.0
 @export var spread_curve := 1.5

@@ -147,9 +147,12 @@ func _homing_aim_position() -> Vector2:
 func _collect_source_hitboxes() -> void:
 	if not is_instance_valid(source_mech):
 		return
-	for node in source_mech.find_children("*", "Area2D", true, false):
-		if node.get_script() == PART_HITBOX:
-			source_hitbox_rids.append(node.get_rid())
+	for mech in get_tree().get_nodes_in_group(&"mech_combatants"):
+		if not source_mech.has_method("is_ally_of") or not source_mech.is_ally_of(mech):
+			continue
+		for node in mech.find_children("*", "Area2D", true, false):
+			if node.get_script() == PART_HITBOX:
+				source_hitbox_rids.append(node.get_rid())
 
 
 func _check_swept_hit(start_position: Vector2, end_position: Vector2) -> bool:
@@ -179,7 +182,12 @@ func _exit_tree() -> void:
 
 
 func _on_area_entered(area: Area2D) -> void:
-	if hit_resolved or area.get_script() != PART_HITBOX or area.mech == source_mech:
+	if (
+		hit_resolved
+		or area.get_script() != PART_HITBOX
+		or area.mech == source_mech
+		or (source_mech.has_method("is_ally_of") and source_mech.is_ally_of(area.mech))
+	):
 		return
 	hit_candidates.append(area)
 	if not hit_resolution_queued:

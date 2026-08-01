@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="WeaponSpec" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_spec.gd" id="1_spec"]
+[ext_resource type="Resource" path="res://data/projectile_scatter_standard.tres" id="2_projectile"]
+
+[resource]
+script = ExtResource("1_spec")
+display_name = "Breach Scattergun"
+weapon_family = 0
+fire_effect_id = &"cannon_heavy"
+fire_rate = 1.2
+resource_type = 1
+resource_cost = 1.0
+magazine_capacity = 24
+reload_duration = 5.0
+effective_range = 1400.0
+max_range = 2200.0
+traverse_limit_degrees = 35.0
+projectiles_per_shot = 8
+volley_arc_degrees = 28.0
+base_spread_degrees = 0.4
+max_spread_degrees = 2.0
+spread_curve = 1.4
+visual_recoil_distance = 3.0
+visual_recoil_recovery = 9.0
+visual_recoil_limit = 4.0
+muzzle_flash_color = Color(1, 0.85098, 0.54902, 1)
+muzzle_flash_duration = 0.08
+preparation_time = 0.6
+preparation_move_speed_multiplier = 0.5
+preparation_turn_speed_multiplier = 0.5
+projectile = ExtResource("2_projectile")
