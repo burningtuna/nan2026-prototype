@@ -11,6 +11,7 @@ const COLOR_TO_ANCHOR := {
 	"FF00FF": &"aim_pivot",
 	"0000FF": &"muzzle",
 	"00FFFF": &"boost",
+	"FF0080": &"casing_eject",
 }
 
 

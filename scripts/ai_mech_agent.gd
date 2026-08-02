@@ -29,6 +29,8 @@ enum MovementType {
 
 const AnchorMap := preload("res://scripts/sprite_anchor_map.gd")
 const MUZZLE_FLASH_SCENE := preload("res://scenes/muzzle_flash.tscn")
+const CASING_EFFECT := preload("res://scripts/casing_effect.gd")
+const VAPOR_EFFECT := preload("res://scripts/vapor_effect.gd")
 const PART_HITBOX := preload("res://scripts/part_hitbox.gd")
 const PART_DESTRUCTION_EFFECT := preload("res://scripts/part_destruction_effect.gd")
 const WRECK_FIRE_EFFECT := preload("res://scripts/wreck_fire_effect.gd")
@@ -64,6 +66,7 @@ const BOOST_FRAMES := [
 @export var movement_type := MovementType.AGGRESSIVE
 @export var preferred_range := 2000.0
 @export var evasion_range := 1500.0
+@export var mech_collision_radius := 28.0
 @export var player_controlled := false
 @export var team_id := 0
 @export var combat_visuals_enabled := true
@@ -1289,6 +1292,8 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 		projectile_count += 1
 	var flash_direction := base_direction.rotated(deg_to_rad(weapon.spec.launch_offset_degrees))
 	_spawn_muzzle_flash(weapon.spec, muzzle.global_position, flash_direction)
+	_spawn_casing(weapon, flash_direction, volley_rng.randi())
+	_spawn_vapor(weapon, flash_direction, volley_rng.randi())
 	shot_count += 1
 	fired_shots[weapon.spec.weapon_family] = fired_shots.get(weapon.spec.weapon_family, 0) + 1
 	weapon_fired.emit(weapon)
@@ -1386,6 +1391,43 @@ func _spawn_muzzle_flash(
 	)
 	projectile_layer.add_child(flash)
 	flash.global_position = spawn_position
+
+
+func _spawn_casing(weapon: WeaponRuntime, firing_direction: Vector2, random_seed: int) -> void:
+	if (
+		not combat_visuals_enabled
+		or weapon.spec.weapon_family != WeaponSpec.WeaponFamily.BALLISTIC
+	):
+		return
+	if not is_instance_valid(weapon.casing_eject):
+		push_error("Ballistic weapon '%s' requires a casing_eject anchor" % weapon.spec.display_name)
+		return
+	var casing := CASING_EFFECT.new() as CasingEffect
+	casing.setup(
+		weapon.spec.projectile,
+		maxi(weapon.spec.projectiles_per_shot, 1),
+		firing_direction,
+		random_seed
+	)
+	casing.z_index = weapon.effect_z_index
+	projectile_layer.add_child(casing)
+	casing.global_position = weapon.casing_eject.global_position
+
+
+func _spawn_vapor(weapon: WeaponRuntime, firing_direction: Vector2, random_seed: int) -> void:
+	if (
+		not combat_visuals_enabled
+		or weapon.spec.weapon_family != WeaponSpec.WeaponFamily.ENERGY
+	):
+		return
+	if not is_instance_valid(weapon.casing_eject):
+		push_error("Energy weapon '%s' requires a casing_eject anchor" % weapon.spec.display_name)
+		return
+	var vapor := VAPOR_EFFECT.new() as VaporEffect
+	vapor.setup(weapon.spec.projectile, firing_direction, random_seed)
+	vapor.z_index = weapon.effect_z_index
+	projectile_layer.add_child(vapor)
+	vapor.global_position = weapon.casing_eject.global_position
 
 
 func _build_mech() -> void:
@@ -1509,6 +1551,8 @@ func _attach_static_part(
 
 func _attach_backpack_weapon(backpack: Dictionary, weapon_spec: WeaponSpec) -> void:
 	var backpack_root := backpack["root"] as Node2D
+	var backpack_map: Dictionary = backpack["map"]
+	var backpack_mount: Vector2 = backpack["mount"]
 	var muzzle_positions := _backpack_muzzle_local_positions(backpack)
 	var muzzles: Array[Marker2D] = []
 	for index in muzzle_positions.size():
@@ -1522,8 +1566,23 @@ func _attach_backpack_weapon(backpack: Dictionary, weapon_spec: WeaponSpec) -> v
 	var recoil_proxy := Sprite2D.new()
 	recoil_proxy.name = "BackpackWeaponProxy"
 	backpack_root.add_child(recoil_proxy)
+	var casing_eject := _attach_casing_eject(
+		backpack_root,
+		backpack_map,
+		backpack_mount,
+		weapon_spec
+	)
 	var weapon := WeaponRuntime.new()
-	weapon.setup(weapon_spec, recoil_proxy, muzzles, &"Backpack", fire_rate_multiplier)
+	var backpack_sprite := backpack["sprite"] as Sprite2D
+	weapon.setup(
+		weapon_spec,
+		recoil_proxy,
+		muzzles,
+		&"Backpack",
+		fire_rate_multiplier,
+		casing_eject,
+		backpack_sprite.z_index
+	)
 	weapons.append(weapon)
 
 
@@ -1578,10 +1637,43 @@ func _attach_aiming_arm(
 
 	var result := {"aim": aim_node}
 	if weapon_spec != null:
+		var casing_eject := _attach_casing_eject(
+			aim_node,
+			anchor_map,
+			aim_pivot,
+			weapon_spec,
+			part_name == "RightArm"
+		)
 		var weapon := WeaponRuntime.new()
-		weapon.setup(weapon_spec, sprite, muzzles, StringName(part_name), fire_rate_multiplier)
+		weapon.setup(
+			weapon_spec,
+			sprite,
+			muzzles,
+			StringName(part_name),
+			fire_rate_multiplier,
+			casing_eject,
+			z_index_value
+		)
 		result["weapon"] = weapon
 	return result
+
+
+func _attach_casing_eject(
+	parent: Node2D,
+	anchor_map: Dictionary,
+	local_origin: Vector2,
+	weapon_spec: WeaponSpec,
+	mirror_across_weapon_axis := false
+) -> Marker2D:
+	if weapon_spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE:
+		return null
+	var marker := Marker2D.new()
+	marker.name = "CasingEject"
+	marker.position = AnchorMap.one(anchor_map, &"casing_eject") - local_origin
+	if mirror_across_weapon_axis:
+		marker.position.y = -marker.position.y
+	parent.add_child(marker)
+	return marker
 
 
 func _attach_rotating_head(

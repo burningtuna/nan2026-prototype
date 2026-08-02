@@ -3,6 +3,7 @@ extends Node2D
 signal battle_finished(winner_team_id: int)
 
 const AI_MECH := preload("res://scripts/ai_mech_agent.gd")
+const MECH_COLLISION_RESOLVER := preload("res://scripts/mech_collision_resolver.gd")
 const STEEL_FLOOR_TILE := preload("res://Sprites/Environment/Stage-01-Steel-Floor.png")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const WEAPONS_DATA_PATH := "res://data/weapons.json"
@@ -46,6 +47,7 @@ var camera_framed_units := {}
 
 
 func _ready() -> void:
+	process_physics_priority = 100
 	smoke_test_enabled = OS.get_cmdline_user_args().has("--camera-smoke")
 	battle_result_smoke_enabled = OS.get_cmdline_user_args().has("--battle-result-smoke")
 	weapon_catalog = WeaponCatalog.new()
@@ -62,6 +64,10 @@ func _ready() -> void:
 	queue_redraw()
 	if battle_result_smoke_enabled:
 		call_deferred("_run_battle_result_smoke")
+
+
+func _physics_process(_delta: float) -> void:
+	MECH_COLLISION_RESOLVER.resolve(agents)
 
 
 func _process(delta: float) -> void:

@@ -16,6 +16,10 @@ This directory contains the first top-down test mech set for `DIRECTIVE//12`. Th
 | `Arm-Rifle-0001.png` | 24×12 | Right (`+X`) |
 | `Arm-Pistol-0001.png` | 24×12 | Right (`+X`) |
 | `Backpack-Generator-0001.png` | 24×12 | Up |
+| `Backpack-Rail-0001.svg` | 24×12 | Up |
+| `Backpack-Energy-0001.svg` | 24×12 | Up |
+| `Backpack-Missile-0001.svg` | 24×12 | Up |
+| `Backpack-Flak-0001.svg` | 24×12 | Up |
 | `Projectile-0001.svg` | 6×3 | Right (`+X`) |
 | `Boost-0001.png` | 4×6 | Down |
 | `Boost-0002.png` | 4×6 | Down |
@@ -41,7 +45,7 @@ Arm sprites are shared by both arm slots. Rotate them around their aim pivot ins
 
 ## Anchor Masks
 
-Every anchor mask has the same dimensions as its art PNG. Anchor masks are metadata and must not be rendered in the game.
+Every anchor mask has the same dimensions as its art texture. Anchor masks are metadata and must not be rendered in the game.
 
 | Color | Meaning |
 | --- | --- |
@@ -54,8 +58,11 @@ Every anchor mask has the same dimensions as its art PNG. Anchor masks are metad
 | `#FF00FF` | Aim pivot |
 | `#0000FF` | Muzzle |
 | `#00FFFF` | Boost exhaust |
+| `#FF0080` | Casing eject / heat vapor |
 
 Marker pixels must use exact opaque RGBA colors without antialiasing. Outer transparent padding is excluded from each part's collision boundary; transparent holes inside that boundary remain hittable.
+
+Ballistic and energy weapon art must provide exactly one `casing_eject` marker. Ballistic weapons emit casings there, while energy weapons reserve the same marker for heat vapor effects.
 
 The muzzle marker defines spawn position only. Projectile direction is calculated from the logical aim direction, `WeaponSpec.launch_offset_degrees`, and spread; muzzle flashes use the same result. A positive launch offset rotates clockwise in screen coordinates, and a negative offset rotates counterclockwise. Guided weapons may therefore launch sideways before steering toward their target or first waypoint without requiring a directional muzzle marker.
 

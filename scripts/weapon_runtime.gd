@@ -4,6 +4,8 @@ extends RefCounted
 var spec: WeaponSpec
 var visual: Sprite2D
 var muzzles: Array[Marker2D] = []
+var casing_eject: Marker2D
+var effect_z_index := 4
 var part_name: StringName
 var ammo := 0
 var cooldown_remaining := 0.0
@@ -22,13 +24,17 @@ func setup(
 	weapon_visual: Sprite2D,
 	weapon_muzzles: Array[Marker2D],
 	source_part: StringName,
-	fire_rate_scale: float
+	fire_rate_scale: float,
+	casing_eject_marker: Marker2D = null,
+	visual_effect_z_index: int = 4
 ) -> void:
 	spec = weapon_spec
 	visual = weapon_visual
 	muzzles = weapon_muzzles
 	part_name = source_part
 	fire_rate_multiplier = fire_rate_scale
+	casing_eject = casing_eject_marker
+	effect_z_index = visual_effect_z_index
 	ammo = spec.magazine_capacity
 	rest_position = visual.position
 

@@ -2,6 +2,7 @@ class_name CombatBatchMatch
 extends Node2D
 
 const AI_MECH := preload("res://scripts/ai_mech_agent.gd")
+const MECH_COLLISION_RESOLVER := preload("res://scripts/mech_collision_resolver.gd")
 const ARENA := Rect2(-3000.0, -3000.0, 6000.0, 6000.0)
 const STARTS := [
 	Vector2(-1000.0, -260.0),
@@ -20,6 +21,7 @@ var result: Dictionary = {}
 
 
 func setup(config: Dictionary, team_loadouts: Array, physics_hz: int, timeout_seconds: float) -> void:
+	process_physics_priority = 100
 	match_config = config
 	timeout_ticks = maxi(roundi(timeout_seconds * physics_hz), 1)
 	projectile_layer = Node2D.new()
@@ -68,6 +70,7 @@ func setup(config: Dictionary, team_loadouts: Array, physics_hz: int, timeout_se
 func _physics_process(_delta: float) -> void:
 	if completed:
 		return
+	MECH_COLLISION_RESOLVER.resolve(agents)
 	elapsed_ticks += 1
 	var team_zero_alive := not agents[0].is_defeated() or not agents[1].is_defeated()
 	var team_one_alive := not agents[2].is_defeated() or not agents[3].is_defeated()

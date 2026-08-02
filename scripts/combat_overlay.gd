@@ -20,6 +20,7 @@ var attack_flash_remaining := {}
 var pending_attack_flashes := {}
 var observed_sensor_sequence := -1
 var winning_team_number := -1
+var combat_hud_visible := true
 var target_preview: MechWireframePreview
 var displayed_target: AiMechAgent
 
@@ -46,6 +47,10 @@ func bind(combat_player: AiMechAgent, combat_allies: Array, combat_enemies: Arra
 
 
 func _process(delta: float) -> void:
+	if not combat_hud_visible:
+		target_preview.visible = false
+		queue_redraw()
+		return
 	for enemy_id in attack_flash_remaining.keys():
 		var remaining: float = attack_flash_remaining[enemy_id] - delta
 		if remaining <= 0.0:
@@ -72,9 +77,16 @@ func show_team_victory(team_number: int) -> void:
 	queue_redraw()
 
 
+func set_combat_hud_visible(value: bool) -> void:
+	combat_hud_visible = value
+	if not combat_hud_visible:
+		target_preview.visible = false
+	queue_redraw()
+
+
 func _draw() -> void:
 	_draw_team_victory()
-	if not is_instance_valid(player):
+	if not combat_hud_visible or not is_instance_valid(player):
 		return
 	var canvas_transform := get_viewport().get_canvas_transform()
 	_draw_target_panel()
