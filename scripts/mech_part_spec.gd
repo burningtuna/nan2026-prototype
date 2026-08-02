@@ -10,11 +10,13 @@ enum PartType {
 }
 
 @export var display_name := "Unnamed Part"
+@export var part_id := ""
 @export var designation := "--"
 @export_multiline var description := ""
 @export var part_type := PartType.BODY
 @export_file("*.png") var art_path := ""
 @export_file("*.png") var anchor_path := ""
+@export_file("*.png") var splash_art_path := ""
 @export_file("*.png") var wireframe_art_path := ""
 @export_file("*.png") var wireframe_anchor_path := ""
 @export var preview_tint := Color.WHITE

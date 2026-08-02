@@ -9,6 +9,7 @@ const MUTED := Color("718b8e")
 const CYAN := Color("5ce1d0")
 const AMBER := Color("f5bd55")
 const RED := Color("e05a55")
+const PARTS_DATA_PATH := "res://data/mech_parts.json"
 
 const SLOT_NAMES := {
 	MechLoadout.MechSlot.BODY: "BODY",
@@ -27,9 +28,10 @@ const SLOT_ORDER := [
 	MechLoadout.MechSlot.LEGS,
 ]
 
-@onready var mech_preview: MechPreview = $MechPreview
+@onready var mech_preview: MechWireframePreview = $MechPreview
 
 var _catalog: Dictionary = {}
+var _part_catalog: MechPartCatalog
 var _working_loadout: MechLoadout
 var _slot_buttons: Dictionary = {}
 var _stat_bars: Dictionary = {}
@@ -44,7 +46,8 @@ var _confirmed := false
 
 
 func _ready() -> void:
-	_build_catalog()
+	if not _build_catalog():
+		return
 	_working_loadout = _initial_loadout()
 	_build_interface()
 	_refresh()
@@ -96,7 +99,7 @@ func _build_interface() -> void:
 		_slot_buttons[slot] = button
 
 	_status_label = _make_label(self, "EDITING", Vector2(380, 43), Vector2(84, 14), 8, AMBER, HORIZONTAL_ALIGNMENT_RIGHT)
-	_make_label(self, "TOP-DOWN ASSEMBLY PREVIEW", Vector2(255, 169), Vector2(162, 11), 7, MUTED, HORIZONTAL_ALIGNMENT_CENTER)
+	_make_label(self, "FRONT WIREFRAME PREVIEW", Vector2(255, 169), Vector2(162, 11), 7, MUTED, HORIZONTAL_ALIGNMENT_CENTER)
 
 	var stat_defs := [
 		["ARMOR", 600.0],
@@ -184,91 +187,19 @@ func _build_overlay() -> void:
 	scroll.add_child(_candidate_list)
 
 
-func _build_catalog() -> void:
-	var body_art := "res://Sprites/Body-0001.png"
-	var body_anchors := "res://Sprites/Body-0001.anchors.png"
-	var head_art := "res://Sprites/Head-0001.png"
-	var head_anchors := "res://Sprites/Head-0001.anchors.png"
-	var legs_art := "res://Sprites/Legs-0001.png"
-	var legs_anchors := "res://Sprites/Legs-0001.anchors.png"
-	var arm_art := "res://Sprites/Arm-Cannon-0001.png"
-	var arm_anchors := "res://Sprites/Arm-Cannon-0001.anchors.png"
-	var pack_art := "res://Sprites/Backpack-Generator-0001.png"
-	var pack_anchors := "res://Sprites/Backpack-Generator-0001.anchors.png"
-
-	_catalog[MechPartSpec.PartType.BODY] = [
-		_make_part("KESTREL CORE", "BD-01", "Balanced lightweight combat core.", MechPartSpec.PartType.BODY, body_art, body_anchors, Color("ffffff"), 150, 12, 15, 8, 12, 4, 0, 0),
-		_make_part("BULWARK CORE", "BD-04", "Heavy core with reinforced plating.", MechPartSpec.PartType.BODY, body_art, body_anchors, Color("b6d2d5"), 230, 21, 18, 12, 8, -4, 0, 0),
-	]
-	_catalog[MechPartSpec.PartType.HEAD] = [
-		_make_part("RAVEN SENSOR", "HD-02", "Fast acquisition sensor crown.", MechPartSpec.PartType.HEAD, head_art, head_anchors, Color("ffffff"), 55, 4, 0, 5, 6, 8, 0, 0),
-		_make_part("BASTION ARRAY", "HD-07", "Armored command and targeting array.", MechPartSpec.PartType.HEAD, head_art, head_anchors, Color("ffd28b"), 90, 7, 0, 7, 4, 2, 0, 0),
-	]
-	_catalog[MechPartSpec.PartType.LEGS] = [
-		_make_part("STRIDER LEGS", "LG-03", "High-output vector drive assembly.", MechPartSpec.PartType.LEGS, legs_art, legs_anchors, Color("ffffff"), 110, 11, 0, 10, 3, 62, 0, 58),
-		_make_part("ANVIL LEGS", "LG-08", "Stable heavy-duty load platform.", MechPartSpec.PartType.LEGS, legs_art, legs_anchors, Color("a8c7bf"), 180, 18, 0, 13, 5, 36, 0, 78),
-	]
-	_catalog[MechPartSpec.PartType.ARM_EQUIPMENT] = [
-		_make_part("RX AUTOCANNON", "AR-11", "Reliable ballistic arm weapon.", MechPartSpec.PartType.ARM_EQUIPMENT, arm_art, arm_anchors, Color("ffffff"), 48, 9, 0, 8, 0, -2, 42, 0, preload("res://data/test_cannon.tres")),
-		_make_part("TEMPEST ROCKET", "AR-15", "Single-shot guided rocket system.", MechPartSpec.PartType.ARM_EQUIPMENT, arm_art, arm_anchors, Color("ffd28b"), 40, 7, 0, 6, 0, 0, 58, 0, preload("res://data/test_missile.tres")),
-		_make_part("ARC PULSE", "AR-22", "Compact pulse-energy projector.", MechPartSpec.PartType.ARM_EQUIPMENT, arm_art, arm_anchors, Color("9bdfff"), 36, 6, 0, 15, 0, 2, 52, 0, preload("res://data/test_energy_cannon.tres")),
-		_make_part("BREACH CANNON", "AR-31", "Heavy five-round kinetic cannon.", MechPartSpec.PartType.ARM_EQUIPMENT, arm_art, arm_anchors, Color("ff9c87"), 65, 14, 0, 11, 0, -7, 74, 0, preload("res://data/test_burst_cannon.tres")),
-	]
-	_catalog[MechPartSpec.PartType.BACKPACK] = [
-		_make_part("GRID GENERATOR", "BP-05", "Auxiliary generator for high-draw parts.", MechPartSpec.PartType.BACKPACK, pack_art, pack_anchors, Color("ffffff"), 55, 8, 38, 2, 6, -2, 0, 0),
-		_make_part("HEAT SINK ARRAY", "BP-09", "Large thermal dissipation package.", MechPartSpec.PartType.BACKPACK, pack_art, pack_anchors, Color("9bdfff"), 45, 7, 6, 4, 35, 0, 0, 0),
-		_make_part("TEMPEST RACK", "BP-16", "Back-mounted guided missile rack.", MechPartSpec.PartType.BACKPACK, pack_art, pack_anchors, Color("ffd28b"), 38, 10, 0, 9, 0, -4, 48, 0, preload("res://data/test_missile.tres")),
-	]
-
-
-func _make_part(
-	name: String,
-	designation: String,
-	description: String,
-	type: MechPartSpec.PartType,
-	art_path: String,
-	anchor_path: String,
-	tint: Color,
-	armor: float,
-	weight: float,
-	generation: float,
-	power_draw: float,
-	cooling: float,
-	mobility: float,
-	firepower: float,
-	capacity: float,
-	weapon: WeaponSpec = null
-) -> MechPartSpec:
-	var part := MechPartSpec.new()
-	part.display_name = name
-	part.designation = designation
-	part.description = description
-	part.part_type = type
-	part.art_path = art_path
-	part.anchor_path = anchor_path
-	part.preview_tint = tint
-	part.armor = armor
-	part.weight = weight
-	part.power_generation = generation
-	part.power_draw = power_draw
-	part.cooling = cooling
-	part.mobility = mobility
-	part.firepower = firepower
-	part.weight_capacity = capacity
-	part.weapon = weapon
-	return part
+func _build_catalog() -> bool:
+	_part_catalog = MechPartCatalog.new()
+	if not _part_catalog.load_file(PARTS_DATA_PATH):
+		push_error("Unable to initialize Hangar part catalog")
+		return false
+	_catalog = _part_catalog.parts_by_type
+	return true
 
 
 func _initial_loadout() -> MechLoadout:
 	if GameSession.player_mech_loadout != null:
 		return GameSession.player_mech_loadout.copy()
-	var loadout := MechLoadout.new()
-	loadout.body = _catalog[MechPartSpec.PartType.BODY][0]
-	loadout.head = _catalog[MechPartSpec.PartType.HEAD][0]
-	loadout.legs = _catalog[MechPartSpec.PartType.LEGS][0]
-	loadout.left_arm = _catalog[MechPartSpec.PartType.ARM_EQUIPMENT][0]
-	loadout.backpack = _catalog[MechPartSpec.PartType.BACKPACK][0]
-	return loadout
+	return _part_catalog.create_default_loadout()
 
 
 func _open_part_picker(slot: MechLoadout.MechSlot) -> void:
@@ -294,14 +225,31 @@ func _add_candidate_button(part: MechPartSpec) -> void:
 	button.add_theme_stylebox_override("normal", _style(PANEL, LINE))
 	button.add_theme_stylebox_override("hover", _style(Color("17343a"), CYAN))
 	button.add_theme_stylebox_override("pressed", _style(Color("0a171b"), AMBER))
+	var equipped_part := _working_loadout.part_for_slot(_active_slot)
+	var marker := ">" if equipped_part == part else " "
 	if part == null:
-		button.text = "  -- EMPTY MOUNT --\n     REMOVE EQUIPPED COMPONENT"
+		button.text = " %s -- EMPTY MOUNT --\n     REMOVE EQUIPPED COMPONENT" % marker
 		button.add_theme_color_override("font_color", MUTED)
 	else:
-		button.text = "  %s  //  %s\n     ARM %d   WT %.0f   PWR %+.0f   FP %.0f" % [part.designation, part.display_name, part.armor, part.weight, part.power_generation - part.power_draw, part.firepower]
-		button.tooltip_text = part.description
+		button.text = " %s %s  //  %s\n     %s" % [marker, part.designation, part.display_name, _part_summary(part)]
+		button.tooltip_text = _part_tooltip(part)
 	button.pressed.connect(_select_part.bind(part))
 	_candidate_list.add_child(button)
+
+
+func _part_summary(part: MechPartSpec) -> String:
+	if part.weapon == null:
+		return "ARM %.0f  WT %.0f  PWR %+.0f" % [part.armor, part.weight, part.power_generation - part.power_draw]
+	var family: String = WeaponSpec.WeaponFamily.keys()[part.weapon.weapon_family]
+	return "%s  RPM %.0f  RNG %.0f" % [family, part.weapon.fire_rate * 60.0, part.weapon.effective_range]
+
+
+func _part_tooltip(part: MechPartSpec) -> String:
+	var lines := PackedStringArray([part.description])
+	lines.append("Armor %.0f / Weight %.0f / Power %+.0f" % [part.armor, part.weight, part.power_generation - part.power_draw])
+	if part.weapon != null:
+		lines.append("Range %.0f-%.0f / Magazine %d / Reload %.1fs" % [part.weapon.effective_range, part.weapon.max_range, part.weapon.magazine_capacity, part.weapon.reload_duration])
+	return "\n".join(lines)
 
 
 func _select_part(part: MechPartSpec) -> void:
