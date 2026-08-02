@@ -7,8 +7,9 @@ const WEAPONS_DATA_PATH := "res://data/weapons.json"
 
 @export var arena := Rect2(-5000.0, -5000.0, 10000.0, 10000.0)
 @export var framing_margin := Vector2(72.0, 58.0)
-@export var minimum_zoom := 0.14
+@export var minimum_zoom := 0.01
 @export var maximum_zoom := 1.8
+@export var maximum_framing_distance := 4000.0
 @export var zoom_in_smoothing := 3.0
 @export var two_vs_two := false
 @export var enable_player_control := false
@@ -29,7 +30,6 @@ var observed_min_zoom := INF
 var observed_max_zoom := 0.0
 var framing_failed := false
 var loadout_rng := RandomNumberGenerator.new()
-var initial_camera_zoom := 0.0
 var weapon_catalog: WeaponCatalog
 var random_part_catalog: MechPartCatalog
 var random_arm_parts: Array[MechPartSpec] = []
@@ -215,24 +215,22 @@ func _update_camera(delta: float, snap := false) -> void:
 	var camera_subjects := _camera_subjects()
 	if camera_subjects.is_empty():
 		return
+	var subject_positions := _camera_subject_positions(camera_subjects)
 
-	var minimum_position: Vector2 = camera_subjects[0].global_position
+	var minimum_position: Vector2 = subject_positions[0]
 	var maximum_position := minimum_position
-	for agent in camera_subjects:
-		minimum_position = minimum_position.min(agent.global_position)
-		maximum_position = maximum_position.max(agent.global_position)
+	for subject_position in subject_positions:
+		minimum_position = minimum_position.min(subject_position)
+		maximum_position = maximum_position.max(subject_position)
 	var separation := maximum_position - minimum_position
 	var required_size: Vector2 = separation + framing_margin * 2.0
 	var viewport_size := get_viewport_rect().size
+	var framing_zoom_floor := _framing_zoom_floor(viewport_size)
 	var target_zoom := clampf(
 		minf(viewport_size.x / required_size.x, viewport_size.y / required_size.y),
-		minimum_zoom,
+		maxf(minimum_zoom, framing_zoom_floor),
 		maximum_zoom
 	)
-	if initial_camera_zoom <= 0.0:
-		initial_camera_zoom = target_zoom
-	else:
-		target_zoom = maxf(target_zoom, initial_camera_zoom)
 
 	var desired_camera_position := (minimum_position + maximum_position) * 0.5
 	var visible_half_extent := viewport_size / target_zoom * 0.5
@@ -254,6 +252,25 @@ func _update_camera(delta: float, snap := false) -> void:
 	else:
 		var blend := 1.0 - exp(-zoom_in_smoothing * delta)
 		camera.zoom = Vector2.ONE * lerpf(camera.zoom.x, target_zoom, blend)
+
+
+func _camera_subject_positions(camera_subjects: Array[AiMechAgent]) -> Array[Vector2]:
+	var result: Array[Vector2] = []
+	var player_position := camera_subjects[0].global_position
+	for agent in camera_subjects:
+		var subject_position := agent.global_position
+		var player_offset := subject_position - player_position
+		if maximum_framing_distance > 0.0 and player_offset.length() > maximum_framing_distance:
+			subject_position = player_position + player_offset.normalized() * maximum_framing_distance
+		result.append(subject_position)
+	return result
+
+
+func _framing_zoom_floor(viewport_size: Vector2) -> float:
+	if maximum_framing_distance <= 0.0:
+		return minimum_zoom
+	var maximum_size := Vector2.ONE * maximum_framing_distance + framing_margin * 2.0
+	return minf(viewport_size.x / maximum_size.x, viewport_size.y / maximum_size.y)
 
 
 func _camera_subjects() -> Array[AiMechAgent]:
@@ -314,8 +331,9 @@ func _update_smoke_test(delta: float) -> void:
 	observed_min_zoom = minf(observed_min_zoom, camera.zoom.x)
 	observed_max_zoom = maxf(observed_max_zoom, camera.zoom.x)
 	var visible_half_extent := get_viewport_rect().size / camera.zoom * 0.5
-	for agent in _camera_subjects():
-		var occupied_extent: Vector2 = (agent.global_position - camera.global_position).abs() + Vector2.ONE * 32.0
+	var camera_subjects := _camera_subjects()
+	for subject_position in _camera_subject_positions(camera_subjects):
+		var occupied_extent: Vector2 = (subject_position - camera.global_position).abs() + Vector2.ONE * 32.0
 		if occupied_extent.x > visible_half_extent.x or occupied_extent.y > visible_half_extent.y:
 			framing_failed = true
 	smoke_elapsed += delta

@@ -29,6 +29,8 @@ enum PartType {
 @export var mobility := 0.0
 @export var firepower := 0.0
 @export var weight_capacity := 0.0
+@export var sensor_range := 0.0
+@export var projectile_track_limit := 0
 
 
 func provides_weapon() -> bool:

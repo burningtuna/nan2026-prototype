@@ -64,4 +64,4 @@ func _bind_combat() -> void:
 	var enemies := [battle.agents[2], battle.agents[3]]
 	battle.get_node("UI").visible = false
 	hud.bind(player, allies, enemies, battle.projectile_layer)
-	overlay.bind(player, enemies, battle.projectile_layer)
+	overlay.bind(player, allies, enemies, battle.projectile_layer)

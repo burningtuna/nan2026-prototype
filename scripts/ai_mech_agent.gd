@@ -1,6 +1,17 @@
 class_name AiMechAgent
 extends Node2D
 
+const DEFAULT_SENSOR_RANGE := 2500.0
+const DEFAULT_PROJECTILE_TRACK_LIMIT := 4
+const MAX_ENERGY := 100.0
+const MAX_HEAT := 100.0
+const DASH_ENERGY_COST := 15.0
+const DASH_HEAT_COST := 15.0
+const WEAPON_SELECT_LEFT := 1
+const WEAPON_SELECT_RIGHT := 2
+const WEAPON_SELECT_BACKPACK := 4
+const WEAPON_SELECT_ALL := WEAPON_SELECT_LEFT | WEAPON_SELECT_RIGHT | WEAPON_SELECT_BACKPACK
+
 signal hit_received(part_name: StringName, aspect: StringName)
 signal hit_landed(weapon_family: WeaponSpec.WeaponFamily)
 signal weapon_fired(weapon: WeaponRuntime)
@@ -36,7 +47,7 @@ const BOOST_FRAMES := [
 @export var head_traverse_limit_degrees := 30.0
 @export var arm_visual_turn_speed_degrees := 45.0
 @export var linked_fire_stagger := 0.12
-@export var dash_speed := 140.0
+@export var dash_speed := 420.0
 @export var dash_duration := 0.5
 @export var dash_cooldown := 1.0
 @export var fire_rate_multiplier := 1.0
@@ -96,6 +107,8 @@ var dash_cooldown_remaining := 0.0
 var dash_direction := Vector2.ZERO
 var linked_fire_cooldown := 0.0
 var next_weapon_index := 0
+var selected_weapon_mask := WEAPON_SELECT_ALL
+var dash_input_was_pressed := false
 var rng := RandomNumberGenerator.new()
 var weapon_specs: Array[WeaponSpec] = []
 var mech_loadout: MechLoadout
@@ -108,6 +121,8 @@ var preparation_prediction_blocked_count := 0
 var aim_blocked_count := 0
 var range_blocked_count := 0
 var manual_aim_position := Vector2.ZERO
+var current_energy := MAX_ENERGY
+var current_heat := 0.0
 
 
 func setup(
@@ -150,6 +165,66 @@ func set_opponents(targets: Array) -> void:
 func is_ally_of(other: Node) -> bool:
 	var other_mech := other as AiMechAgent
 	return is_instance_valid(other_mech) and team_id == other_mech.team_id
+
+
+func sensor_range() -> float:
+	if mech_loadout != null and mech_loadout.head != null:
+		return maxf(mech_loadout.head.sensor_range, 0.0)
+	return DEFAULT_SENSOR_RANGE
+
+
+func projectile_track_limit() -> int:
+	if mech_loadout != null and mech_loadout.head != null:
+		return maxi(mech_loadout.head.projectile_track_limit, 0)
+	return DEFAULT_PROJECTILE_TRACK_LIMIT
+
+
+func movement_speed() -> float:
+	if mech_loadout != null:
+		return maxf(float(mech_loadout.stats().get("mobility", cruise_speed)), 0.0)
+	return cruise_speed
+
+
+func energy_ratio() -> float:
+	return current_energy / MAX_ENERGY
+
+
+func heat_ratio() -> float:
+	return current_heat / MAX_HEAT
+
+
+func can_detect_position(world_position: Vector2) -> bool:
+	return global_position.distance_squared_to(world_position) <= sensor_range() ** 2
+
+
+func can_detect_unit(target: Node2D) -> bool:
+	return is_instance_valid(target) and can_detect_position(target.global_position)
+
+
+func detected_hostile_projectiles(projectiles: Node2D) -> Array[BallisticProjectile]:
+	var detected: Array[BallisticProjectile] = []
+	var track_limit := projectile_track_limit()
+	if not is_instance_valid(projectiles) or track_limit <= 0:
+		return detected
+	for node in projectiles.get_children():
+		var projectile := node as BallisticProjectile
+		if (
+			projectile == null
+			or not is_instance_valid(projectile.source_mech)
+			or is_ally_of(projectile.source_mech)
+			or not can_detect_position(projectile.global_position)
+		):
+			continue
+		detected.append(projectile)
+	detected.sort_custom(func(a: BallisticProjectile, b: BallisticProjectile) -> bool:
+		var a_distance := global_position.distance_squared_to(a.global_position)
+		var b_distance := global_position.distance_squared_to(b.global_position)
+		if is_equal_approx(a_distance, b_distance):
+			return a.get_instance_id() < b.get_instance_id()
+		return a_distance < b_distance
+	)
+	detected.resize(mini(detected.size(), track_limit))
+	return detected
 
 
 func ammo_remaining() -> int:
@@ -277,6 +352,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if player_controlled:
+		_update_player_weapon_selection()
 		_update_player_movement(delta)
 		_select_opponent(manual_aim_position)
 	else:
@@ -355,9 +431,20 @@ func _update_player_movement(delta: float) -> void:
 		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
 		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
 	).normalized()
-	var target_velocity := input_direction * cruise_speed
+	dash_cooldown_remaining = maxf(dash_cooldown_remaining - delta, 0.0)
+	var dash_input_pressed := Input.is_physical_key_pressed(KEY_SPACE)
+	if dash_input_pressed and not dash_input_was_pressed:
+		_try_start_player_dash(input_direction)
+	dash_input_was_pressed = dash_input_pressed
+
+	var target_velocity := input_direction * movement_speed()
 	velocity = velocity.move_toward(target_velocity, acceleration * delta)
-	position += velocity * delta
+	var movement_step := velocity * delta
+	if dash_time_remaining > 0.0:
+		var dash_step := minf(delta, dash_time_remaining)
+		movement_step += dash_direction * dash_speed * dash_step
+		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
+	position += movement_step
 	position = position.clamp(arena.position, arena.end)
 	if input_direction.length_squared() > 0.0:
 		lower_body.rotation = rotate_toward(
@@ -372,6 +459,49 @@ func _update_player_movement(delta: float) -> void:
 			aim_vector.angle() + PI * 0.5,
 			deg_to_rad(upper_turn_speed_degrees) * delta
 		)
+
+
+func _try_start_player_dash(input_direction: Vector2) -> void:
+	if (
+		dash_time_remaining > 0.0
+		or dash_cooldown_remaining > 0.0
+		or preparing_weapon_index >= 0
+		or current_energy < DASH_ENERGY_COST
+	):
+		return
+	var travel_direction := input_direction
+	if travel_direction.is_zero_approx() and velocity.length_squared() > 1.0:
+		travel_direction = velocity.normalized()
+	if travel_direction.is_zero_approx():
+		return
+	dash_direction = travel_direction
+	dash_time_remaining = dash_duration
+	dash_cooldown_remaining = dash_cooldown
+	current_energy = maxf(current_energy - DASH_ENERGY_COST, 0.0)
+	current_heat = minf(current_heat + DASH_HEAT_COST, MAX_HEAT)
+	dash_count += 1
+
+
+func _update_player_weapon_selection() -> void:
+	if Input.is_physical_key_pressed(KEY_1):
+		selected_weapon_mask = WEAPON_SELECT_LEFT
+	elif Input.is_physical_key_pressed(KEY_2):
+		selected_weapon_mask = WEAPON_SELECT_RIGHT
+	elif Input.is_physical_key_pressed(KEY_3):
+		selected_weapon_mask = WEAPON_SELECT_BACKPACK
+	elif Input.is_physical_key_pressed(KEY_4):
+		selected_weapon_mask = WEAPON_SELECT_ALL
+
+
+func _weapon_selection_bit(weapon: WeaponRuntime) -> int:
+	match weapon.part_name:
+		&"LeftArm":
+			return WEAPON_SELECT_LEFT
+		&"RightArm":
+			return WEAPON_SELECT_RIGHT
+		&"Backpack":
+			return WEAPON_SELECT_BACKPACK
+	return 0
 
 
 func _select_opponent(reference_position: Vector2) -> void:
@@ -554,6 +684,8 @@ func _try_fire_linked_group() -> void:
 	for offset in weapons.size():
 		var weapon_index := (next_weapon_index + offset) % weapons.size()
 		var weapon := weapons[weapon_index]
+		if player_controlled and (_weapon_selection_bit(weapon) & selected_weapon_mask) == 0:
+			continue
 		if not weapon.can_fire():
 			continue
 		if (

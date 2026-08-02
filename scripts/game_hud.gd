@@ -12,7 +12,7 @@ var player: AiMechAgent
 var projectile_layer: Node2D
 var tactical_map: TacticalMap
 var unit_status: Label
-var weapon_status: Label
+var weapon_status_labels: Array[Label] = []
 var message_status: Label
 var wireframe: MechWireframePreview
 var messages: Array[Dictionary] = []
@@ -51,6 +51,8 @@ func _process(delta: float) -> void:
 	_detect_incoming_missiles()
 	_update_unit_status()
 	_update_weapon_status()
+	if is_instance_valid(player):
+		set_resource_ratios(player.energy_ratio(), player.heat_ratio())
 	queue_redraw()
 
 
@@ -65,10 +67,13 @@ func _build_interface() -> void:
 	wireframe.display_sample()
 	add_child(wireframe)
 
-	weapon_status = _make_label("WEAPON LINK // WAITING", 7, NORMAL_COLOR)
-	weapon_status.position = Vector2(45.0, 87.0)
-	weapon_status.size = Vector2(88.0, 81.0)
-	add_child(weapon_status)
+	for index in 4:
+		var weapon_label := _make_label("%d  EMPTY" % (index + 1), 7, NORMAL_COLOR)
+		weapon_label.position = Vector2(45.0, 86.0 + index * 21.0)
+		weapon_label.size = Vector2(88.0, 19.0)
+		weapon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		add_child(weapon_label)
+		weapon_status_labels.append(weapon_label)
 
 	unit_status = _make_label("FRAME // WAITING", 7, NORMAL_COLOR)
 	unit_status.position = Vector2(36.0, 180.0)
@@ -135,25 +140,32 @@ func _update_unit_status() -> void:
 func _update_weapon_status() -> void:
 	if not is_instance_valid(player):
 		return
-	var rows := PackedStringArray()
-	for index in 4:
-		if index >= player.weapons.size():
-			rows.append("%d  EMPTY" % (index + 1))
+	var part_names: Array[StringName] = [&"LeftArm", &"RightArm", &"Backpack"]
+	for index in part_names.size():
+		var weapon := _weapon_for_part(part_names[index])
+		if weapon == null:
+			weapon_status_labels[index].text = "%d  EMPTY" % (index + 1)
 			continue
-		var weapon := player.weapons[index]
 		var resource := "--"
 		if weapon.spec.resource_type == WeaponSpec.ResourceType.AMMO:
 			resource = "%02d" % weapon.ammo
 		var state := "RDY"
 		if weapon.reload_remaining > 0.0:
 			state = "RLD"
-		elif player.preparing_weapon_index == index:
+		elif player.preparing_weapon_index == player.weapons.find(weapon):
 			state = "PRE"
 		elif weapon.cooldown_remaining > 0.0:
 			state = "CD"
 		var weapon_name := weapon.spec.display_name.to_upper().trim_prefix("TEST ").left(8)
-		rows.append("%d  %-8s %2s %s" % [index + 1, weapon_name, resource, state])
-	weapon_status.text = "\n".join(rows)
+		weapon_status_labels[index].text = "%d  %-8s %2s %s" % [index + 1, weapon_name, resource, state]
+	weapon_status_labels[3].text = "4  ALL WEAPONS"
+
+
+func _weapon_for_part(part_name: StringName) -> WeaponRuntime:
+	for weapon in player.weapons:
+		if weapon.part_name == part_name:
+			return weapon
+	return null
 
 
 func _update_messages(delta: float) -> void:
@@ -165,9 +177,9 @@ func _update_messages(delta: float) -> void:
 
 
 func _detect_incoming_missiles() -> void:
-	if not is_instance_valid(projectile_layer):
+	if not is_instance_valid(player) or not is_instance_valid(projectile_layer):
 		return
-	var active := {}
+	var live_missiles := {}
 	for node in projectile_layer.get_children():
 		var projectile := node as BallisticProjectile
 		if (
@@ -176,11 +188,20 @@ func _detect_incoming_missiles() -> void:
 			or projectile.homing_target != player
 		):
 			continue
+		live_missiles[projectile.get_instance_id()] = true
+	for projectile in player.detected_hostile_projectiles(projectile_layer):
+		if (
+			projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE
+			or projectile.homing_target != player
+		):
+			continue
 		var instance_id := projectile.get_instance_id()
-		active[instance_id] = true
 		if not tracked_missiles.has(instance_id):
 			_add_message("MISSILE DETECTED")
-	tracked_missiles = active
+			tracked_missiles[instance_id] = true
+	for instance_id in tracked_missiles.keys():
+		if not live_missiles.has(instance_id):
+			tracked_missiles.erase(instance_id)
 
 
 func _add_message(text_value: String) -> void:

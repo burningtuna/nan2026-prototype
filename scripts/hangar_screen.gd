@@ -125,10 +125,10 @@ func _build_interface() -> void:
 		var stat_name: String = stat_defs[index][0]
 		_make_label(self, stat_name, origin, Vector2(52, 10), 7, MUTED)
 		var bar := ProgressBar.new()
-		bar.position = origin + Vector2(0, 10)
-		bar.size = Vector2(106, 7)
-		bar.max_value = stat_defs[index][1]
 		bar.show_percentage = false
+		bar.position = origin + Vector2(0, 10)
+		bar.size = Vector2(106, 8)
+		bar.max_value = stat_defs[index][1]
 		bar.add_theme_stylebox_override("background", _style(Color("081216"), Color("1b363d"), 0))
 		bar.add_theme_stylebox_override("fill", _style(CYAN, CYAN, 0))
 		add_child(bar)

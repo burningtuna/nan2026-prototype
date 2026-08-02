@@ -6,8 +6,11 @@ const PREP_COLOR := Color("ffd15c")
 const LABEL_COLOR := Color("ffdede")
 const RANGE_READY_COLOR := Color("65f0d0")
 const RANGE_BLOCKED_COLOR := Color("ff6259")
+const ALLY_MARKER_COLOR := Color("62ed8c")
+const UNIT_MARKER_MARGIN := 24.0
 
 var player: AiMechAgent
+var allies: Array[AiMechAgent] = []
 var enemies: Array[AiMechAgent] = []
 var projectile_layer: Node2D
 var attack_flash_remaining := {}
@@ -19,8 +22,9 @@ func _ready() -> void:
 	set_process(false)
 
 
-func bind(combat_player: AiMechAgent, combat_enemies: Array, projectiles: Node2D) -> void:
+func bind(combat_player: AiMechAgent, combat_allies: Array, combat_enemies: Array, projectiles: Node2D) -> void:
 	player = combat_player
+	allies.assign(combat_allies)
 	enemies.assign(combat_enemies)
 	projectile_layer = projectiles
 	for enemy in enemies:
@@ -40,24 +44,38 @@ func _process(delta: float) -> void:
 
 
 func _on_enemy_weapon_fired(_weapon: WeaponRuntime, enemy: AiMechAgent) -> void:
-	attack_flash_remaining[enemy.get_instance_id()] = 0.45
+	if is_instance_valid(player) and player.can_detect_unit(enemy):
+		attack_flash_remaining[enemy.get_instance_id()] = 0.45
 
 
 func _draw() -> void:
+	if not is_instance_valid(player):
+		return
 	var canvas_transform := get_viewport().get_canvas_transform()
+	var safe_rect := Rect2(
+		Vector2.ONE * UNIT_MARKER_MARGIN,
+		size - Vector2.ONE * UNIT_MARKER_MARGIN * 2.0
+	)
+	for ally in allies:
+		if not is_instance_valid(ally):
+			continue
+		var ally_position: Vector2 = canvas_transform * ally.global_position
+		if not safe_rect.has_point(ally_position):
+			_draw_offscreen_unit_marker(ally_position, safe_rect, ALLY_MARKER_COLOR)
 	for enemy in enemies:
-		if not is_instance_valid(enemy):
+		if not is_instance_valid(enemy) or not player.can_detect_unit(enemy):
 			continue
 		var enemy_position: Vector2 = canvas_transform * enemy.global_position
-		_draw_target_marker(enemy_position, enemy)
+		if safe_rect.has_point(enemy_position):
+			_draw_target_marker(enemy_position, enemy)
+		else:
+			_draw_offscreen_unit_marker(enemy_position, safe_rect, TARGET_COLOR)
 	_draw_cursor_range(canvas_transform)
 	if not is_instance_valid(projectile_layer):
 		return
-	for node in projectile_layer.get_children():
-		var projectile := node as BallisticProjectile
+	for projectile in player.detected_hostile_projectiles(projectile_layer):
 		if (
-			projectile == null
-			or projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE
+			projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE
 			or projectile.homing_target != player
 		):
 			continue
@@ -133,6 +151,22 @@ func _draw_missile_marker(screen_position: Vector2) -> void:
 	if is_offscreen:
 		var direction := (screen_position - marker_position).normalized()
 		draw_line(marker_position, marker_position + direction * 8.0, TARGET_COLOR, 2.0)
+
+
+func _draw_offscreen_unit_marker(screen_position: Vector2, safe_rect: Rect2, color: Color) -> void:
+	var center := safe_rect.get_center()
+	var direction := (screen_position - center).normalized()
+	if direction.is_zero_approx():
+		return
+	var half_size := safe_rect.size * 0.5
+	var x_scale := INF if is_zero_approx(direction.x) else half_size.x / absf(direction.x)
+	var y_scale := INF if is_zero_approx(direction.y) else half_size.y / absf(direction.y)
+	var tip := center + direction * minf(x_scale, y_scale)
+	var base := tip - direction * 11.0
+	var normal := Vector2(-direction.y, direction.x) * 5.0
+	var points := PackedVector2Array([tip, base + normal, base - normal])
+	draw_colored_polygon(points, color)
+	draw_polyline(PackedVector2Array([tip, base + normal, base - normal, tip]), color.lightened(0.25), 1.0)
 
 
 func _enemy_state(enemy: AiMechAgent) -> String:
