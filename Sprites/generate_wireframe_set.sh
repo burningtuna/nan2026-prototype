@@ -43,6 +43,26 @@ render "Head-0001.png" "16x14" \
 render "Head-0001.anchors.png" "16x14" \
     -fill "#FF0000" -draw "point 7,12"
 
+scale_head() {
+    local output="$1"
+    local scale="$2"
+
+    if [[ -e "${OUTPUT_DIR}/${output}" && "${FORCE_SPRITES:-0}" != "1" ]]; then
+        return
+    fi
+
+    magick "${OUTPUT_DIR}/Head-0001.png" -filter point -resize "$scale" -depth 8 "PNG32:${OUTPUT_DIR}/${output}"
+}
+
+scale_head "Head-Falcon-0001.png" "50%"
+scale_head "Head-Bastion-0001.png" "200%x100%"
+
+render "Head-Falcon-0001.anchors.png" "8x7" \
+    -fill "#FF0000" -draw "point 3,6"
+
+render "Head-Bastion-0001.anchors.png" "32x14" \
+    -fill "#FF0000" -draw "point 15,12"
+
 render "Legs-0001.png" "24x24" \
     -fill none -stroke "$DARK" -strokewidth 1 -draw "polygon 5,1 11,1 10,9 8,22 2,22 3,10 polygon 12,1 18,1 20,10 21,22 15,22 13,9" \
     -stroke "$MID" -draw "line 5,5 10,5 line 13,5 18,5 rectangle 4,10 9,17 rectangle 14,10 19,17" \

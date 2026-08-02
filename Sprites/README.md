@@ -8,6 +8,8 @@ This directory contains the first top-down test mech set for `DIRECTIVE//12`. Th
 | --- | ---: | --- |
 | `Body-0001.png` | 12×12 | Up |
 | `Head-0001.png` | 12×12 | Up |
+| `Head-Falcon-0001.png` | 6×6 | Up |
+| `Head-Bastion-0001.png` | 24×24 | Up |
 | `Legs-0001.png` | 12×12 | Up |
 | `Arm-Cannon-0001.png` | 24×12 | Right (`+X`) |
 | `Arm-Shotgun-0001.png` | 24×12 | Right (`+X`) |
@@ -22,7 +24,7 @@ This directory contains the first top-down test mech set for `DIRECTIVE//12`. Th
 | `Dash-0002.png` | 4×9 | Down |
 | `Dash-0003.png` | 4×9 | Down |
 
-Arm sprites are shared by both arm slots. Rotate them around their aim pivot instead of drawing directional variants. The shotgun retains the cannon's reach with a thinner silhouette; the rifle and pistol use progressively shorter barrels on the same canvas and pivot. The head is an armored crown seen from above and intentionally has no front-facing face or eyes.
+Arm sprites are shared by both arm slots. Rotate them around their aim pivot instead of drawing directional variants. The shotgun retains the cannon's reach with a thinner silhouette; the rifle and pistol use progressively shorter barrels on the same canvas and pivot. The head is an armored crown seen from above and intentionally has no front-facing face or eyes. Falcon uses a half-size crown, Raven uses the standard crown, and Bastion uses a double-size crown so sensor performance increases the exposed head hitbox.
 
 ## Palette
 

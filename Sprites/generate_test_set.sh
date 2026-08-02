@@ -32,6 +32,29 @@ render "Head-0001.png" "12x12" \
     -fill "$HIGHLIGHT" -draw "point 5,1 point 4,2 point 3,4 point 8,4" \
     -fill "$BLACK" -draw "rectangle 5,3 6,5"
 
+scale_head() {
+    local output="$1"
+    local scale="$2"
+
+    if [[ -e "${SCRIPT_DIR}/${output}" && "${FORCE_SPRITES:-0}" != "1" ]]; then
+        return
+    fi
+
+    magick "${SCRIPT_DIR}/Head-0001.png" -filter point -resize "$scale" -depth 8 "PNG32:${SCRIPT_DIR}/${output}"
+}
+
+# Sensor performance trades silhouette size for capability. Falcon is half the
+# standard crown dimensions; Bastion doubles them so its larger hitbox is a
+# visible high-risk cost.
+scale_head "Head-Falcon-0001.png" "50%"
+scale_head "Head-Bastion-0001.png" "200%"
+
+render "Head-Falcon-0001.anchors.png" "6x6" \
+    -fill "#FF0000" -draw "point 2,3"
+
+render "Head-Bastion-0001.anchors.png" "24x24" \
+    -fill "#FF0000" -draw "point 11,12"
+
 # Top-down twin ground-thruster pods. There are no feet or walking joints.
 render "Legs-0001.png" "12x12" \
     -fill "$BLACK" -draw "rectangle 4,0 7,2 rectangle 2,2 4,9 rectangle 7,2 9,9 rectangle 1,4 4,8 rectangle 7,4 10,8 rectangle 2,9 3,10 rectangle 8,9 9,10" \
@@ -119,8 +142,9 @@ render "Dash-0003.png" "4x9" \
 # Anchor mask palette:
 # red parent mount, orange head socket, lime legs socket, yellow left arm,
 # green right arm, violet backpack, magenta aim pivot, blue muzzle, cyan boost.
-# Body and head anchor masks are hand-authored references and are intentionally
-# not regenerated. The head mount also serves as its aiming rotation pivot.
+# The standard body and head anchor masks are hand-authored references and are
+# intentionally not regenerated. Each head mount also serves as its aiming
+# rotation pivot.
 
 render "Legs-0001.anchors.png" "12x12" \
     -fill "#FF0000" -draw "point 5,0" \

@@ -11,7 +11,9 @@ const WEAPONS_DATA_PATH := "res://data/weapons.json"
 @export var framing_margin := Vector2(96.0, 82.0)
 @export var minimum_zoom := 0.01
 @export var maximum_zoom := 1.8
-@export var zoom_smoothing := 3.0
+@export var camera_position_smoothing := 4.0
+@export var zoom_in_smoothing := 3.0
+@export var zoom_out_smoothing := 2.0
 @export var two_vs_two := false
 @export var enable_player_control := false
 @export var randomize_loadouts := false
@@ -40,6 +42,7 @@ var valid_random_loadouts: Array[MechLoadout] = []
 var winner_team_id := -1
 var battle_completed := false
 var camera_dynamic_zoom_started := false
+var camera_framed_units := {}
 
 
 func _ready() -> void:
@@ -73,6 +76,7 @@ func _process(delta: float) -> void:
 func _update_battle_result() -> void:
 	if battle_completed or agents.is_empty():
 		return
+	_update_last_ally_behavior()
 	var team_has_members := {}
 	var team_is_alive := {}
 	for agent in agents:
@@ -94,6 +98,28 @@ func _update_battle_result() -> void:
 	battle_finished.emit(winner_team_id)
 
 
+func _update_last_ally_behavior() -> void:
+	var player := _player_agent()
+	if player == null:
+		return
+	var surviving_allies: Array[AiMechAgent] = []
+	for agent in agents:
+		var ally := agent as AiMechAgent
+		if (
+			is_instance_valid(ally)
+			and ally.team_id == player.team_id
+			and not ally.is_defeated()
+		):
+			surviving_allies.append(ally)
+	if surviving_allies.size() != 1:
+		return
+	var last_ally := surviving_allies[0]
+	if last_ally.player_controlled:
+		return
+	last_ally.movement_type = AiMechAgent.MovementType.AGGRESSIVE
+	last_ally.ai_decision_time_remaining = 0.0
+
+
 func _run_battle_result_smoke() -> void:
 	assert(agents.size() == 4)
 	var emitted_results: Array[int] = []
@@ -102,6 +128,28 @@ func _run_battle_result_smoke() -> void:
 	)
 	for agent in agents:
 		agent.combat_visuals_enabled = false
+	camera_framed_units.clear()
+	camera.global_position = agents[0].global_position
+	camera.zoom = Vector2.ONE * maximum_zoom
+	assert(not _camera_subjects().has(agents[1]))
+	camera.global_position = agents[1].global_position
+	assert(_camera_subjects().has(agents[1]))
+	camera_framed_units.clear()
+	camera.global_position = agents[0].global_position
+	agents[1].movement_type = AiMechAgent.MovementType.DEFENSIVE
+	_destroy_agent_body(agents[0])
+	_update_battle_result()
+	assert(not battle_completed)
+	assert(_camera_player() == agents[1])
+	assert(agents[1].movement_type == AiMechAgent.MovementType.AGGRESSIVE)
+	camera.global_position = agents[0].global_position
+	var camera_distance_before := camera.global_position.distance_to(agents[1].global_position)
+	_update_camera_position(agents[1].global_position, 1.0 / 60.0, false)
+	var camera_distance_after := camera.global_position.distance_to(agents[1].global_position)
+	assert(camera_distance_after > 0.0 and camera_distance_after < camera_distance_before)
+	camera.zoom = Vector2.ONE
+	_update_camera_zoom(0.5, 1.0 / 60.0, false)
+	assert(camera.zoom.x > 0.5 and camera.zoom.x < 1.0)
 	for enemy_index in [2, 3]:
 		_destroy_agent_body(agents[enemy_index])
 	_update_battle_result()
@@ -110,7 +158,7 @@ func _run_battle_result_smoke() -> void:
 
 	battle_completed = false
 	winner_team_id = -1
-	for ally_index in [0, 1]:
+	for ally_index in [1]:
 		_destroy_agent_body(agents[ally_index])
 	_update_battle_result()
 	assert(battle_completed and winner_team_id == -1)
@@ -300,8 +348,8 @@ func _update_camera(delta: float, snap := false) -> void:
 	var framing_zoom_floor := _framing_zoom_floor(viewport_size, player.sensor_range())
 	var initial_zoom := clampf(framing_zoom_floor, minimum_zoom, maximum_zoom)
 	if not camera_dynamic_zoom_started:
-		camera.global_position = player.global_position
-		camera.zoom = Vector2.ONE * initial_zoom
+		_update_camera_position(player.global_position, delta, snap)
+		_update_camera_zoom(initial_zoom, delta, snap)
 		if not snap and _can_start_dynamic_camera(player, viewport_size, initial_zoom):
 			camera_dynamic_zoom_started = true
 		return
@@ -338,12 +386,38 @@ func _update_camera(delta: float, snap := false) -> void:
 		player_position.y - player_safe_extent.y,
 		player_position.y + player_safe_extent.y
 	)
-	camera.global_position = desired_camera_position
+	_update_camera_position(desired_camera_position, delta, snap)
+	target_zoom = minf(target_zoom, _safe_zoom_for_positions(subject_positions, viewport_size))
+	_update_camera_zoom(target_zoom, delta, snap)
+
+
+func _update_camera_position(target_position: Vector2, delta: float, snap: bool) -> void:
+	if snap:
+		camera.global_position = target_position
+		return
+	var blend := 1.0 - exp(-camera_position_smoothing * delta)
+	camera.global_position = camera.global_position.lerp(target_position, blend)
+
+
+func _update_camera_zoom(target_zoom: float, delta: float, snap: bool) -> void:
 	if snap:
 		camera.zoom = Vector2.ONE * target_zoom
-	else:
-		var blend := 1.0 - exp(-zoom_smoothing * delta)
-		camera.zoom = Vector2.ONE * lerpf(camera.zoom.x, target_zoom, blend)
+		return
+	var smoothing := zoom_out_smoothing if target_zoom < camera.zoom.x else zoom_in_smoothing
+	var blend := 1.0 - exp(-smoothing * delta)
+	camera.zoom = Vector2.ONE * lerpf(camera.zoom.x, target_zoom, blend)
+
+
+func _safe_zoom_for_positions(subject_positions: Array[Vector2], viewport_size: Vector2) -> float:
+	var required_half_extent := framing_margin
+	for subject_position in subject_positions:
+		required_half_extent = required_half_extent.max(
+			(subject_position - camera.global_position).abs() + framing_margin
+		)
+	return minf(
+		viewport_size.x / maxf(required_half_extent.x * 2.0, 1.0),
+		viewport_size.y / maxf(required_half_extent.y * 2.0, 1.0)
+	)
 
 
 func _camera_subject_positions(camera_subjects: Array[AiMechAgent]) -> Array[Vector2]:
@@ -385,13 +459,29 @@ func _can_start_dynamic_camera(
 	return required_zoom > initial_zoom + 0.001
 
 
-func _camera_player() -> AiMechAgent:
+func _player_agent() -> AiMechAgent:
 	for agent in agents:
 		if is_instance_valid(agent) and agent.player_controlled:
 			return agent
 	if not agents.is_empty() and is_instance_valid(agents[0]):
 		return agents[0]
 	return null
+
+
+func _camera_player() -> AiMechAgent:
+	var player := _player_agent()
+	if player == null or not player.is_defeated():
+		return player
+	for agent in agents:
+		var ally := agent as AiMechAgent
+		if (
+			is_instance_valid(ally)
+			and ally != player
+			and ally.team_id == player.team_id
+			and not ally.is_defeated()
+		):
+			return ally
+	return player
 
 
 func _camera_subjects() -> Array[AiMechAgent]:
@@ -402,13 +492,27 @@ func _camera_subjects() -> Array[AiMechAgent]:
 
 	result.append(player)
 	var camera_range := player.sensor_range()
+	var eligible_unit_ids := {}
 	for agent in agents:
 		if not is_instance_valid(agent) or agent == player or agent.is_defeated():
 			continue
+		var unit_id: int = agent.get_instance_id()
 		if camera_range <= 0.0 or player.global_position.distance_to(agent.global_position) > camera_range:
+			camera_framed_units.erase(unit_id)
 			continue
-		result.append(agent)
+		eligible_unit_ids[unit_id] = true
+		if camera_framed_units.has(unit_id) or _is_inside_current_camera(agent.global_position):
+			camera_framed_units[unit_id] = true
+			result.append(agent)
+	for unit_id in camera_framed_units.keys():
+		if not eligible_unit_ids.has(unit_id):
+			camera_framed_units.erase(unit_id)
 	return result
+
+
+func _is_inside_current_camera(world_position: Vector2) -> bool:
+	var half_extent := get_viewport_rect().size / camera.zoom * 0.5
+	return Rect2(camera.global_position - half_extent, half_extent * 2.0).has_point(world_position)
 
 
 func _update_status() -> void:

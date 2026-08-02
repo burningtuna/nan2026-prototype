@@ -16,6 +16,7 @@ func _initialize() -> void:
 	assert(raven.enemy_track_limit == 4 and raven.projectile_track_limit == 8)
 	assert(is_equal_approx(bastion.sensor_period, 0.125))
 	assert(bastion.enemy_track_limit == 8 and bastion.projectile_track_limit == 16)
+	_verify_head_profiles(falcon, raven, bastion, weapon_catalog)
 
 	var projectile_layer := Node2D.new()
 	var observer_loadout := part_catalog.create_default_loadout()
@@ -97,6 +98,31 @@ func _make_agent(agent_name: String, projectile_layer: Node2D, loadout: MechLoad
 		loadout
 	)
 	return agent
+
+
+func _verify_head_profiles(
+	falcon: MechPartSpec,
+	raven: MechPartSpec,
+	bastion: MechPartSpec,
+	weapon_catalog: WeaponCatalog
+) -> void:
+	var falcon_texture := load(falcon.art_path) as Texture2D
+	var raven_texture := load(raven.art_path) as Texture2D
+	var bastion_texture := load(bastion.art_path) as Texture2D
+	assert(falcon_texture.get_size() == Vector2(6.0, 6.0))
+	assert(raven_texture.get_size() == Vector2(12.0, 12.0))
+	assert(bastion_texture.get_size() == Vector2(24.0, 24.0))
+	var falcon_hit_area := falcon_texture.get_image().get_used_rect().get_area()
+	var raven_hit_area := raven_texture.get_image().get_used_rect().get_area()
+	var bastion_hit_area := bastion_texture.get_image().get_used_rect().get_area()
+	assert(falcon_hit_area < raven_hit_area and raven_hit_area < bastion_hit_area)
+	assert((load(falcon.wireframe_art_path) as Texture2D).get_size() == Vector2(8.0, 7.0))
+	assert((load(bastion.wireframe_art_path) as Texture2D).get_size() == Vector2(32.0, 14.0))
+	var longest_weapon_range := 0.0
+	for weapon_value in weapon_catalog.weapons_by_id.values():
+		var weapon := weapon_value as WeaponSpec
+		longest_weapon_range = maxf(longest_weapon_range, weapon.max_range)
+	assert(is_equal_approx(bastion.sensor_range, longest_weapon_range))
 
 
 func _decision_period(type: AiMechAgent.MovementType) -> float:
