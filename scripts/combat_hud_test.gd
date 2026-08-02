@@ -3,11 +3,13 @@ extends Control
 const SIDEBAR_RATIO := 0.3
 const SIDEBAR_MIN_WIDTH := 136.0
 const SIDEBAR_MAX_WIDTH := 192.0
+const HUD_DESIGN_SIZE := Vector2(144.0, 270.0)
 const HANGAR_SCENE_PATH := "res://scenes/hangar_screen.tscn"
 const RESULT_DISPLAY_SECONDS := 2.5
 
 @onready var sidebar: PanelContainer = $Sidebar
-@onready var hud: GameHud = $Sidebar/HudStack/GameHud
+@onready var hud_canvas: Control = $Sidebar/HudStack/HudCanvas
+@onready var hud: GameHud = $Sidebar/HudStack/HudCanvas/GameHud
 @onready var combat_container: SubViewportContainer = $CombatContainer
 @onready var combat_viewport: SubViewport = $CombatContainer/CombatViewport
 @onready var battle = $CombatContainer/CombatViewport/SampleAssembly
@@ -25,8 +27,14 @@ func _ready() -> void:
 
 
 func _update_layout() -> void:
-	var sidebar_width := clampf(size.x * SIDEBAR_RATIO, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+	var target_sidebar_width := clampf(size.x * SIDEBAR_RATIO, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+	var hud_scale := minf(
+		target_sidebar_width / HUD_DESIGN_SIZE.x,
+		size.y / HUD_DESIGN_SIZE.y
+	)
+	var sidebar_width := HUD_DESIGN_SIZE.x * hud_scale
 	sidebar.offset_right = sidebar_width
+	hud_canvas.scale = Vector2.ONE * hud_scale
 	var combat_position := Vector2(sidebar_width + 1.0, 0.0)
 	var logical_combat_size := Vector2(
 		maxf(size.x - combat_position.x, 1.0),

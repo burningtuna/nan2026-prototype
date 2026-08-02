@@ -41,7 +41,13 @@ theme_override_styles/panel = SubResource("StyleSidebar")
 [node name="HudStack" type="Control" parent="Sidebar"]
 layout_mode = 2
 
-[node name="HudFrame" type="TextureRect" parent="Sidebar/HudStack"]
+[node name="HudCanvas" type="Control" parent="Sidebar/HudStack"]
+layout_mode = 0
+offset_right = 144.0
+offset_bottom = 270.0
+mouse_filter = 2
+
+[node name="HudFrame" type="TextureRect" parent="Sidebar/HudStack/HudCanvas"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -52,7 +58,7 @@ mouse_filter = 2
 texture = ExtResource("5_hud_frame")
 expand_mode = 1
 
-[node name="GameHud" type="Control" parent="Sidebar/HudStack"]
+[node name="GameHud" type="Control" parent="Sidebar/HudStack/HudCanvas"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
