@@ -47,6 +47,29 @@ render "Arm-Cannon-0001.png" "24x12" \
     -fill "$DARK_RED" -draw "rectangle 4,5 8,6 rectangle 9,4 12,7 rectangle 15,6 21,6" \
     -fill "$HIGHLIGHT" -draw "rectangle 8,3 12,3 rectangle 14,5 20,5 point 3,4 point 3,7"
 
+# Full-length scattergun arm. It keeps the cannon's reach while reducing the
+# maximum silhouette thickness from eight pixels to six.
+render "Arm-Shotgun-0001.png" "24x12" \
+    -fill "$BLACK" -draw "rectangle 2,3 13,8 rectangle 12,4 22,7 rectangle 22,3 23,8" \
+    -fill "$RED" -draw "rectangle 3,4 12,7 rectangle 13,5 21,6 rectangle 23,4 23,7" \
+    -fill "$DARK_RED" -draw "rectangle 4,5 8,7 rectangle 9,5 12,6 rectangle 14,6 21,6" \
+    -fill "$HIGHLIGHT" -draw "rectangle 4,4 11,4 rectangle 13,5 20,5 point 23,4"
+
+# Mid-length rifle arm with a narrow exposed barrel.
+render "Arm-Rifle-0001.png" "24x12" \
+    -fill "$BLACK" -draw "rectangle 2,3 12,8 rectangle 11,4 15,7 rectangle 14,5 20,6 rectangle 20,4 21,7" \
+    -fill "$RED" -draw "rectangle 3,4 11,7 rectangle 12,5 14,6 rectangle 15,5 19,6 rectangle 20,5 20,6" \
+    -fill "$DARK_RED" -draw "rectangle 4,5 8,7 rectangle 9,5 13,6 rectangle 15,6 19,6" \
+    -fill "$HIGHLIGHT" -draw "rectangle 4,4 10,4 rectangle 12,5 19,5 point 20,5"
+
+# Compact pistol arm. The receiver remains large enough to read as an arm
+# mount, while its short muzzle makes the class distinct during rotation.
+render "Arm-Pistol-0001.png" "24x12" \
+    -fill "$BLACK" -draw "rectangle 2,3 10,8 rectangle 9,4 15,7 rectangle 15,4 16,7" \
+    -fill "$RED" -draw "rectangle 3,4 9,7 rectangle 10,5 14,6 rectangle 15,5 16,6" \
+    -fill "$DARK_RED" -draw "rectangle 4,5 8,7 rectangle 10,6 14,6" \
+    -fill "$HIGHLIGHT" -draw "rectangle 4,4 8,4 rectangle 10,5 14,5 point 15,5"
+
 # Wide top-down generator backpack, drawn beneath the torso layer.
 render "Backpack-Generator-0001.png" "24x12" \
     -fill "$BLACK" -draw "rectangle 7,1 16,10 rectangle 2,3 7,9 rectangle 16,3 21,9 rectangle 1,5 2,8 rectangle 21,5 22,8" \
@@ -107,6 +130,21 @@ render "Arm-Cannon-0001.anchors.png" "24x12" \
     -fill "#FF0000" -draw "point 3,6" \
     -fill "#FF00FF" -draw "point 4,6" \
     -fill "#0000FF" -draw "point 23,5"
+
+render "Arm-Shotgun-0001.anchors.png" "24x12" \
+    -fill "#FF0000" -draw "point 3,6" \
+    -fill "#FF00FF" -draw "point 4,6" \
+    -fill "#0000FF" -draw "point 23,5"
+
+render "Arm-Rifle-0001.anchors.png" "24x12" \
+    -fill "#FF0000" -draw "point 3,6" \
+    -fill "#FF00FF" -draw "point 4,6" \
+    -fill "#0000FF" -draw "point 20,5"
+
+render "Arm-Pistol-0001.anchors.png" "24x12" \
+    -fill "#FF0000" -draw "point 3,6" \
+    -fill "#FF00FF" -draw "point 4,6" \
+    -fill "#0000FF" -draw "point 16,5"
 
 render "Backpack-Generator-0001.anchors.png" "24x12" \
     -fill "#FF0000" -draw "point 11,6" \

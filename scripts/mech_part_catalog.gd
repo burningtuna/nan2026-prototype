@@ -137,8 +137,8 @@ func _add_part(data: Dictionary) -> bool:
 	part.projectile_track_limit = int(stats.get("projectile_track_limit", part.projectile_track_limit))
 
 	var wireframe_paths: Array = WIREFRAME_PATHS[part_type]
-	part.wireframe_art_path = wireframe_paths[0]
-	part.wireframe_anchor_path = wireframe_paths[1]
+	part.wireframe_art_path = str(data.get("wireframe_art_path", wireframe_paths[0]))
+	part.wireframe_anchor_path = str(data.get("wireframe_anchor_path", wireframe_paths[1]))
 
 	var weapon_value = data.get("weapon_id")
 	if weapon_value != null:

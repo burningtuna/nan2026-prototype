@@ -238,8 +238,9 @@ func _build_catalog() -> bool:
 
 
 func _initial_loadout() -> MechLoadout:
-	if GameSession.player_mech_loadout != null:
-		return GameSession.player_mech_loadout.copy()
+	var saved_loadout := GameSession.load_saved_player_loadout(_part_catalog)
+	if saved_loadout != null:
+		return saved_loadout
 	return _part_catalog.create_default_loadout()
 
 

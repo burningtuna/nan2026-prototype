@@ -5,8 +5,10 @@ const NORMAL_COLOR := Color("a9c0ca")
 const ACTIVE_COLOR := Color("66e6dc")
 const HEAT_COLOR := Color("ff684f")
 const WIREFRAME_PREVIEW := preload("res://scripts/mech_wireframe_preview.gd")
-const HIT_FLASH_DURATION := 0.8
 const MESSAGE_DURATION := 4.0
+const PART_NAMES: Array[StringName] = [
+	&"Body", &"Head", &"Legs", &"LeftArm", &"RightArm", &"Backpack",
+]
 
 var player: AiMechAgent
 var projectile_layer: Node2D
@@ -16,7 +18,6 @@ var weapon_status_labels: Array[Label] = []
 var message_status: Label
 var wireframe: MechWireframePreview
 var messages: Array[Dictionary] = []
-var part_hit_timers := {}
 var tracked_missiles := {}
 var energy_ratio := 1.0
 var heat_ratio := 0.0
@@ -34,7 +35,9 @@ func bind(combat_player: AiMechAgent, allies: Array, enemies: Array, projectiles
 		wireframe.display(player.mech_loadout)
 	tactical_map.bind(player, allies, enemies, projectile_layer)
 	player.hit_received.connect(_on_player_hit_received)
+	player.part_destroyed.connect(_on_player_part_destroyed)
 	player.hit_landed.connect(_on_player_hit_landed)
+	_update_wireframe_durability()
 	_add_message("WASD MOVE / MOUSE AIM / LMB FIRE")
 	set_process(true)
 
@@ -46,7 +49,6 @@ func set_resource_ratios(current_energy_ratio: float, current_heat_ratio: float)
 
 
 func _process(delta: float) -> void:
-	_update_hit_timers(delta)
 	_update_messages(delta)
 	_detect_incoming_missiles()
 	_update_unit_status()
@@ -117,23 +119,15 @@ func _draw_resource_gauge(rect: Rect2, ratio: float, color: Color) -> void:
 	for y in range(int(fill_rect.position.y), int(fill_rect.end.y), 4):
 		draw_line(Vector2(fill_rect.position.x, y), Vector2(fill_rect.end.x, y), color, 1.0)
 
-
-func _update_hit_timers(delta: float) -> void:
-	for part_name in part_hit_timers.keys():
-		var remaining: float = part_hit_timers[part_name] - delta
-		if remaining <= 0.0:
-			part_hit_timers.erase(part_name)
-			wireframe.set_part_state(part_name, MechWireframePreview.PartState.HEALTHY)
-		else:
-			part_hit_timers[part_name] = remaining
-
-
 func _update_unit_status() -> void:
 	if not is_instance_valid(player):
 		return
 	var last_hit := "NOMINAL"
 	if not player.last_hit_part.is_empty():
-		last_hit = "%s %s" % [player.last_hit_part, player.last_hit_aspect]
+		last_hit = "%s %d%%" % [
+			player.last_hit_part,
+			roundi(player.part_durability_ratio(player.last_hit_part) * 100.0),
+		]
 	unit_status.text = "FRAME // %s" % last_hit.to_upper()
 
 
@@ -150,7 +144,9 @@ func _update_weapon_status() -> void:
 		if weapon.spec.resource_type == WeaponSpec.ResourceType.AMMO:
 			resource = "%02d" % weapon.ammo
 		var state := "RDY"
-		if weapon.reload_remaining > 0.0:
+		if weapon.disabled:
+			state = "OUT"
+		elif weapon.reload_remaining > 0.0:
 			state = "RLD"
 		elif player.preparing_weapon_index == player.weapons.find(weapon):
 			state = "PRE"
@@ -211,10 +207,21 @@ func _add_message(text_value: String) -> void:
 
 
 func _on_player_hit_received(part_name: StringName, aspect: StringName) -> void:
-	part_hit_timers[part_name] = HIT_FLASH_DURATION
-	wireframe.set_part_state(part_name, MechWireframePreview.PartState.DAMAGED)
+	wireframe.set_part_durability(part_name, player.part_durability_ratio(part_name))
 	var display_part := String(part_name).replace("Arm", " ARM").to_upper()
 	_add_message("UNIT HIT: %s / %s" % [display_part, aspect])
+
+
+func _on_player_part_destroyed(part_name: StringName) -> void:
+	wireframe.set_part_state(part_name, MechWireframePreview.PartState.DESTROYED)
+	var display_part := String(part_name).replace("Arm", " ARM").to_upper()
+	_add_message("PART DESTROYED: %s" % display_part)
+
+
+func _update_wireframe_durability() -> void:
+	for part_name in PART_NAMES:
+		if player.part_max_durability.has(part_name):
+			wireframe.set_part_durability(part_name, player.part_durability_ratio(part_name))
 
 
 func _on_player_hit_landed(weapon_family: WeaponSpec.WeaponFamily) -> void:

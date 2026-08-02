@@ -1,11 +1,13 @@
 extends Node2D
 
+signal battle_finished(winner_team_id: int)
+
 const AI_MECH := preload("res://scripts/ai_mech_agent.gd")
 const STEEL_FLOOR_TILE := preload("res://Sprites/Environment/Stage-01-Steel-Floor.png")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const WEAPONS_DATA_PATH := "res://data/weapons.json"
 
-@export var arena := Rect2(-5000.0, -5000.0, 10000.0, 10000.0)
+@export var arena := Rect2(-3000.0, -3000.0, 6000.0, 6000.0)
 @export var framing_margin := Vector2(72.0, 58.0)
 @export var minimum_zoom := 0.01
 @export var maximum_zoom := 1.8
@@ -34,6 +36,8 @@ var weapon_catalog: WeaponCatalog
 var random_part_catalog: MechPartCatalog
 var random_arm_parts: Array[MechPartSpec] = []
 var random_backpack_parts: Array[MechPartSpec] = []
+var valid_random_loadouts: Array[MechLoadout] = []
+var winner_team_id := -1
 
 
 func _ready() -> void:
@@ -54,10 +58,34 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_update_camera(delta)
+	_update_battle_result()
 	_update_status()
 	queue_redraw()
 	if smoke_test_enabled:
 		_update_smoke_test(delta)
+
+
+func _update_battle_result() -> void:
+	if winner_team_id >= 0 or agents.is_empty():
+		return
+	var team_has_members := {}
+	var team_is_alive := {}
+	for agent in agents:
+		if not is_instance_valid(agent):
+			continue
+		team_has_members[agent.team_id] = true
+		if not agent.is_defeated():
+			team_is_alive[agent.team_id] = true
+	if team_has_members.size() < 2:
+		return
+	var surviving_teams: Array[int] = []
+	for team_id in team_has_members:
+		if team_is_alive.get(team_id, false):
+			surviving_teams.append(team_id)
+	if surviving_teams.size() != 1:
+		return
+	winner_team_id = surviving_teams[0]
+	battle_finished.emit(winner_team_id)
 
 
 func _draw() -> void:
@@ -118,7 +146,7 @@ func _spawn_agents() -> void:
 			agent.weapon_range_multiplier = 0.5
 			agent.movement_type = AiMechAgent.MovementType.AGGRESSIVE
 		else:
-			agent.cruise_speed *= 0.5
+			agent.movement_speed_multiplier *= 0.5
 			agent.acceleration *= 0.5
 			agent.dash_cooldown *= 0.5
 			agent.dash_speed *= 0.5
@@ -173,18 +201,15 @@ func _spawn_agents() -> void:
 
 
 func _random_mech_loadout() -> MechLoadout:
-	var result := random_part_catalog.create_default_loadout()
-	result.left_arm = random_arm_parts[loadout_rng.randi_range(0, random_arm_parts.size() - 1)]
-	result.right_arm = random_arm_parts[loadout_rng.randi_range(0, random_arm_parts.size() - 1)]
-	result.backpack = random_backpack_parts[
-		loadout_rng.randi_range(0, random_backpack_parts.size() - 1)
-	]
-	return result
+	return valid_random_loadouts[
+		loadout_rng.randi_range(0, valid_random_loadouts.size() - 1)
+	].copy()
 
 
 func _load_random_weapon_pools() -> bool:
 	random_arm_parts.clear()
 	random_backpack_parts.clear()
+	valid_random_loadouts.clear()
 	random_part_catalog = MechPartCatalog.new()
 	if not random_part_catalog.load_file(PARTS_DATA_PATH, weapon_catalog):
 		push_error("Unable to load random weapon parts from %s" % PARTS_DATA_PATH)
@@ -199,6 +224,20 @@ func _load_random_weapon_pools() -> bool:
 
 	if random_arm_parts.is_empty() or random_backpack_parts.is_empty():
 		push_error("Random loadouts require armed ARM_EQUIPMENT and BACKPACK parts")
+		return false
+
+	for left_arm in random_arm_parts:
+		for right_arm in random_arm_parts:
+			for backpack in random_backpack_parts:
+				var loadout := random_part_catalog.create_default_loadout()
+				loadout.left_arm = left_arm
+				loadout.right_arm = right_arm
+				loadout.backpack = backpack
+				if loadout.is_valid():
+					valid_random_loadouts.append(loadout)
+
+	if valid_random_loadouts.is_empty():
+		push_error("Random loadout pools contain no deployable combinations")
 		return false
 	return true
 
@@ -256,13 +295,8 @@ func _update_camera(delta: float, snap := false) -> void:
 
 func _camera_subject_positions(camera_subjects: Array[AiMechAgent]) -> Array[Vector2]:
 	var result: Array[Vector2] = []
-	var player_position := camera_subjects[0].global_position
 	for agent in camera_subjects:
-		var subject_position := agent.global_position
-		var player_offset := subject_position - player_position
-		if maximum_framing_distance > 0.0 and player_offset.length() > maximum_framing_distance:
-			subject_position = player_position + player_offset.normalized() * maximum_framing_distance
-		result.append(subject_position)
+		result.append(agent.global_position)
 	return result
 
 
@@ -291,6 +325,11 @@ func _camera_subjects() -> Array[AiMechAgent]:
 			is_instance_valid(agent)
 			and agent != player
 			and agent.team_id != player.team_id
+			and not agent.is_defeated()
+			and (
+				maximum_framing_distance <= 0.0
+				or player.global_position.distance_to(agent.global_position) <= maximum_framing_distance
+			)
 		):
 			result.append(agent)
 	return result

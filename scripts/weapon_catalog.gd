@@ -69,6 +69,10 @@ func _add_projectile(data: Dictionary) -> bool:
 			push_error("Unable to load projectile texture for '%s': %s" % [projectile_id, texture_path])
 			return false
 	spec.visual_scale = float(data.get("visual_scale", spec.visual_scale))
+	spec.trail_width_multiplier = float(data.get("trail_width_multiplier", spec.trail_width_multiplier))
+	spec.trail_lifetime_multiplier = float(
+		data.get("trail_lifetime_multiplier", spec.trail_lifetime_multiplier)
+	)
 	spec.damage = float(data.get("damage", spec.damage))
 	spec.damage_type = StringName(str(data.get("damage_type", spec.damage_type)))
 	spec.penetration = float(data.get("penetration", spec.penetration))
@@ -106,6 +110,7 @@ func _add_weapon(data: Dictionary) -> bool:
 	spec.fire_rate = float(data.get("fire_rate", spec.fire_rate))
 	spec.resource_type = RESOURCE_TYPE_BY_NAME[resource_name]
 	spec.resource_cost = float(data.get("resource_cost", spec.resource_cost))
+	spec.heat_cost = float(data.get("heat_cost", spec.heat_cost))
 	spec.magazine_capacity = int(data.get("magazine_capacity", spec.magazine_capacity))
 	spec.reload_duration = float(data.get("reload_duration", spec.reload_duration))
 	spec.effective_range = float(data.get("effective_range", spec.effective_range))

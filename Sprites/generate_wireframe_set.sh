@@ -61,6 +61,32 @@ render "Arm-Cannon-0001.png" "16x28" \
 render "Arm-Cannon-0001.anchors.png" "16x28" \
     -fill "#FF0000" -draw "point 7,3"
 
+# Front-view arm variants share the cannon's mount and height. Their width and
+# muzzle aperture decrease with caliber because barrel length is not visible.
+render "Arm-Shotgun-0001.png" "16x28" \
+    -fill none -stroke "$DARK" -strokewidth 1 -draw "polygon 3,2 11,2 13,6 11,17 9,25 5,25 3,17 1,6" \
+    -stroke "$MID" -draw "rectangle 4,5 10,14 rectangle 5,16 9,23 line 7,5 7,23" \
+    -stroke "$BRIGHT" -draw "line 3,3 11,3 line 5,15 9,15 rectangle 6,19 8,22"
+
+render "Arm-Shotgun-0001.anchors.png" "16x28" \
+    -fill "#FF0000" -draw "point 7,3"
+
+render "Arm-Rifle-0001.png" "16x28" \
+    -fill none -stroke "$DARK" -strokewidth 1 -draw "polygon 4,2 10,2 12,6 10,17 9,25 5,25 4,17 2,6" \
+    -stroke "$MID" -draw "rectangle 5,5 9,14 rectangle 5,16 9,23 line 7,5 7,23" \
+    -stroke "$BRIGHT" -draw "line 4,3 10,3 line 5,15 9,15 rectangle 6,20 8,22"
+
+render "Arm-Rifle-0001.anchors.png" "16x28" \
+    -fill "#FF0000" -draw "point 7,3"
+
+render "Arm-Pistol-0001.png" "16x28" \
+    -fill none -stroke "$DARK" -strokewidth 1 -draw "polygon 5,2 9,2 11,6 9,17 8,25 6,25 5,17 3,6" \
+    -stroke "$MID" -draw "rectangle 5,5 9,14 rectangle 6,16 8,23 line 7,5 7,23" \
+    -stroke "$BRIGHT" -draw "line 5,3 9,3 line 6,15 8,15 line 7,20 7,22"
+
+render "Arm-Pistol-0001.anchors.png" "16x28" \
+    -fill "#FF0000" -draw "point 7,3"
+
 render "Backpack-Generator-0001.png" "32x22" \
     -fill none -stroke "$DARK" -strokewidth 1 -draw "polygon 3,4 11,2 20,2 28,4 30,17 21,19 10,19 1,17" \
     -stroke "$MID" -draw "rectangle 4,6 9,15 rectangle 22,6 27,15 rectangle 11,4 20,17" \

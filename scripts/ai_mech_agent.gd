@@ -3,16 +3,19 @@ extends Node2D
 
 const DEFAULT_SENSOR_RANGE := 2500.0
 const DEFAULT_PROJECTILE_TRACK_LIMIT := 4
-const MAX_ENERGY := 100.0
+const DEFAULT_MAX_ENERGY := 100.0
 const MAX_HEAT := 100.0
 const DASH_ENERGY_COST := 15.0
 const DASH_HEAT_COST := 15.0
+const ENERGY_FULL_RECHARGE_SECONDS := 10.0
+const MOBILITY_SPEED_MULTIPLIER := 2.0
 const WEAPON_SELECT_LEFT := 1
 const WEAPON_SELECT_RIGHT := 2
 const WEAPON_SELECT_BACKPACK := 4
 const WEAPON_SELECT_ALL := WEAPON_SELECT_LEFT | WEAPON_SELECT_RIGHT | WEAPON_SELECT_BACKPACK
 
 signal hit_received(part_name: StringName, aspect: StringName)
+signal part_destroyed(part_name: StringName)
 signal hit_landed(weapon_family: WeaponSpec.WeaponFamily)
 signal weapon_fired(weapon: WeaponRuntime)
 
@@ -24,6 +27,8 @@ enum MovementType {
 const AnchorMap := preload("res://scripts/sprite_anchor_map.gd")
 const MUZZLE_FLASH_SCENE := preload("res://scenes/muzzle_flash.tscn")
 const PART_HITBOX := preload("res://scripts/part_hitbox.gd")
+const PART_DESTRUCTION_EFFECT := preload("res://scripts/part_destruction_effect.gd")
+const WRECK_FIRE_EFFECT := preload("res://scripts/wreck_fire_effect.gd")
 
 const BODY_ART := "res://Sprites/Body-0001.png"
 const BODY_ANCHORS := "res://Sprites/Body-0001.anchors.png"
@@ -52,11 +57,13 @@ const BOOST_FRAMES := [
 @export var dash_cooldown := 1.0
 @export var fire_rate_multiplier := 1.0
 @export var weapon_range_multiplier := 1.0
+@export var movement_speed_multiplier := 1.0
 @export var movement_type := MovementType.AGGRESSIVE
 @export var preferred_range := 2000.0
 @export var evasion_range := 1500.0
 @export var player_controlled := false
 @export var team_id := 0
+@export var combat_visuals_enabled := true
 
 var opponent: AiMechAgent
 var opponents: Array[AiMechAgent] = []
@@ -121,8 +128,12 @@ var preparation_prediction_blocked_count := 0
 var aim_blocked_count := 0
 var range_blocked_count := 0
 var manual_aim_position := Vector2.ZERO
-var current_energy := MAX_ENERGY
+var current_energy := DEFAULT_MAX_ENERGY
 var current_heat := 0.0
+var energy_spent_this_frame := false
+var part_durability: Dictionary = {}
+var part_max_durability: Dictionary = {}
+var part_hitboxes: Dictionary = {}
 
 
 func setup(
@@ -142,6 +153,9 @@ func setup(
 	scale = Vector2.ONE * 4.0
 	weapon_specs = loadout
 	mech_loadout = configured_loadout.copy() if configured_loadout != null else null
+	_initialize_part_durability()
+	current_energy = energy_capacity()
+	current_heat = 0.0
 
 
 func set_opponent(target: AiMechAgent) -> void:
@@ -168,6 +182,8 @@ func is_ally_of(other: Node) -> bool:
 
 
 func sensor_range() -> float:
+	if is_part_destroyed(&"Head"):
+		return 0.0
 	if mech_loadout != null and mech_loadout.head != null:
 		return maxf(mech_loadout.head.sensor_range, 0.0)
 	return DEFAULT_SENSOR_RANGE
@@ -180,17 +196,45 @@ func projectile_track_limit() -> int:
 
 
 func movement_speed() -> float:
+	if is_part_destroyed(&"Legs"):
+		return 0.0
 	if mech_loadout != null:
-		return maxf(float(mech_loadout.stats().get("mobility", cruise_speed)), 0.0)
-	return cruise_speed
+		return (
+			maxf(float(mech_loadout.stats().get("mobility", cruise_speed)), 0.0)
+			* MOBILITY_SPEED_MULTIPLIER
+			* movement_speed_multiplier
+		)
+	return cruise_speed * MOBILITY_SPEED_MULTIPLIER * movement_speed_multiplier
+
+
+func energy_capacity() -> float:
+	if mech_loadout == null:
+		return DEFAULT_MAX_ENERGY
+	var stats := mech_loadout.stats()
+	return maxf(float(stats["power_generation"]) - float(stats["power_draw"]), 0.0)
+
+
+func cooling_rate() -> float:
+	if mech_loadout == null:
+		return 0.0
+	return maxf(float(mech_loadout.stats()["cooling"]), 0.0)
 
 
 func energy_ratio() -> float:
-	return current_energy / MAX_ENERGY
+	var maximum_energy := energy_capacity()
+	return current_energy / maximum_energy if maximum_energy > 0.0 else 0.0
 
 
 func heat_ratio() -> float:
 	return current_heat / MAX_HEAT
+
+
+func is_dashing() -> bool:
+	return dash_time_remaining > 0.0
+
+
+func visuals_enabled() -> bool:
+	return combat_visuals_enabled
 
 
 func can_detect_position(world_position: Vector2) -> bool:
@@ -198,7 +242,13 @@ func can_detect_position(world_position: Vector2) -> bool:
 
 
 func can_detect_unit(target: Node2D) -> bool:
-	return is_instance_valid(target) and can_detect_position(target.global_position)
+	if not is_instance_valid(target):
+		return false
+	var target_mech := target as AiMechAgent
+	return (
+		(target_mech == null or not target_mech.is_defeated())
+		and can_detect_position(target.global_position)
+	)
 
 
 func detected_hostile_projectiles(projectiles: Node2D) -> Array[BallisticProjectile]:
@@ -234,13 +284,108 @@ func ammo_remaining() -> int:
 	return total
 
 
-func register_hit(part_name: StringName, incoming_direction: Vector2) -> StringName:
+func register_hit(part_name: StringName, incoming_direction: Vector2, damage := 0.0) -> StringName:
 	hit_count += 1
 	last_hit_part = part_name
 	last_hit_aspect = _classify_hit_aspect(incoming_direction)
 	aspect_hit_counts[last_hit_aspect] = aspect_hit_counts.get(last_hit_aspect, 0) + 1
+	var was_destroyed := is_part_destroyed(part_name)
+	if part_durability.has(part_name) and float(part_durability[part_name]) > 0.0:
+		part_durability[part_name] = maxf(float(part_durability[part_name]) - damage, 0.0)
 	hit_received.emit(last_hit_part, last_hit_aspect)
+	if not was_destroyed and is_part_destroyed(part_name):
+		_destroy_part(part_name, incoming_direction)
 	return last_hit_aspect
+
+
+func part_durability_ratio(part_name: StringName) -> float:
+	var maximum := float(part_max_durability.get(part_name, 0.0))
+	if maximum <= 0.0:
+		return 0.0
+	return clampf(float(part_durability.get(part_name, 0.0)) / maximum, 0.0, 1.0)
+
+
+func is_part_destroyed(part_name: StringName) -> bool:
+	return part_max_durability.has(part_name) and float(part_durability.get(part_name, 0.0)) <= 0.0
+
+
+func is_defeated() -> bool:
+	for weapon in weapons:
+		if not weapon.disabled:
+			return false
+	return not weapons.is_empty()
+
+
+func _initialize_part_durability() -> void:
+	part_durability.clear()
+	part_max_durability.clear()
+	if mech_loadout == null:
+		return
+	var parts := {
+		&"Body": mech_loadout.body,
+		&"Head": mech_loadout.head,
+		&"Legs": mech_loadout.legs,
+		&"LeftArm": mech_loadout.left_arm,
+		&"RightArm": mech_loadout.right_arm,
+		&"Backpack": mech_loadout.backpack,
+	}
+	for part_name: StringName in parts:
+		var part := parts[part_name] as MechPartSpec
+		if part == null:
+			continue
+		part_max_durability[part_name] = maxf(part.armor, 0.0)
+		part_durability[part_name] = maxf(part.armor, 0.0)
+
+
+func _destroy_part(part_name: StringName, incoming_direction: Vector2) -> void:
+	var was_defeated := is_defeated()
+	var hitbox := part_hitboxes.get(part_name) as PartHitbox
+	var destruction_position := global_position
+	if hitbox != null and hitbox.monitorable:
+		hitbox.set_deferred("monitorable", false)
+		hitbox.set_deferred("collision_layer", 0)
+		var sprite := hitbox.get_parent() as Sprite2D
+		if sprite != null:
+			destruction_position = sprite.global_position
+			_spawn_part_destruction_effect(destruction_position, part_name, incoming_direction)
+			sprite.visible = false
+	if part_name == &"Legs":
+		for boost in boost_sprites:
+			boost.visible = false
+			boost.stop()
+	for weapon in weapons:
+		if weapon.part_name == part_name:
+			weapon.disabled = true
+	if not was_defeated and is_defeated():
+		_spawn_wreck_fire_effect(destruction_position, part_name)
+	part_destroyed.emit(part_name)
+
+
+func _spawn_part_destruction_effect(
+	world_position: Vector2,
+	part_name: StringName,
+	incoming_direction: Vector2
+) -> void:
+	if not combat_visuals_enabled or not is_instance_valid(projectile_layer):
+		return
+	var effect := PART_DESTRUCTION_EFFECT.new()
+	var seed_value := hash("%s:%d:%s" % [part_name, hit_count, incoming_direction])
+	effect.setup(seed_value)
+	effect.scale = Vector2.ONE * 4.0
+	effect.z_index = 5
+	projectile_layer.add_child(effect)
+	effect.global_position = world_position
+
+
+func _spawn_wreck_fire_effect(world_position: Vector2, part_name: StringName) -> void:
+	if not combat_visuals_enabled or not is_instance_valid(projectile_layer):
+		return
+	var effect := WRECK_FIRE_EFFECT.new()
+	effect.setup(hash("wreck:%s:%d" % [part_name, hit_count]))
+	effect.scale = Vector2.ONE * 4.0
+	effect.z_index = 4
+	projectile_layer.add_child(effect)
+	effect.global_position = world_position
 
 
 func torso_forward() -> Vector2:
@@ -351,6 +496,16 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	energy_spent_this_frame = false
+	if is_defeated():
+		velocity = Vector2.ZERO
+		dash_time_remaining = 0.0
+		preparing_weapon_index = -1
+		preparation_time_remaining = 0.0
+		_update_resources(delta)
+		_update_boost_effect()
+		queue_redraw()
+		return
 	if player_controlled:
 		_update_player_weapon_selection()
 		_update_player_movement(delta)
@@ -360,6 +515,7 @@ func _physics_process(delta: float) -> void:
 		_update_random_movement(delta)
 	_aim_at_opponent(delta)
 	_update_weapons(delta)
+	_update_resources(delta)
 	_update_boost_effect()
 	queue_redraw()
 
@@ -404,7 +560,7 @@ func _update_random_movement(delta: float) -> void:
 	lower_body.rotation = upper_body.rotation
 	var forward := torso_forward()
 	var alignment := maxf(forward.dot(movement_direction), 0.0)
-	var target_velocity := forward * cruise_speed * move_multiplier * alignment
+	var target_velocity := forward * movement_speed() * move_multiplier * alignment
 	velocity = velocity.move_toward(target_velocity, acceleration * delta)
 	var movement_step := velocity * delta
 	dash_cooldown_remaining = maxf(dash_cooldown_remaining - delta, 0.0)
@@ -466,7 +622,6 @@ func _try_start_player_dash(input_direction: Vector2) -> void:
 		dash_time_remaining > 0.0
 		or dash_cooldown_remaining > 0.0
 		or preparing_weapon_index >= 0
-		or current_energy < DASH_ENERGY_COST
 	):
 		return
 	var travel_direction := input_direction
@@ -474,12 +629,31 @@ func _try_start_player_dash(input_direction: Vector2) -> void:
 		travel_direction = velocity.normalized()
 	if travel_direction.is_zero_approx():
 		return
+	if not _consume_dash_resources():
+		return
 	dash_direction = travel_direction
 	dash_time_remaining = dash_duration
 	dash_cooldown_remaining = dash_cooldown
-	current_energy = maxf(current_energy - DASH_ENERGY_COST, 0.0)
-	current_heat = minf(current_heat + DASH_HEAT_COST, MAX_HEAT)
 	dash_count += 1
+
+
+func _consume_dash_resources() -> bool:
+	if current_energy < DASH_ENERGY_COST:
+		return false
+	current_energy -= DASH_ENERGY_COST
+	current_heat = minf(current_heat + DASH_HEAT_COST, MAX_HEAT)
+	energy_spent_this_frame = true
+	return true
+
+
+func _update_resources(delta: float) -> void:
+	var maximum_energy := energy_capacity()
+	if not energy_spent_this_frame and dash_time_remaining <= 0.0 and maximum_energy > 0.0:
+		current_energy = minf(
+			current_energy + maximum_energy / ENERGY_FULL_RECHARGE_SECONDS * delta,
+			maximum_energy
+		)
+	current_heat = maxf(current_heat - cooling_rate() * delta, 0.0)
 
 
 func _update_player_weapon_selection() -> void:
@@ -512,7 +686,7 @@ func _nearest_opponent(reference_position: Vector2) -> AiMechAgent:
 	var nearest: AiMechAgent
 	var nearest_distance := INF
 	for target in opponents:
-		if not is_instance_valid(target):
+		if not is_instance_valid(target) or target.is_defeated():
 			continue
 		var distance := reference_position.distance_squared_to(target.global_position)
 		if distance < nearest_distance:
@@ -590,6 +764,9 @@ func _update_strategy_direction() -> void:
 
 
 func _start_random_dash() -> void:
+	if not _consume_dash_resources():
+		dash_decision_time_remaining = 0.5
+		return
 	dash_direction = torso_forward()
 	dash_time_remaining = dash_duration
 	dash_cooldown_remaining = dash_cooldown
@@ -662,7 +839,11 @@ func _update_weapons(delta: float) -> void:
 
 func _has_ready_weapon_in_range(distance: float) -> bool:
 	for weapon in weapons:
-		if weapon.can_fire() and distance <= weapon.spec.max_range * weapon_range_multiplier:
+		if (
+			weapon.can_fire()
+			and _has_weapon_resources(weapon)
+			and distance <= weapon.spec.max_range * weapon_range_multiplier
+		):
 			return true
 	return false
 
@@ -777,6 +958,11 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 	var muzzle := weapon.fire()
 	if muzzle == null:
 		return
+	if weapon.spec.resource_type == WeaponSpec.ResourceType.EN:
+		current_energy = maxf(current_energy - weapon.spec.resource_cost, 0.0)
+		energy_spent_this_frame = true
+	if weapon.spec.heat_cost > 0.0:
+		current_heat = minf(current_heat + weapon.spec.heat_cost, MAX_HEAT)
 
 	var aim_vector := _aim_target_position() - muzzle.global_position
 	if aim_vector.length_squared() <= 1.0:
@@ -830,6 +1016,7 @@ func _can_execute_weapon(weapon_index: int) -> bool:
 		or dash_time_remaining > 0.0
 		or not weapon_aim_valid[weapon_index]
 		or not weapons[weapon_index].can_fire()
+		or not _has_weapon_resources(weapons[weapon_index])
 	):
 		return false
 	if player_controlled:
@@ -841,6 +1028,15 @@ func _can_execute_weapon(weapon_index: int) -> bool:
 	return global_position.distance_to(opponent.global_position) <= (
 		weapons[weapon_index].spec.max_range * weapon_range_multiplier
 	)
+
+
+func _has_weapon_resources(weapon: WeaponRuntime) -> bool:
+	if (
+		weapon.spec.resource_type == WeaponSpec.ResourceType.EN
+		and current_energy < weapon.spec.resource_cost
+	):
+		return false
+	return current_heat + weapon.spec.heat_cost <= MAX_HEAT
 
 
 func _spawn_projectile(
@@ -873,6 +1069,8 @@ func _spawn_muzzle_flash(
 	spawn_position: Vector2,
 	direction: Vector2
 ) -> void:
+	if not combat_visuals_enabled:
+		return
 	var flash := MUZZLE_FLASH_SCENE.instantiate() as MuzzleFlash
 	flash.setup(
 		direction,
@@ -1093,10 +1291,13 @@ func _attach_hitbox(sprite: Sprite2D, part_name: StringName, priority: int) -> v
 	hitbox.name = "%sHitbox" % part_name
 	hitbox.setup(self, part_name, sprite.texture, priority)
 	sprite.add_child(hitbox)
+	part_hitboxes[part_name] = hitbox
 	hitbox_count += 1
 
 
 func _attach_boosts(legs: Dictionary) -> void:
+	if not combat_visuals_enabled:
+		return
 	var legs_root := legs["root"] as Node2D
 	var legs_map: Dictionary = legs["map"]
 	var legs_mount: Vector2 = legs["mount"]
@@ -1123,7 +1324,7 @@ func _attach_boosts(legs: Dictionary) -> void:
 
 func _update_boost_effect() -> void:
 	for boost in boost_sprites:
-		boost.visible = velocity.length_squared() > 4.0
+		boost.visible = not is_part_destroyed(&"Legs") and velocity.length_squared() > 4.0
 
 
 func _create_sprite(texture_path: String, z_index_value: int) -> Sprite2D:
@@ -1133,6 +1334,8 @@ func _create_sprite(texture_path: String, z_index_value: int) -> Sprite2D:
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.z_index = z_index_value
 	var shadow := Sprite2D.new()
+	if not combat_visuals_enabled:
+		return sprite
 	shadow.name = "SilhouetteShadow"
 	shadow.texture = sprite.texture
 	shadow.centered = true

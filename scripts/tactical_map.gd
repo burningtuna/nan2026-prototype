@@ -54,6 +54,8 @@ func _draw() -> void:
 	if not is_instance_valid(projectile_layer):
 		return
 	for projectile in player.detected_hostile_projectiles(projectile_layer):
+		if projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE:
+			continue
 		draw_circle(_radar_position(projectile.global_position, center, radius), 1.25, THREAT_COLOR)
 
 

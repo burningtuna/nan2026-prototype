@@ -65,3 +65,10 @@ func _bind_combat() -> void:
 	battle.get_node("UI").visible = false
 	hud.bind(player, allies, enemies, battle.projectile_layer)
 	overlay.bind(player, allies, enemies, battle.projectile_layer)
+	battle.battle_finished.connect(_on_battle_finished)
+	if battle.winner_team_id >= 0:
+		_on_battle_finished(battle.winner_team_id)
+
+
+func _on_battle_finished(winner_team_id: int) -> void:
+	overlay.show_team_victory(winner_team_id + 1)

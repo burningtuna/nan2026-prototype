@@ -14,6 +14,7 @@ var allies: Array[AiMechAgent] = []
 var enemies: Array[AiMechAgent] = []
 var projectile_layer: Node2D
 var attack_flash_remaining := {}
+var winning_team_number := 0
 
 
 func _ready() -> void:
@@ -46,6 +47,11 @@ func _process(delta: float) -> void:
 func _on_enemy_weapon_fired(_weapon: WeaponRuntime, enemy: AiMechAgent) -> void:
 	if is_instance_valid(player) and player.can_detect_unit(enemy):
 		attack_flash_remaining[enemy.get_instance_id()] = 0.45
+
+
+func show_team_victory(team_number: int) -> void:
+	winning_team_number = team_number
+	queue_redraw()
 
 
 func _draw() -> void:
@@ -81,6 +87,25 @@ func _draw() -> void:
 			continue
 		var missile_position: Vector2 = canvas_transform * projectile.global_position
 		_draw_missile_marker(missile_position)
+	_draw_team_victory()
+
+
+func _draw_team_victory() -> void:
+	if winning_team_number <= 0:
+		return
+	var banner_size := Vector2(minf(size.x - 32.0, 220.0), 46.0)
+	var banner_rect := Rect2((size - banner_size) * 0.5, banner_size)
+	draw_rect(banner_rect, Color(0.01, 0.025, 0.03, 0.9))
+	draw_rect(banner_rect, Color("66e6dc"), false, 2.0)
+	draw_string(
+		ThemeDB.fallback_font,
+		banner_rect.position + Vector2(0.0, 29.0),
+		"TEAM %d WIN" % winning_team_number,
+		HORIZONTAL_ALIGNMENT_CENTER,
+		banner_rect.size.x,
+		18,
+		Color("d7fffa")
+	)
 
 
 func _draw_cursor_range(canvas_transform: Transform2D) -> void:

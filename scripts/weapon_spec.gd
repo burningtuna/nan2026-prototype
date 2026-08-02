@@ -19,6 +19,7 @@ enum ResourceType {
 @export var fire_rate := 2.0
 @export var resource_type := ResourceType.AMMO
 @export var resource_cost := 1.0
+@export var heat_cost := 0.0
 @export var magazine_capacity := 30
 @export var reload_duration := 0.0
 @export var effective_range := 140.0

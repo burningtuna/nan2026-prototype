@@ -12,7 +12,7 @@ const AnchorMap := preload("res://scripts/sprite_anchor_map.gd")
 const HEALTHY_COLOR := Color("35d070")
 const DAMAGED_COLOR := Color("f2cf45")
 const CRITICAL_COLOR := Color("ef4e42")
-const DESTROYED_COLOR := Color("111719")
+const DESTROYED_COLOR := Color.TRANSPARENT
 
 const SAMPLE_PATHS := {
 	&"Body": [
@@ -67,6 +67,7 @@ func set_part_state(part_name: StringName, state: PartState) -> void:
 	var sprite := part_sprites.get(part_name) as Sprite2D
 	if sprite == null:
 		return
+	sprite.visible = state != PartState.DESTROYED
 	match state:
 		PartState.HEALTHY:
 			sprite.modulate = HEALTHY_COLOR
@@ -76,6 +77,18 @@ func set_part_state(part_name: StringName, state: PartState) -> void:
 			sprite.modulate = CRITICAL_COLOR
 		PartState.DESTROYED:
 			sprite.modulate = DESTROYED_COLOR
+
+
+func set_part_durability(part_name: StringName, ratio: float) -> void:
+	var clamped_ratio := clampf(ratio, 0.0, 1.0)
+	if is_zero_approx(clamped_ratio):
+		set_part_state(part_name, PartState.DESTROYED)
+	elif clamped_ratio <= 0.5:
+		set_part_state(part_name, PartState.CRITICAL)
+	elif clamped_ratio < 1.0:
+		set_part_state(part_name, PartState.DAMAGED)
+	else:
+		set_part_state(part_name, PartState.HEALTHY)
 
 
 func _wireframe_paths(part: MechPartSpec) -> Array:

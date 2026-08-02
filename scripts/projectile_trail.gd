@@ -1,8 +1,11 @@
 class_name ProjectileTrail
 extends Node2D
 
+const MAX_MISSILE_POINTS := 64
+
 var weapon_family := WeaponSpec.WeaponFamily.BALLISTIC
 var launch_direction := Vector2.RIGHT
+var width_multiplier := 1.0
 var sample_lifetime := 0.12
 var sample_spacing := 2.0
 var finish_lifetime := 1.0
@@ -12,14 +15,23 @@ var points: Array[Vector2] = []
 var ages: Array[float] = []
 
 
-func setup(family: WeaponSpec.WeaponFamily, direction: Vector2) -> void:
+func setup(
+	family: WeaponSpec.WeaponFamily,
+	direction: Vector2,
+	trail_width_multiplier := 1.0,
+	trail_lifetime_multiplier := 1.0
+) -> void:
 	weapon_family = family
 	launch_direction = direction.normalized()
+	width_multiplier = maxf(trail_width_multiplier, 0.1)
 	if weapon_family == WeaponSpec.WeaponFamily.MISSILE:
-		sample_lifetime = 5.0
+		sample_lifetime = 1.0
 		sample_spacing = 6.0
 	elif weapon_family == WeaponSpec.WeaponFamily.ENERGY:
 		sample_lifetime = 0.16
+	var lifetime_multiplier := maxf(trail_lifetime_multiplier, 0.05)
+	sample_lifetime *= lifetime_multiplier
+	finish_lifetime *= lifetime_multiplier
 
 
 func add_sample(world_position: Vector2) -> void:
@@ -29,6 +41,9 @@ func add_sample(world_position: Vector2) -> void:
 		return
 	points.append(world_position)
 	ages.append(0.0)
+	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and points.size() > MAX_MISSILE_POINTS:
+		points.pop_front()
+		ages.pop_front()
 	queue_redraw()
 
 
@@ -75,23 +90,27 @@ func _draw_streak(outer_color: Color) -> void:
 		var alpha := 1.0 - ages[index] / sample_lifetime
 		var faded_outer := outer_color
 		faded_outer.a *= alpha
-		draw_line(points[index], points[index + 1], faded_outer, 3.0)
-		draw_line(points[index], points[index + 1], Color(1.0, 1.0, 1.0, alpha * 0.9), 1.0)
+		draw_line(points[index], points[index + 1], faded_outer, 3.0 * width_multiplier)
+		draw_line(
+			points[index],
+			points[index + 1],
+			Color(1.0, 1.0, 1.0, alpha * 0.9),
+			width_multiplier
+		)
 
 
 func _draw_missile_trail() -> void:
 	var trail_width := 3.0
 	var finish_ratio := clampf(finish_elapsed / finish_lifetime, 0.0, 1.0) if finished else 0.0
 	var finish_alpha := 1.0 - finish_ratio
-	for index in points.size() - 1:
-		var age_ratio := clampf(ages[index] / sample_lifetime, 0.0, 1.0)
-		var trail_alpha := (1.0 - age_ratio) * 0.5 * finish_alpha
-		draw_line(
-			points[index],
-			points[index + 1],
-			Color(0.88, 0.9, 0.92, trail_alpha),
-			trail_width
-		)
+	if points.size() >= 2:
+		var line_points := PackedVector2Array(points)
+		var line_colors := PackedColorArray()
+		for index in points.size():
+			var age_ratio := clampf(ages[index] / sample_lifetime, 0.0, 1.0)
+			var trail_alpha := (1.0 - age_ratio) * 0.5 * finish_alpha
+			line_colors.append(Color(0.88, 0.9, 0.92, trail_alpha))
+		draw_polyline_colors(line_points, line_colors, trail_width)
 	for index in points.size():
 		var age_ratio := clampf(ages[index] / sample_lifetime, 0.0, 1.0)
 		var smoke_alpha := (1.0 - age_ratio) * 0.5 * finish_alpha

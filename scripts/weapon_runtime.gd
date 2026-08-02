@@ -14,6 +14,7 @@ var fire_rate_multiplier := 1.0
 var reload_remaining := 0.0
 var reload_count := 0
 var reload_completed_count := 0
+var disabled := false
 
 
 func setup(
@@ -45,20 +46,20 @@ func tick(delta: float) -> void:
 
 
 func can_fire() -> bool:
-	if cooldown_remaining > 0.0 or reload_remaining > 0.0 or muzzles.is_empty():
+	if disabled or cooldown_remaining > 0.0 or reload_remaining > 0.0 or muzzles.is_empty():
 		return false
-	if spec.resource_type == WeaponSpec.ResourceType.AMMO:
-		return ammo >= ceili(spec.resource_cost)
-	return spec.resource_type == WeaponSpec.ResourceType.NONE
+	var magazine_cost := _magazine_cost()
+	return magazine_cost <= 0 or ammo >= magazine_cost
 
 
 func fire() -> Marker2D:
 	if not can_fire():
 		return null
 
-	if spec.resource_type == WeaponSpec.ResourceType.AMMO:
-		ammo -= ceili(spec.resource_cost)
-		if ammo < ceili(spec.resource_cost) and spec.reload_duration > 0.0:
+	var magazine_cost := _magazine_cost()
+	if magazine_cost > 0:
+		ammo -= magazine_cost
+		if ammo < magazine_cost and spec.reload_duration > 0.0:
 			reload_remaining = spec.reload_duration
 			reload_count += 1
 	cooldown_remaining = spec.fire_interval() / maxf(fire_rate_multiplier, 0.001)
@@ -74,3 +75,11 @@ func fire() -> Marker2D:
 
 func is_reloading() -> bool:
 	return reload_remaining > 0.0
+
+
+func _magazine_cost() -> int:
+	if spec.resource_type == WeaponSpec.ResourceType.AMMO:
+		return maxi(ceili(spec.resource_cost), 1)
+	if spec.resource_type == WeaponSpec.ResourceType.NONE:
+		return 1
+	return 0

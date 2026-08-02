@@ -10,6 +10,9 @@ This directory contains the first top-down test mech set for `DIRECTIVE//12`. Th
 | `Head-0001.png` | 12×12 | Up |
 | `Legs-0001.png` | 12×12 | Up |
 | `Arm-Cannon-0001.png` | 24×12 | Right (`+X`) |
+| `Arm-Shotgun-0001.png` | 24×12 | Right (`+X`) |
+| `Arm-Rifle-0001.png` | 24×12 | Right (`+X`) |
+| `Arm-Pistol-0001.png` | 24×12 | Right (`+X`) |
 | `Backpack-Generator-0001.png` | 24×12 | Up |
 | `Projectile-0001.svg` | 6×3 | Right (`+X`) |
 | `Boost-0001.png` | 4×6 | Down |
@@ -19,7 +22,7 @@ This directory contains the first top-down test mech set for `DIRECTIVE//12`. Th
 | `Dash-0002.png` | 4×9 | Down |
 | `Dash-0003.png` | 4×9 | Down |
 
-The cannon arm is shared by both arm slots. Rotate it around its aim pivot instead of drawing directional variants. The head is an armored crown seen from above and intentionally has no front-facing face or eyes.
+Arm sprites are shared by both arm slots. Rotate them around their aim pivot instead of drawing directional variants. The shotgun retains the cannon's reach with a thinner silhouette; the rifle and pistol use progressively shorter barrels on the same canvas and pivot. The head is an armored crown seen from above and intentionally has no front-facing face or eyes.
 
 ## Palette
 
@@ -72,7 +75,9 @@ bash Sprites/generate_wireframe_set.sh
 
 Generated wireframe art and anchor masks are stored under `Sprites/Wireframe/`.
 The wireframe is a static status schematic; it does not use top-down arm aim or
-movement animation.
+movement animation. Cannon, shotgun, rifle and pistol arms share a `16x28`
+front-view canvas and mount; only their silhouette width and muzzle aperture
+change to communicate caliber.
 
 Stage environment tiles are generated separately:
 

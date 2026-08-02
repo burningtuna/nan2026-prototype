@@ -23,6 +23,7 @@ var hit_resolution_queued := false
 var homing_reported := false
 var hit_resolved := false
 var source_hitbox_rids: Array[RID] = []
+var visuals_enabled := true
 
 
 func configure(
@@ -40,6 +41,7 @@ func configure(
 	direction = launch_direction.normalized()
 	max_distance = travel_limit
 	source_mech = shot_source
+	visuals_enabled = not source_mech.has_method("visuals_enabled") or source_mech.visuals_enabled()
 	source_part = part_name
 	shot_seed = seed
 	launch_spread_degrees = spread_degrees
@@ -60,18 +62,24 @@ func _ready() -> void:
 	monitorable = true
 	area_entered.connect(_on_area_entered)
 	z_index = 2
-	trail = PROJECTILE_TRAIL.new()
-	trail.setup(weapon_family, direction)
-	trail.top_level = true
-	trail.z_index = 1
-	get_parent().add_child(trail)
-	trail.global_position = Vector2.ZERO
+	if visuals_enabled:
+		trail = PROJECTILE_TRAIL.new()
+		trail.setup(
+			weapon_family,
+			direction,
+			spec.trail_width_multiplier,
+			spec.trail_lifetime_multiplier
+		)
+		trail.top_level = true
+		trail.z_index = 1
+		get_parent().add_child(trail)
+		trail.global_position = Vector2.ZERO
 	_collect_source_hitboxes()
 	queue_redraw()
 
 
 func _physics_process(delta: float) -> void:
-	if not trail_started:
+	if visuals_enabled and not trail_started:
 		trail.add_sample(global_position)
 		trail_started = true
 	_update_homing_direction(delta)
@@ -84,13 +92,19 @@ func _physics_process(delta: float) -> void:
 		return
 	global_position = end_position
 	traveled_distance += frame_distance
-	trail.add_sample(global_position)
+	if visuals_enabled:
+		trail.add_sample(global_position)
 	if traveled_distance >= max_distance or (spec.lifetime > 0.0 and elapsed_time >= spec.lifetime):
 		queue_free()
 
 
 func _update_homing_direction(delta: float) -> void:
-	if not spec.homing or not is_instance_valid(homing_target):
+	if (
+		not spec.homing
+		or not is_instance_valid(homing_target)
+		or (homing_target.has_method("is_defeated") and homing_target.is_defeated())
+		or (homing_target.has_method("is_dashing") and homing_target.is_dashing())
+	):
 		return
 	var target_direction := homing_target.global_position - global_position
 	if target_direction.length_squared() <= 1.0:
@@ -105,13 +119,14 @@ func _update_homing_direction(delta: float) -> void:
 			source_mech.register_homing_adjustment()
 	direction = direction.rotated(applied_turn).normalized()
 	rotation = direction.angle()
-	trail.set_direction(direction)
+	if visuals_enabled:
+		trail.set_direction(direction)
 
 
 func _collect_source_hitboxes() -> void:
 	if not is_instance_valid(source_mech):
 		return
-	for mech in get_tree().get_nodes_in_group(&"mech_combatants"):
+	for mech in source_mech.get_parent().get_children():
 		if not source_mech.has_method("is_ally_of") or not source_mech.is_ally_of(mech):
 			continue
 		for node in mech.find_children("*", "Area2D", true, false):
@@ -178,19 +193,22 @@ func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> void:
 	if hit_resolved:
 		return
 	hit_resolved = true
-	var effect = IMPACT_EFFECT.new()
-	effect.setup(weapon_family, direction, shot_seed)
-	effect.scale = Vector2.ONE * 3.0
-	effect.z_index = 3
-	get_parent().add_child(effect)
-	effect.global_position = hit_position
-	hitbox.mech.register_hit(hitbox.part_name, direction)
+	if visuals_enabled:
+		var effect = IMPACT_EFFECT.new()
+		effect.setup(weapon_family, direction, shot_seed)
+		effect.scale = Vector2.ONE * 3.0
+		effect.z_index = 3
+		get_parent().add_child(effect)
+		effect.global_position = hit_position
+	hitbox.mech.register_hit(hitbox.part_name, direction, spec.damage)
 	if source_mech.has_method("register_landed_hit"):
 		source_mech.register_landed_hit(weapon_family)
 	queue_free()
 
 
 func _draw() -> void:
+	if not visuals_enabled:
+		return
 	var shadow_offset := Vector2(1.5, 2.0).rotated(-global_rotation)
 	if spec.visual_texture != null:
 		var visual_size := spec.visual_texture.get_size() * spec.visual_scale
