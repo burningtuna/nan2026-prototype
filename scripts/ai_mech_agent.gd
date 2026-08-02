@@ -73,11 +73,6 @@ var fired_shots := {
 	WeaponSpec.WeaponFamily.MISSILE: 0,
 	WeaponSpec.WeaponFamily.ENERGY: 0,
 }
-var missile_approaches := {
-	&"LEFT": 0,
-	&"RIGHT": 0,
-	&"REAR": 0,
-}
 
 var arena := Rect2(-360.0, -220.0, 720.0, 440.0)
 var projectile_layer: Node2D
@@ -208,10 +203,6 @@ func fired_shots_for(family: WeaponSpec.WeaponFamily) -> int:
 
 func register_homing_adjustment() -> void:
 	homing_adjustment_count += 1
-
-
-func register_missile_approach(approach: StringName) -> void:
-	missile_approaches[approach] = missile_approaches.get(approach, 0) + 1
 
 
 func is_preparing_attack() -> bool:
@@ -384,6 +375,10 @@ func _update_player_movement(delta: float) -> void:
 
 
 func _select_opponent(reference_position: Vector2) -> void:
+	opponent = _nearest_opponent(reference_position)
+
+
+func _nearest_opponent(reference_position: Vector2) -> AiMechAgent:
 	var nearest: AiMechAgent
 	var nearest_distance := INF
 	for target in opponents:
@@ -393,7 +388,7 @@ func _select_opponent(reference_position: Vector2) -> void:
 		if distance < nearest_distance:
 			nearest = target
 			nearest_distance = distance
-	opponent = nearest
+	return nearest
 
 
 func _aim_target_position() -> Vector2:
@@ -660,6 +655,9 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 	)
 	var volley_size := maxi(weapon.spec.projectiles_per_shot, 1)
 	var base_direction := aim_vector.normalized()
+	var projectile_target := opponent
+	if player_controlled and weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE:
+		projectile_target = _nearest_opponent(manual_aim_position)
 	var volley_rng := RandomNumberGenerator.new()
 	volley_rng.seed = rng.randi()
 	for projectile_index in volley_size:
@@ -681,7 +679,8 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 			muzzle.global_position,
 			launch_direction,
 			volley_rng.randi(),
-			spread_degrees
+			spread_degrees,
+			projectile_target
 		)
 		projectile_count += 1
 	var flash_direction := base_direction.rotated(deg_to_rad(weapon.spec.launch_offset_degrees))
@@ -717,7 +716,8 @@ func _spawn_projectile(
 	spawn_position: Vector2,
 	direction: Vector2,
 	shot_seed: int,
-	spread_degrees: float
+	spread_degrees: float,
+	target: AiMechAgent
 ) -> void:
 	var projectile_spec := weapon.spec.projectile
 	var projectile := projectile_spec.projectile_scene.instantiate() as BallisticProjectile
@@ -730,7 +730,7 @@ func _spawn_projectile(
 		shot_seed,
 		spread_degrees,
 		weapon.spec.weapon_family,
-		opponent
+		target
 	)
 	projectile_layer.add_child(projectile)
 	projectile.global_position = spawn_position

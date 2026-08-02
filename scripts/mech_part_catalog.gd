@@ -1,6 +1,7 @@
 class_name MechPartCatalog
 extends RefCounted
 
+const WEAPONS_DATA_PATH := "res://data/weapons.json"
 const TYPE_BY_NAME := {
 	"HEAD": MechPartSpec.PartType.HEAD,
 	"BODY": MechPartSpec.PartType.BODY,
@@ -42,12 +43,18 @@ const WIREFRAME_PATHS := {
 var parts_by_type: Dictionary = {}
 var parts_by_id: Dictionary = {}
 var default_part_ids: Dictionary = {}
+var weapon_catalog: WeaponCatalog
 
 
-func load_file(path: String) -> bool:
+func load_file(path: String, shared_weapon_catalog: WeaponCatalog = null) -> bool:
 	parts_by_type.clear()
 	parts_by_id.clear()
 	default_part_ids.clear()
+	weapon_catalog = shared_weapon_catalog
+	if weapon_catalog == null:
+		weapon_catalog = WeaponCatalog.new()
+		if not weapon_catalog.load_file(WEAPONS_DATA_PATH):
+			return false
 	for type in TYPE_BY_NAME.values():
 		parts_by_type[type] = []
 
@@ -131,12 +138,12 @@ func _add_part(data: Dictionary) -> bool:
 	part.wireframe_art_path = wireframe_paths[0]
 	part.wireframe_anchor_path = wireframe_paths[1]
 
-	var weapon_value = data.get("weapon_resource")
+	var weapon_value = data.get("weapon_id")
 	if weapon_value != null:
-		var weapon_path := str(weapon_value)
-		part.weapon = ResourceLoader.load(weapon_path) as WeaponSpec
+		var weapon_id := str(weapon_value)
+		part.weapon = weapon_catalog.weapon(weapon_id)
 		if part.weapon == null:
-			push_error("Unable to load weapon resource for '%s': %s" % [part_id_value, weapon_path])
+			push_error("Unknown weapon '%s' for mech part '%s'" % [weapon_id, part_id_value])
 			return false
 
 	parts_by_id[part_id_value] = part

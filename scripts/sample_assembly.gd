@@ -1,33 +1,9 @@
 extends Node2D
 
 const AI_MECH := preload("res://scripts/ai_mech_agent.gd")
-const TEST_CANNON := preload("res://data/test_cannon.tres")
-const TEST_SHOTGUN := preload("res://data/test_shotgun.tres")
-const TEST_MISSILE := preload("res://data/test_missile.tres")
-const TEST_ENERGY_CANNON := preload("res://data/test_energy_cannon.tres")
 const STEEL_FLOOR_TILE := preload("res://Sprites/Environment/Stage-01-Steel-Floor.png")
-const RANDOM_ARM_WEAPONS := [
-	preload("res://data/weapon_ballistic_rapid.tres"),
-	preload("res://data/weapon_ballistic_standard.tres"),
-	preload("res://data/weapon_ballistic_heavy.tres"),
-	preload("res://data/weapon_energy_rapid.tres"),
-	preload("res://data/weapon_energy_standard.tres"),
-	preload("res://data/weapon_energy_heavy.tres"),
-	preload("res://data/weapon_missile_rapid.tres"),
-	preload("res://data/weapon_missile_standard.tres"),
-	preload("res://data/weapon_missile_heavy.tres"),
-	preload("res://data/weapon_scatter_rapid.tres"),
-	preload("res://data/weapon_scatter_standard.tres"),
-	preload("res://data/weapon_scatter_heavy.tres"),
-]
-const RANDOM_BACKPACK_WEAPONS := [
-	preload("res://data/weapon_ballistic_heavy.tres"),
-	preload("res://data/weapon_energy_heavy.tres"),
-	preload("res://data/weapon_missile_rapid.tres"),
-	preload("res://data/weapon_missile_standard.tres"),
-	preload("res://data/weapon_missile_heavy.tres"),
-	preload("res://data/weapon_scatter_heavy.tres"),
-]
+const PARTS_DATA_PATH := "res://data/mech_parts.json"
+const WEAPONS_DATA_PATH := "res://data/weapons.json"
 
 @export var arena := Rect2(-5000.0, -5000.0, 10000.0, 10000.0)
 @export var framing_margin := Vector2(72.0, 58.0)
@@ -54,12 +30,22 @@ var observed_max_zoom := 0.0
 var framing_failed := false
 var loadout_rng := RandomNumberGenerator.new()
 var initial_camera_zoom := 0.0
+var weapon_catalog: WeaponCatalog
+var random_part_catalog: MechPartCatalog
+var random_arm_parts: Array[MechPartSpec] = []
+var random_backpack_parts: Array[MechPartSpec] = []
 
 
 func _ready() -> void:
 	smoke_test_enabled = OS.get_cmdline_user_args().has("--camera-smoke")
+	weapon_catalog = WeaponCatalog.new()
+	if not weapon_catalog.load_file(WEAPONS_DATA_PATH):
+		push_error("Unable to initialize combat weapon catalog")
+		return
 	if randomize_loadouts:
 		loadout_rng.randomize()
+		if not _load_random_weapon_pools():
+			randomize_loadouts = false
 	_spawn_agents()
 	camera.enabled = true
 	_update_camera(0.0, true)
@@ -103,8 +89,15 @@ func _draw() -> void:
 
 
 func _spawn_agents() -> void:
-	var first_loadout: Array[WeaponSpec] = [TEST_CANNON, TEST_MISSILE]
-	var second_loadout: Array[WeaponSpec] = [TEST_ENERGY_CANNON, TEST_SHOTGUN, TEST_MISSILE]
+	var first_loadout: Array[WeaponSpec] = [
+		weapon_catalog.weapon("test_cannon"),
+		weapon_catalog.weapon("test_missile"),
+	]
+	var second_loadout: Array[WeaponSpec] = [
+		weapon_catalog.weapon("test_energy_cannon"),
+		weapon_catalog.weapon("test_shotgun"),
+		weapon_catalog.weapon("test_missile"),
+	]
 	var colors := [Color("8fe5ff"), Color("ff9b8f")]
 	var starts := [Vector2(-1000.0, 0.0), Vector2(1000.0, 0.0)]
 	var agent_count := 2
@@ -141,12 +134,11 @@ func _spawn_agents() -> void:
 		if agent.player_controlled and GameSession.player_mech_loadout != null:
 			configured_loadout = GameSession.player_mech_loadout.copy()
 			loadout = _weapons_from_mech_loadout(configured_loadout)
+		elif randomize_loadouts:
+			configured_loadout = _random_mech_loadout()
+			loadout = _weapons_from_mech_loadout(configured_loadout)
 		else:
-			loadout = (
-				_random_weapon_loadout()
-				if randomize_loadouts
-				else first_loadout if uses_close_range_build else second_loadout
-			)
+			loadout = first_loadout if uses_close_range_build else second_loadout
 		var agent_name := "AI-%02d" % (index + 1)
 		if two_vs_two:
 			agent_name = ["PLAYER", "ALLY-01", "ENEMY-01", "ENEMY-02"][index]
@@ -180,16 +172,35 @@ func _spawn_agents() -> void:
 		agents[1].set_opponent(agents[0])
 
 
-func _random_weapon_loadout() -> Array[WeaponSpec]:
-	var result: Array[WeaponSpec] = []
-	for _arm_slot in 2:
-		result.append(RANDOM_ARM_WEAPONS[loadout_rng.randi_range(0, RANDOM_ARM_WEAPONS.size() - 1)])
-	result.append(
-		RANDOM_BACKPACK_WEAPONS[
-			loadout_rng.randi_range(0, RANDOM_BACKPACK_WEAPONS.size() - 1)
-		]
-	)
+func _random_mech_loadout() -> MechLoadout:
+	var result := random_part_catalog.create_default_loadout()
+	result.left_arm = random_arm_parts[loadout_rng.randi_range(0, random_arm_parts.size() - 1)]
+	result.right_arm = random_arm_parts[loadout_rng.randi_range(0, random_arm_parts.size() - 1)]
+	result.backpack = random_backpack_parts[
+		loadout_rng.randi_range(0, random_backpack_parts.size() - 1)
+	]
 	return result
+
+
+func _load_random_weapon_pools() -> bool:
+	random_arm_parts.clear()
+	random_backpack_parts.clear()
+	random_part_catalog = MechPartCatalog.new()
+	if not random_part_catalog.load_file(PARTS_DATA_PATH, weapon_catalog):
+		push_error("Unable to load random weapon parts from %s" % PARTS_DATA_PATH)
+		return false
+
+	for part: MechPartSpec in random_part_catalog.parts_by_type[MechPartSpec.PartType.ARM_EQUIPMENT]:
+		if part.weapon != null:
+			random_arm_parts.append(part)
+	for part: MechPartSpec in random_part_catalog.parts_by_type[MechPartSpec.PartType.BACKPACK]:
+		if part.weapon != null:
+			random_backpack_parts.append(part)
+
+	if random_arm_parts.is_empty() or random_backpack_parts.is_empty():
+		push_error("Random loadouts require armed ARM_EQUIPMENT and BACKPACK parts")
+		return false
+	return true
 
 
 func _weapons_from_mech_loadout(loadout: MechLoadout) -> Array[WeaponSpec]:
@@ -351,14 +362,6 @@ func _update_smoke_test(delta: float) -> void:
 	)
 	var burst_reloads: int = agents[1].reload_count_for(WeaponSpec.WeaponFamily.BALLISTIC)
 	var burst_reload_completions: int = agents[1].reload_completed_count_for(WeaponSpec.WeaponFamily.BALLISTIC)
-	var missile_paths: int = (
-		agents[0].missile_approaches[&"LEFT"]
-		+ agents[0].missile_approaches[&"RIGHT"]
-		+ agents[0].missile_approaches[&"REAR"]
-		+ agents[1].missile_approaches[&"LEFT"]
-		+ agents[1].missile_approaches[&"RIGHT"]
-		+ agents[1].missile_approaches[&"REAR"]
-	)
 	var passed: bool = (
 		ballistic_shots + missile_shots + energy_shots > 0
 		and agents[1].fired_shots_for(WeaponSpec.WeaponFamily.BALLISTIC) > 0
@@ -373,7 +376,6 @@ func _update_smoke_test(delta: float) -> void:
 		and side_hits + rear_hits > 0
 		and preparation_started > 0
 		and preparation_completed > 0
-		and missile_paths > 0
 		and agents[0].evasion_count + agents[1].evasion_count > 0
 		and agents[0].range_blocked_count > 0
 		and agents[0].aim_blocked_count + agents[1].aim_blocked_count > 0
@@ -389,7 +391,7 @@ func _update_smoke_test(delta: float) -> void:
 		and not framing_failed
 	)
 	print(
-		"camera_smoke distance=%.1f..%.1f zoom=%.3f..%.3f shots=%d/%d fired=%d/%d/%d hits=%d/%d/%d aspect=%d/%d/%d dash=%d/%d evade=%d/%d blocked=%d/%d prep=%d/%d/%d predict=%d reload=%d/%d/%d re_evasion=%d paths=%d guide=%d boxes=%d/%d framed=%s" % [
+		"camera_smoke distance=%.1f..%.1f zoom=%.3f..%.3f shots=%d/%d fired=%d/%d/%d hits=%d/%d/%d aspect=%d/%d/%d dash=%d/%d evade=%d/%d blocked=%d/%d prep=%d/%d/%d predict=%d reload=%d/%d/%d re_evasion=%d guide=%d boxes=%d/%d framed=%s" % [
 			observed_min_distance,
 			observed_max_distance,
 			observed_min_zoom,
@@ -419,7 +421,6 @@ func _update_smoke_test(delta: float) -> void:
 			burst_reloads,
 			burst_reload_completions,
 			agents[1].reload_evasion_count,
-			missile_paths,
 			agents[0].homing_adjustment_count + agents[1].homing_adjustment_count,
 			agents[0].hitbox_count,
 			agents[1].hitbox_count,

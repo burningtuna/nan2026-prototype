@@ -9,8 +9,6 @@ var spec: ProjectileSpec
 var weapon_family := WeaponSpec.WeaponFamily.BALLISTIC
 var direction := Vector2.RIGHT
 var homing_target: Node2D
-var missile_approach: StringName = &"DIRECT"
-var terminal_guidance := false
 var max_distance := 0.0
 var traveled_distance := 0.0
 var elapsed_time := 0.0
@@ -47,11 +45,6 @@ func configure(
 	launch_spread_degrees = spread_degrees
 	weapon_family = family
 	homing_target = target
-	if weapon_family == WeaponSpec.WeaponFamily.MISSILE:
-		var approaches: Array[StringName] = [&"LEFT", &"RIGHT", &"REAR"]
-		missile_approach = approaches[absi(shot_seed) % approaches.size()]
-		if source_mech.has_method("register_missile_approach"):
-			source_mech.register_missile_approach(missile_approach)
 	rotation = direction.angle()
 
 
@@ -99,8 +92,7 @@ func _physics_process(delta: float) -> void:
 func _update_homing_direction(delta: float) -> void:
 	if not spec.homing or not is_instance_valid(homing_target):
 		return
-	var aim_position := _homing_aim_position()
-	var target_direction := aim_position - global_position
+	var target_direction := homing_target.global_position - global_position
 	if target_direction.length_squared() <= 1.0:
 		return
 	var next_direction := target_direction.normalized()
@@ -114,34 +106,6 @@ func _update_homing_direction(delta: float) -> void:
 	direction = direction.rotated(applied_turn).normalized()
 	rotation = direction.angle()
 	trail.set_direction(direction)
-
-
-func _homing_aim_position() -> Vector2:
-	var target_velocity := Vector2.ZERO
-	var velocity_value = homing_target.get("velocity")
-	if velocity_value is Vector2:
-		target_velocity = velocity_value
-	var time_to_target := global_position.distance_to(homing_target.global_position) / maxf(spec.speed, 1.0)
-	if spec.lifetime > 0.0:
-		time_to_target = minf(time_to_target, maxf(spec.lifetime - elapsed_time, 0.0))
-	var predicted_position := homing_target.global_position + target_velocity * time_to_target
-	if weapon_family != WeaponSpec.WeaponFamily.MISSILE or terminal_guidance:
-		return predicted_position
-
-	var target_forward := Vector2.UP
-	if homing_target.has_method("torso_forward"):
-		target_forward = homing_target.torso_forward()
-	var target_right := target_forward.rotated(PI * 0.5)
-	var offset := -target_right * 450.0
-	if missile_approach == &"RIGHT":
-		offset = target_right * 450.0
-	elif missile_approach == &"REAR":
-		offset = -target_forward * 350.0
-	var waypoint := predicted_position + offset
-	if global_position.distance_to(waypoint) <= 180.0 or elapsed_time >= spec.lifetime * 0.65:
-		terminal_guidance = true
-		return predicted_position
-	return waypoint
 
 
 func _collect_source_hitboxes() -> void:

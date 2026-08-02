@@ -19,7 +19,7 @@
       "anchor_path": "res://Sprites/Body-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffffff",
-      "weapon_resource": null,
+      "weapon_id": null,
       "stats": {
         "armor": 150,
         "weight": 12,
@@ -41,7 +41,7 @@
       "anchor_path": "res://Sprites/Body-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#b6d2d5",
-      "weapon_resource": null,
+      "weapon_id": null,
       "stats": {
         "armor": 230,
         "weight": 21,
@@ -63,7 +63,7 @@
       "anchor_path": "res://Sprites/Head-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffffff",
-      "weapon_resource": null,
+      "weapon_id": null,
       "stats": {
         "armor": 55,
         "weight": 4,
@@ -85,7 +85,7 @@
       "anchor_path": "res://Sprites/Head-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffd28b",
-      "weapon_resource": null,
+      "weapon_id": null,
       "stats": {
         "armor": 90,
         "weight": 7,
@@ -107,7 +107,7 @@
       "anchor_path": "res://Sprites/Legs-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffffff",
-      "weapon_resource": null,
+      "weapon_id": null,
       "stats": {
         "armor": 110,
         "weight": 11,
@@ -129,7 +129,7 @@
       "anchor_path": "res://Sprites/Legs-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#a8c7bf",
-      "weapon_resource": null,
+      "weapon_id": null,
       "stats": {
         "armor": 180,
         "weight": 18,
@@ -151,7 +151,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffffff",
-      "weapon_resource": "res://data/test_cannon.tres",
+      "weapon_id": "test_cannon",
       "stats": {
         "armor": 48,
         "weight": 9,
@@ -173,7 +173,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffd28b",
-      "weapon_resource": "res://data/test_missile.tres",
+      "weapon_id": "test_missile",
       "stats": {
         "armor": 40,
         "weight": 7,
@@ -195,7 +195,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#9bdfff",
-      "weapon_resource": "res://data/test_energy_cannon.tres",
+      "weapon_id": "test_energy_cannon",
       "stats": {
         "armor": 36,
         "weight": 6,
@@ -217,7 +217,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ff9c87",
-      "weapon_resource": "res://data/test_burst_cannon.tres",
+      "weapon_id": "test_burst_cannon",
       "stats": {
         "armor": 65,
         "weight": 14,
@@ -239,7 +239,7 @@
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffffff",
-      "weapon_resource": null,
+      "weapon_id": null,
       "stats": {
         "armor": 55,
         "weight": 8,
@@ -261,7 +261,7 @@
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#9bdfff",
-      "weapon_resource": null,
+      "weapon_id": null,
       "stats": {
         "armor": 45,
         "weight": 7,
@@ -283,7 +283,7 @@
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffd28b",
-      "weapon_resource": "res://data/test_missile.tres",
+      "weapon_id": "test_missile",
       "stats": {
         "armor": 38,
         "weight": 10,
@@ -305,7 +305,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#fff1b5",
-      "weapon_resource": "res://data/weapon_ballistic_rapid.tres",
+      "weapon_id": "weapon_ballistic_rapid",
       "stats": {
         "armor": 32,
         "weight": 5,
@@ -327,7 +327,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffffff",
-      "weapon_resource": "res://data/weapon_ballistic_standard.tres",
+      "weapon_id": "weapon_ballistic_standard",
       "stats": {
         "armor": 48,
         "weight": 10,
@@ -349,7 +349,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ff9c87",
-      "weapon_resource": "res://data/weapon_ballistic_heavy.tres",
+      "weapon_id": "weapon_ballistic_heavy",
       "stats": {
         "armor": 72,
         "weight": 22,
@@ -371,7 +371,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#9bdfff",
-      "weapon_resource": "res://data/weapon_energy_rapid.tres",
+      "weapon_id": "weapon_energy_rapid",
       "stats": {
         "armor": 28,
         "weight": 4,
@@ -393,7 +393,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#6fd2ff",
-      "weapon_resource": "res://data/weapon_energy_standard.tres",
+      "weapon_id": "weapon_energy_standard",
       "stats": {
         "armor": 40,
         "weight": 9,
@@ -415,7 +415,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#d6f7ff",
-      "weapon_resource": "res://data/weapon_energy_heavy.tres",
+      "weapon_id": "weapon_energy_heavy",
       "stats": {
         "armor": 55,
         "weight": 24,
@@ -437,7 +437,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffe08a",
-      "weapon_resource": "res://data/weapon_missile_rapid.tres",
+      "weapon_id": "weapon_missile_rapid",
       "stats": {
         "armor": 30,
         "weight": 5,
@@ -459,7 +459,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffd28b",
-      "weapon_resource": "res://data/weapon_missile_standard.tres",
+      "weapon_id": "weapon_missile_standard",
       "stats": {
         "armor": 42,
         "weight": 11,
@@ -481,7 +481,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffad66",
-      "weapon_resource": "res://data/weapon_missile_heavy.tres",
+      "weapon_id": "weapon_missile_heavy",
       "stats": {
         "armor": 60,
         "weight": 25,
@@ -503,7 +503,7 @@
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ff9c87",
-      "weapon_resource": "res://data/weapon_ballistic_heavy.tres",
+      "weapon_id": "weapon_ballistic_heavy",
       "stats": {
         "armor": 85,
         "weight": 25,
@@ -525,7 +525,7 @@
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#d6f7ff",
-      "weapon_resource": "res://data/weapon_energy_heavy.tres",
+      "weapon_id": "weapon_energy_heavy",
       "stats": {
         "armor": 70,
         "weight": 27,
@@ -547,7 +547,7 @@
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffad66",
-      "weapon_resource": "res://data/weapon_missile_heavy.tres",
+      "weapon_id": "weapon_missile_heavy",
       "stats": {
         "armor": 72,
         "weight": 28,
@@ -569,7 +569,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffe39a",
-      "weapon_resource": "res://data/weapon_scatter_rapid.tres",
+      "weapon_id": "weapon_scatter_rapid",
       "stats": {
         "armor": 30,
         "weight": 5,
@@ -591,7 +591,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffc766",
-      "weapon_resource": "res://data/weapon_scatter_standard.tres",
+      "weapon_id": "weapon_scatter_standard",
       "stats": {
         "armor": 48,
         "weight": 11,
@@ -613,7 +613,7 @@
       "anchor_path": "res://Sprites/Arm-Cannon-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ff9c64",
-      "weapon_resource": "res://data/weapon_scatter_heavy.tres",
+      "weapon_id": "weapon_scatter_heavy",
       "stats": {
         "armor": 76,
         "weight": 24,
@@ -635,7 +635,7 @@
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ff9c64",
-      "weapon_resource": "res://data/weapon_scatter_heavy.tres",
+      "weapon_id": "weapon_scatter_heavy",
       "stats": {
         "armor": 90,
         "weight": 28,
