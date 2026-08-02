@@ -28,6 +28,10 @@ window/size/window_height_override=540
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[gui]
+
+theme/custom_font="res://Fonts/ui_font.tres"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

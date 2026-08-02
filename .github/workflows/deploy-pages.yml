@@ -37,6 +37,8 @@ jobs:
         run: |
           mkdir -p Builds/nan2026/web
           godot --headless --path . --export-release Web Builds/nan2026/web/index.html
+          mkdir -p Builds/nan2026/web/licenses
+          cp Fonts/LICENSE.txt Builds/nan2026/web/licenses/IBM-Plex-OFL.txt
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
