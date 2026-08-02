@@ -136,11 +136,17 @@ func _spawn_agents() -> void:
 		var first_enemy_index := 2 if two_vs_two else 1
 		agent.team_id = 0 if index < first_enemy_index else 1
 		agent.player_controlled = two_vs_two and enable_player_control and index == 0
-		var loadout := (
-			_random_weapon_loadout()
-			if randomize_loadouts
-			else first_loadout if uses_close_range_build else second_loadout
-		)
+		var configured_loadout: MechLoadout
+		var loadout: Array[WeaponSpec]
+		if agent.player_controlled and GameSession.player_mech_loadout != null:
+			configured_loadout = GameSession.player_mech_loadout.copy()
+			loadout = _weapons_from_mech_loadout(configured_loadout)
+		else:
+			loadout = (
+				_random_weapon_loadout()
+				if randomize_loadouts
+				else first_loadout if uses_close_range_build else second_loadout
+			)
 		var agent_name := "AI-%02d" % (index + 1)
 		if two_vs_two:
 			agent_name = ["PLAYER", "ALLY-01", "ENEMY-01", "ENEMY-02"][index]
@@ -155,7 +161,8 @@ func _spawn_agents() -> void:
 			arena,
 			1200 + index * 7919,
 			colors[index],
-			loadout
+			loadout,
+			configured_loadout
 		)
 		agent.position = starts[index]
 		add_child(agent)
@@ -182,6 +189,14 @@ func _random_weapon_loadout() -> Array[WeaponSpec]:
 			loadout_rng.randi_range(0, RANDOM_BACKPACK_WEAPONS.size() - 1)
 		]
 	)
+	return result
+
+
+func _weapons_from_mech_loadout(loadout: MechLoadout) -> Array[WeaponSpec]:
+	var result: Array[WeaponSpec] = []
+	for part in [loadout.left_arm, loadout.right_arm, loadout.backpack]:
+		if part != null and part.weapon != null:
+			result.append(part.weapon)
 	return result
 
 

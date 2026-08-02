@@ -30,6 +30,8 @@ func _ready() -> void:
 func bind(combat_player: AiMechAgent, allies: Array, enemies: Array, projectiles: Node2D) -> void:
 	player = combat_player
 	projectile_layer = projectiles
+	if player.mech_loadout != null:
+		wireframe.display(player.mech_loadout)
 	tactical_map.bind(player, allies, enemies, projectile_layer)
 	player.hit_received.connect(_on_player_hit_received)
 	player.hit_landed.connect(_on_player_hit_landed)

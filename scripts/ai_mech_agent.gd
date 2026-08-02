@@ -103,6 +103,7 @@ var linked_fire_cooldown := 0.0
 var next_weapon_index := 0
 var rng := RandomNumberGenerator.new()
 var weapon_specs: Array[WeaponSpec] = []
+var mech_loadout: MechLoadout
 var preparing_weapon_index := -1
 var preparation_time_remaining := 0.0
 var preparation_started_count := 0
@@ -120,7 +121,8 @@ func setup(
 	movement_arena: Rect2,
 	random_seed: int,
 	team_color: Color,
-	loadout: Array[WeaponSpec]
+	loadout: Array[WeaponSpec],
+	configured_loadout: MechLoadout = null
 ) -> void:
 	name = agent_name
 	projectile_layer = shot_parent
@@ -129,6 +131,7 @@ func setup(
 	modulate = team_color
 	scale = Vector2.ONE * 4.0
 	weapon_specs = loadout
+	mech_loadout = configured_loadout.copy() if configured_loadout != null else null
 
 
 func set_opponent(target: AiMechAgent) -> void:
@@ -750,41 +753,92 @@ func _spawn_muzzle_flash(
 
 
 func _build_mech() -> void:
-	var body_map := AnchorMap.load_map(BODY_ANCHORS)
-	var body_sprite := _create_sprite(BODY_ART, 3)
+	var body_art := BODY_ART
+	var body_anchors := BODY_ANCHORS
+	if mech_loadout != null:
+		body_art = mech_loadout.body.art_path
+		body_anchors = mech_loadout.body.anchor_path
+	var body_map := AnchorMap.load_map(body_anchors)
+	var body_sprite := _create_sprite(body_art, 3)
 	body_sprite.name = "BodySprite"
 	upper_body.add_child(body_sprite)
 	_attach_hitbox(body_sprite, &"Body", 3)
 
-	var backpack_socket := AnchorMap.one(body_map, &"backpack_socket")
-	var backpack := _attach_static_part(
-		upper_body,
-		"Backpack",
-		BACKPACK_ART,
-		BACKPACK_ANCHORS,
-		backpack_socket,
-		1
-	)
+	var backpack := {}
+	if mech_loadout == null or mech_loadout.backpack != null:
+		var backpack_art := BACKPACK_ART
+		var backpack_anchors := BACKPACK_ANCHORS
+		if mech_loadout != null:
+			backpack_art = mech_loadout.backpack.art_path
+			backpack_anchors = mech_loadout.backpack.anchor_path
+		var backpack_socket := AnchorMap.one(body_map, &"backpack_socket")
+		backpack = _attach_static_part(
+			upper_body,
+			"Backpack",
+			backpack_art,
+			backpack_anchors,
+			backpack_socket,
+			1
+		)
 
 	var legs_socket := AnchorMap.one(body_map, &"legs_socket")
-	var legs := _attach_static_part(lower_body, "Legs", LEGS_ART, LEGS_ANCHORS, legs_socket, 2)
+	var legs_art := LEGS_ART
+	var legs_anchors := LEGS_ANCHORS
+	if mech_loadout != null:
+		legs_art = mech_loadout.legs.art_path
+		legs_anchors = mech_loadout.legs.anchor_path
+	var legs := _attach_static_part(lower_body, "Legs", legs_art, legs_anchors, legs_socket, 2)
 	_attach_boosts(legs)
 
 	var head_socket := AnchorMap.one(body_map, &"head_socket")
-	head_aim_node = _attach_rotating_head(upper_body, head_socket, 5)
+	var head_art := HEAD_ART
+	var head_anchors := HEAD_ANCHORS
+	if mech_loadout != null:
+		head_art = mech_loadout.head.art_path
+		head_anchors = mech_loadout.head.anchor_path
+	head_aim_node = _attach_rotating_head(upper_body, head_socket, head_art, head_anchors, 5)
 
-	var left_arm_socket := AnchorMap.one(body_map, &"left_arm_socket")
-	var left_arm := _attach_aiming_arm(upper_body, "LeftArm", left_arm_socket, 4, weapon_specs[0])
-	arm_aim_nodes.append(left_arm["aim"] as Node2D)
-	weapons.append(left_arm["weapon"] as WeaponRuntime)
+	if mech_loadout == null or mech_loadout.left_arm != null:
+		var left_art := ARM_ART
+		var left_anchors := ARM_ANCHORS
+		var left_weapon: WeaponSpec
+		if mech_loadout != null:
+			left_art = mech_loadout.left_arm.art_path
+			left_anchors = mech_loadout.left_arm.anchor_path
+			left_weapon = mech_loadout.left_arm.weapon
+		else:
+			left_weapon = weapon_specs[0]
+		var left_arm_socket := AnchorMap.one(body_map, &"left_arm_socket")
+		var left_arm := _attach_aiming_arm(
+			upper_body, "LeftArm", left_arm_socket, left_art, left_anchors, 4, left_weapon
+		)
+		if left_arm.has("weapon"):
+			arm_aim_nodes.append(left_arm["aim"] as Node2D)
+			weapons.append(left_arm["weapon"] as WeaponRuntime)
 
-	var right_arm_socket := AnchorMap.one(body_map, &"right_arm_socket")
-	var right_arm := _attach_aiming_arm(upper_body, "RightArm", right_arm_socket, 4, weapon_specs[1])
-	arm_aim_nodes.append(right_arm["aim"] as Node2D)
-	weapons.append(right_arm["weapon"] as WeaponRuntime)
+	if mech_loadout == null or mech_loadout.right_arm != null:
+		var right_art := ARM_ART
+		var right_anchors := ARM_ANCHORS
+		var right_weapon: WeaponSpec
+		if mech_loadout != null:
+			right_art = mech_loadout.right_arm.art_path
+			right_anchors = mech_loadout.right_arm.anchor_path
+			right_weapon = mech_loadout.right_arm.weapon
+		else:
+			right_weapon = weapon_specs[1]
+		var right_arm_socket := AnchorMap.one(body_map, &"right_arm_socket")
+		var right_arm := _attach_aiming_arm(
+			upper_body, "RightArm", right_arm_socket, right_art, right_anchors, 4, right_weapon
+		)
+		if right_arm.has("weapon"):
+			arm_aim_nodes.append(right_arm["aim"] as Node2D)
+			weapons.append(right_arm["weapon"] as WeaponRuntime)
 
 	# Keep arm weapons aligned with arm_aim_nodes; backpack weapons have unrestricted aim.
-	if weapon_specs.size() > 2:
+	if mech_loadout != null:
+		if mech_loadout.backpack != null and mech_loadout.backpack.weapon != null:
+			_attach_backpack_weapon(backpack, mech_loadout.backpack.weapon)
+	elif weapon_specs.size() > 2:
 		_attach_backpack_weapon(backpack, weapon_specs[2])
 
 
@@ -838,10 +892,12 @@ func _attach_aiming_arm(
 	parent: Node2D,
 	part_name: String,
 	socket_position: Vector2,
+	art_path: String,
+	anchor_path: String,
 	z_index_value: int,
 	weapon_spec: WeaponSpec
 ) -> Dictionary:
-	var anchor_map := AnchorMap.load_map(ARM_ANCHORS)
+	var anchor_map := AnchorMap.load_map(anchor_path)
 	var mount := AnchorMap.one(anchor_map, &"mount")
 	var aim_pivot := AnchorMap.one(anchor_map, &"aim_pivot")
 	var mount_root := Node2D.new()
@@ -855,7 +911,7 @@ func _attach_aiming_arm(
 	aim_node.rotation = -PI * 0.5
 	mount_root.add_child(aim_node)
 
-	var sprite := _create_sprite(ARM_ART, z_index_value)
+	var sprite := _create_sprite(art_path, z_index_value)
 	sprite.name = "%sSprite" % part_name
 	sprite.position = -aim_pivot
 	aim_node.add_child(sprite)
@@ -870,23 +926,29 @@ func _attach_aiming_arm(
 		aim_node.add_child(muzzle)
 		muzzles.append(muzzle)
 
-	var weapon := WeaponRuntime.new()
-	weapon.setup(weapon_spec, sprite, muzzles, StringName(part_name), fire_rate_multiplier)
-	return {
-		"aim": aim_node,
-		"weapon": weapon,
-	}
+	var result := {"aim": aim_node}
+	if weapon_spec != null:
+		var weapon := WeaponRuntime.new()
+		weapon.setup(weapon_spec, sprite, muzzles, StringName(part_name), fire_rate_multiplier)
+		result["weapon"] = weapon
+	return result
 
 
-func _attach_rotating_head(parent: Node2D, socket_position: Vector2, z_index_value: int) -> Node2D:
-	var anchor_map := AnchorMap.load_map(HEAD_ANCHORS)
+func _attach_rotating_head(
+	parent: Node2D,
+	socket_position: Vector2,
+	art_path: String,
+	anchor_path: String,
+	z_index_value: int
+) -> Node2D:
+	var anchor_map := AnchorMap.load_map(anchor_path)
 	var mount := AnchorMap.one(anchor_map, &"mount")
 	var aim_node := Node2D.new()
 	aim_node.name = "HeadAimPivot"
 	aim_node.position = socket_position
 	parent.add_child(aim_node)
 
-	var sprite := _create_sprite(HEAD_ART, z_index_value)
+	var sprite := _create_sprite(art_path, z_index_value)
 	sprite.name = "HeadSprite"
 	sprite.position = -mount
 	aim_node.add_child(sprite)

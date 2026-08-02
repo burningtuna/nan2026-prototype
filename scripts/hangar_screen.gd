@@ -10,6 +10,7 @@ const CYAN := Color("5ce1d0")
 const AMBER := Color("f5bd55")
 const RED := Color("e05a55")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
+const COMBAT_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
 
 const SLOT_NAMES := {
 	MechLoadout.MechSlot.BODY: "BODY",
@@ -41,6 +42,14 @@ var _confirm_button: Button
 var _overlay: Control
 var _overlay_title: Label
 var _candidate_list: VBoxContainer
+var _candidate_parts: Dictionary = {}
+var _detail_name: Label
+var _detail_kind: Label
+var _detail_description: Label
+var _detail_stats: Label
+var _detail_weapon: Label
+var _equip_button: Button
+var _pending_part: MechPartSpec
 var _active_slot := MechLoadout.MechSlot.BODY
 var _confirmed := false
 
@@ -148,6 +157,7 @@ func _build_interface() -> void:
 func _build_overlay() -> void:
 	_overlay = Control.new()
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_overlay.z_index = 100
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.visible = false
 	add_child(_overlay)
@@ -159,16 +169,16 @@ func _build_overlay() -> void:
 	_overlay.add_child(shade)
 
 	var panel := Panel.new()
-	panel.position = Vector2(67, 35)
-	panel.size = Vector2(346, 200)
+	panel.position = Vector2(24, 25)
+	panel.size = Vector2(432, 220)
 	panel.add_theme_stylebox_override("panel", _style(PANEL_ALT, CYAN, 2))
 	_overlay.add_child(panel)
 
-	_overlay_title = _make_label(panel, "SELECT PART", Vector2(12, 9), Vector2(270, 17), 11, CYAN)
-	_make_label(panel, "AVAILABLE COMPONENTS / CLICK TO EQUIP", Vector2(12, 27), Vector2(260, 12), 7, MUTED)
+	_overlay_title = _make_label(panel, "SELECT PART", Vector2(12, 8), Vector2(330, 17), 11, CYAN)
+	_make_label(panel, "SELECT COMPONENT / REVIEW / EQUIP", Vector2(12, 26), Vector2(300, 12), 7, MUTED)
 
 	var close := Button.new()
-	close.position = Vector2(312, 8)
+	close.position = Vector2(398, 8)
 	close.size = Vector2(24, 18)
 	close.text = "X"
 	close.add_theme_font_size_override("font_size", 9)
@@ -178,13 +188,44 @@ func _build_overlay() -> void:
 	panel.add_child(close)
 
 	var scroll := ScrollContainer.new()
-	scroll.position = Vector2(12, 45)
-	scroll.size = Vector2(322, 142)
+	scroll.position = Vector2(12, 43)
+	scroll.size = Vector2(190, 164)
 	panel.add_child(scroll)
 	_candidate_list = VBoxContainer.new()
-	_candidate_list.custom_minimum_size = Vector2(312, 0)
+	_candidate_list.custom_minimum_size = Vector2(180, 0)
 	_candidate_list.add_theme_constant_override("separation", 4)
 	scroll.add_child(_candidate_list)
+
+	var divider := ColorRect.new()
+	divider.position = Vector2(207, 43)
+	divider.size = Vector2(1, 164)
+	divider.color = LINE
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(divider)
+
+	_detail_name = _make_label(panel, "COMPONENT", Vector2(216, 43), Vector2(202, 17), 10, TEXT)
+	_detail_kind = _make_label(panel, "SYSTEM", Vector2(216, 61), Vector2(202, 11), 7, AMBER)
+	_detail_description = _make_label(panel, "", Vector2(216, 76), Vector2(202, 43), 7, TEXT)
+	_detail_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail_description.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_detail_stats = _make_label(panel, "", Vector2(216, 123), Vector2(202, 25), 7, MUTED)
+	_detail_stats.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_detail_weapon = _make_label(panel, "", Vector2(216, 150), Vector2(202, 27), 7, CYAN)
+	_detail_weapon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+	_equip_button = Button.new()
+	_equip_button.position = Vector2(216, 181)
+	_equip_button.size = Vector2(202, 26)
+	_equip_button.text = "EQUIP"
+	_equip_button.add_theme_font_size_override("font_size", 9)
+	_equip_button.add_theme_color_override("font_color", BG)
+	_equip_button.add_theme_color_override("font_disabled_color", MUTED)
+	_equip_button.add_theme_stylebox_override("normal", _style(CYAN, CYAN))
+	_equip_button.add_theme_stylebox_override("hover", _style(Color("8ff9e9"), Color("8ff9e9")))
+	_equip_button.add_theme_stylebox_override("pressed", _style(AMBER, AMBER))
+	_equip_button.add_theme_stylebox_override("disabled", _style(Color("17282d"), LINE))
+	_equip_button.pressed.connect(_equip_pending_part)
+	panel.add_child(_equip_button)
 
 
 func _build_catalog() -> bool:
@@ -205,6 +246,7 @@ func _initial_loadout() -> MechLoadout:
 func _open_part_picker(slot: MechLoadout.MechSlot) -> void:
 	_active_slot = slot
 	_overlay_title.text = "SELECT // %s" % SLOT_NAMES[slot]
+	_candidate_parts.clear()
 	for child in _candidate_list.get_children():
 		_candidate_list.remove_child(child)
 		child.queue_free()
@@ -214,42 +256,87 @@ func _open_part_picker(slot: MechLoadout.MechSlot) -> void:
 	var expected_type := _part_type_for_slot(slot)
 	for part: MechPartSpec in _catalog.get(expected_type, []):
 		_add_candidate_button(part)
+	_pending_part = _working_loadout.part_for_slot(_active_slot)
+	_update_candidate_details()
 	_overlay.visible = true
 
 
 func _add_candidate_button(part: MechPartSpec) -> void:
 	var button := Button.new()
-	button.custom_minimum_size = Vector2(312, 27)
+	button.custom_minimum_size = Vector2(180, 20)
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.add_theme_font_size_override("font_size", 8)
+	button.toggle_mode = true
 	button.add_theme_stylebox_override("normal", _style(PANEL, LINE))
 	button.add_theme_stylebox_override("hover", _style(Color("17343a"), CYAN))
 	button.add_theme_stylebox_override("pressed", _style(Color("0a171b"), AMBER))
 	var equipped_part := _working_loadout.part_for_slot(_active_slot)
 	var marker := ">" if equipped_part == part else " "
 	if part == null:
-		button.text = " %s -- EMPTY MOUNT --\n     REMOVE EQUIPPED COMPONENT" % marker
+		button.text = " %s -- EMPTY MOUNT --" % marker
 		button.add_theme_color_override("font_color", MUTED)
 	else:
-		button.text = " %s %s  //  %s\n     %s" % [marker, part.designation, part.display_name, _part_summary(part)]
-		button.tooltip_text = _part_tooltip(part)
-	button.pressed.connect(_select_part.bind(part))
+		button.text = " %s %s  %s" % [marker, part.designation, part.display_name]
+	button.pressed.connect(_preview_candidate.bind(part))
+	_candidate_parts[button] = part
 	_candidate_list.add_child(button)
 
 
-func _part_summary(part: MechPartSpec) -> String:
-	if part.weapon == null:
-		return "ARM %.0f  WT %.0f  PWR %+.0f" % [part.armor, part.weight, part.power_generation - part.power_draw]
-	var family: String = WeaponSpec.WeaponFamily.keys()[part.weapon.weapon_family]
-	return "%s  RPM %.0f  RNG %.0f" % [family, part.weapon.fire_rate * 60.0, part.weapon.effective_range]
+func _preview_candidate(part: MechPartSpec) -> void:
+	_pending_part = part
+	_update_candidate_details()
 
 
-func _part_tooltip(part: MechPartSpec) -> String:
-	var lines := PackedStringArray([part.description])
-	lines.append("Armor %.0f / Weight %.0f / Power %+.0f" % [part.armor, part.weight, part.power_generation - part.power_draw])
-	if part.weapon != null:
-		lines.append("Range %.0f-%.0f / Magazine %d / Reload %.1fs" % [part.weapon.effective_range, part.weapon.max_range, part.weapon.magazine_capacity, part.weapon.reload_duration])
-	return "\n".join(lines)
+func _update_candidate_details() -> void:
+	for button: Button in _candidate_parts:
+		button.set_pressed_no_signal(_candidate_parts[button] == _pending_part)
+
+	var equipped_part := _working_loadout.part_for_slot(_active_slot)
+	var already_equipped := equipped_part == _pending_part
+	_equip_button.disabled = already_equipped
+	if already_equipped:
+		_equip_button.text = "EQUIPPED"
+	elif _pending_part == null:
+		_equip_button.text = "REMOVE"
+	else:
+		_equip_button.text = "EQUIP"
+
+	if _pending_part == null:
+		_detail_name.text = "EMPTY MOUNT"
+		_detail_kind.text = "NO COMPONENT"
+		_detail_description.text = "Remove the component currently installed in this optional slot."
+		_detail_stats.text = "ARMOR 0    WEIGHT 0\nPOWER +0   MOBILITY +0"
+		_detail_weapon.text = "NO WEAPON LINK"
+		return
+
+	_detail_name.text = "%s // %s" % [_pending_part.designation, _pending_part.display_name]
+	_detail_description.text = _pending_part.description
+	_detail_stats.text = "ARMOR %.0f    WEIGHT %.0f\nPOWER %+.0f   MOBILITY %+.0f" % [
+		_pending_part.armor,
+		_pending_part.weight,
+		_pending_part.power_generation - _pending_part.power_draw,
+		_pending_part.mobility,
+	]
+	if _pending_part.weapon == null:
+		var type_name: String = MechPartSpec.PartType.keys()[_pending_part.part_type]
+		_detail_kind.text = "SYSTEM // %s" % type_name
+		_detail_weapon.text = "NO WEAPON LINK"
+		return
+
+	var weapon := _pending_part.weapon
+	var family: String = WeaponSpec.WeaponFamily.keys()[weapon.weapon_family]
+	_detail_kind.text = "WEAPON // %s" % family
+	_detail_weapon.text = "RATE %.0f RPM   RANGE %.0f-%.0f\nMAG %d          RELOAD %.1fs" % [
+		weapon.fire_rate * 60.0,
+		weapon.effective_range,
+		weapon.max_range,
+		weapon.magazine_capacity,
+		weapon.reload_duration,
+	]
+
+
+func _equip_pending_part() -> void:
+	_select_part(_pending_part)
 
 
 func _select_part(part: MechPartSpec) -> void:
@@ -268,7 +355,11 @@ func _confirm_loadout() -> void:
 		return
 	GameSession.confirm_player_loadout(_working_loadout)
 	_confirmed = true
-	_refresh()
+	_confirm_button.disabled = true
+	var error := get_tree().change_scene_to_file(COMBAT_SCENE_PATH)
+	if error != OK:
+		_confirm_button.disabled = false
+		push_error("Unable to open combat scene: %s" % error_string(error))
 
 
 func _refresh() -> void:
@@ -278,7 +369,6 @@ func _refresh() -> void:
 		var required := not _is_optional(slot)
 		var marker := "*" if required else " "
 		button.text = " %s %-9s  %s" % [marker, SLOT_NAMES[slot], part.designation if part != null else "-- EMPTY --"]
-		button.tooltip_text = part.display_name if part != null else "Empty optional mount"
 
 	mech_preview.display(_working_loadout)
 	var totals := _working_loadout.stats()
