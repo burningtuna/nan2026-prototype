@@ -135,11 +135,12 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 	var maximum_range := player.selected_weapon_maximum_range()
 	var is_in_range := distance <= maximum_range
 	var color := RANGE_READY_COLOR if is_in_range else RANGE_BLOCKED_COLOR
+	var selected_weapons := player.selected_weapons()
 
 	draw_arc(cursor_position, 5.0, 0.0, TAU, 16, color, 1.0)
 	draw_line(cursor_position + Vector2(7.0, 0.0), cursor_position + Vector2(11.0, 0.0), color, 1.0)
 	var text := "D%04d / R%04d" % [roundi(distance), roundi(maximum_range)]
-	var label_size := Vector2(76.0, 11.0)
+	var label_size := Vector2(120.0, 11.0 + selected_weapons.size() * 8.0)
 	var label_position := cursor_position + Vector2(10.0, -13.0)
 	if label_position.x + label_size.x > size.x - 3.0:
 		label_position.x = cursor_position.x - label_size.x - 10.0
@@ -167,6 +168,34 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 		7,
 		color
 	)
+	for index in selected_weapons.size():
+		var weapon := selected_weapons[index]
+		var weapon_name := weapon.spec.display_name.to_upper().trim_prefix("TEST ").left(16)
+		var weapon_text := "%s %02d/%02d" % [
+			weapon_name,
+			weapon.ammo,
+			weapon.spec.magazine_capacity,
+		]
+		var weapon_position := label_position + Vector2(3.0, 17.0 + index * 8.0)
+		draw_string_outline(
+			ThemeDB.fallback_font,
+			weapon_position,
+			weapon_text,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1.0,
+			6,
+			2,
+			Color(0.0, 0.0, 0.0, 0.9)
+		)
+		draw_string(
+			ThemeDB.fallback_font,
+			weapon_position,
+			weapon_text,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1.0,
+			6,
+			ALLY_MARKER_COLOR
+		)
 
 
 func _update_target_preview() -> void:

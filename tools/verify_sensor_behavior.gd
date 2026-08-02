@@ -69,6 +69,7 @@ func _initialize() -> void:
 	assert(is_equal_approx(_decision_period(AiMechAgent.MovementType.DEFENSIVE), 1.0))
 	_verify_freed_projectile_snapshot()
 	_verify_sensor_guided_missile()
+	_verify_backpack_muzzle_positions()
 	assert(not target.is_defeated())
 	target.combat_visuals_enabled = false
 	target.register_hit(&"Body", Vector2.RIGHT, float(target.part_max_durability[&"Body"]))
@@ -188,3 +189,18 @@ func _verify_freed_projectile_snapshot() -> void:
 	snapshot.projectiles.append({"projectile": projectile})
 	projectile.free()
 	assert(snapshot.tracked_projectiles().is_empty())
+
+
+func _verify_backpack_muzzle_positions() -> void:
+	var agent := AiMechAgent.new()
+	var anchored := agent._backpack_muzzle_local_positions({
+		"mount": Vector2(2.0, 3.0),
+		"map": {"anchors": {&"muzzle": [Vector2(5.0, 7.0), Vector2(8.0, 9.0)]}},
+	})
+	assert(anchored == [Vector2(3.0, 4.0), Vector2(6.0, 6.0)])
+	var fallback := agent._backpack_muzzle_local_positions({
+		"mount": Vector2(2.0, 3.0),
+		"map": {"anchors": {}},
+	})
+	assert(fallback == [Vector2(0.0, -6.0)])
+	agent.free()

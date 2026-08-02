@@ -80,6 +80,6 @@ func is_reloading() -> bool:
 func _magazine_cost() -> int:
 	if spec.resource_type == WeaponSpec.ResourceType.AMMO:
 		return maxi(ceili(spec.resource_cost), 1)
-	if spec.resource_type == WeaponSpec.ResourceType.NONE:
+	if spec.resource_type in [WeaponSpec.ResourceType.NONE, WeaponSpec.ResourceType.EN]:
 		return 1
 	return 0

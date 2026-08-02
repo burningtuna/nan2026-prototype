@@ -3,7 +3,15 @@ extends Control
 
 const NORMAL_COLOR := Color("a9c0ca")
 const ACTIVE_COLOR := Color("66e6dc")
+const WEAPON_SELECTED_COLOR := Color("62ed8c")
 const HEAT_COLOR := Color("ff684f")
+const BALLISTIC_AMMO_COLOR := Color("ff9f43")
+const ENERGY_AMMO_COLOR := Color("73e0ff")
+const MISSILE_AMMO_COLOR := Color("ffffff")
+const AMMO_BAR_BACKGROUND := Color("14262e")
+const AMMO_BAR_POSITION := Vector2(46.0, 101.0)
+const AMMO_BAR_SIZE := Vector2(88.0, 2.0)
+const WEAPON_SLOT_RECT := Rect2(32.0, 86.0, 103.0, 19.0)
 const WIREFRAME_PREVIEW := preload("res://scripts/mech_wireframe_preview.gd")
 const MESSAGE_DURATION := 4.0
 const PART_NAMES: Array[StringName] = [
@@ -73,7 +81,7 @@ func _build_interface() -> void:
 
 	for index in 4:
 		var weapon_label := _make_label("%d  EMPTY" % (index + 1), 7, NORMAL_COLOR)
-		weapon_label.position = Vector2(45.0, 86.0 + index * 21.0)
+		weapon_label.position = Vector2(46.0, 81.0 + index * 21.0)
 		weapon_label.size = Vector2(88.0, 19.0)
 		weapon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		add_child(weapon_label)
@@ -109,6 +117,8 @@ func _make_label(text_value: String, font_size: int, color: Color) -> Label:
 func _draw() -> void:
 	_draw_resource_gauge(Rect2(8.0, 23.0, 10.0, 102.0), energy_ratio, ACTIVE_COLOR)
 	_draw_resource_gauge(Rect2(8.0, 150.0, 10.0, 102.0), heat_ratio, HEAT_COLOR)
+	_draw_weapon_ammo_bars()
+	_draw_weapon_selection()
 	var font := ThemeDB.fallback_font
 	draw_string(font, Vector2(7.0, 16.0), "EN", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 6, ACTIVE_COLOR)
 	draw_string(font, Vector2(4.0, 143.0), "HEAT", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 5, HEAT_COLOR)
@@ -125,6 +135,66 @@ func _draw_resource_gauge(rect: Rect2, ratio: float, color: Color) -> void:
 	draw_rect(fill_rect, color.darkened(0.55))
 	for y in range(int(fill_rect.position.y), int(fill_rect.end.y), 4):
 		draw_line(Vector2(fill_rect.position.x, y), Vector2(fill_rect.end.x, y), color, 1.0)
+
+
+func _draw_weapon_ammo_bars() -> void:
+	if not is_instance_valid(player):
+		return
+	var part_names: Array[StringName] = [&"LeftArm", &"RightArm", &"Backpack"]
+	for index in part_names.size():
+		var weapon := _weapon_for_part(part_names[index])
+		if weapon == null:
+			continue
+		var bar_rect := Rect2(AMMO_BAR_POSITION + Vector2(0.0, index * 21.0), AMMO_BAR_SIZE)
+		draw_rect(bar_rect, AMMO_BAR_BACKGROUND)
+		var ammo_ratio: float
+		var ammo_color := _weapon_ammo_color(weapon.spec.weapon_family)
+		if weapon.reload_remaining > 0.0:
+			ammo_ratio = 1.0 - clampf(
+				weapon.reload_remaining / maxf(weapon.spec.reload_duration, 0.001),
+				0.0,
+				1.0
+			)
+			ammo_color.a = 0.45
+		else:
+			ammo_ratio = clampf(
+				float(weapon.ammo) / maxf(float(weapon.spec.magazine_capacity), 1.0),
+				0.0,
+				1.0
+			)
+		if ammo_ratio > 0.0:
+			draw_rect(
+				Rect2(bar_rect.position, Vector2(bar_rect.size.x * ammo_ratio, bar_rect.size.y)),
+				ammo_color
+			)
+
+
+func _weapon_ammo_color(weapon_family: WeaponSpec.WeaponFamily) -> Color:
+	match weapon_family:
+		WeaponSpec.WeaponFamily.ENERGY:
+			return ENERGY_AMMO_COLOR
+		WeaponSpec.WeaponFamily.MISSILE:
+			return MISSILE_AMMO_COLOR
+		_:
+			return BALLISTIC_AMMO_COLOR
+
+
+func _draw_weapon_selection() -> void:
+	if not is_instance_valid(player):
+		return
+	var selected_slots := [
+		(player.selected_weapon_mask & AiMechAgent.WEAPON_SELECT_LEFT) != 0,
+		(player.selected_weapon_mask & AiMechAgent.WEAPON_SELECT_RIGHT) != 0,
+		(player.selected_weapon_mask & AiMechAgent.WEAPON_SELECT_BACKPACK) != 0,
+		player.selected_weapon_mask == AiMechAgent.WEAPON_SELECT_ALL,
+	]
+	for index in selected_slots.size():
+		if selected_slots[index]:
+			var slot_rect := Rect2(
+				WEAPON_SLOT_RECT.position + Vector2(0.0, index * 21.0),
+				WEAPON_SLOT_RECT.size
+			)
+			draw_rect(slot_rect, WEAPON_SELECTED_COLOR, false, 1.0)
 
 func _update_unit_status() -> void:
 	if not is_instance_valid(player):

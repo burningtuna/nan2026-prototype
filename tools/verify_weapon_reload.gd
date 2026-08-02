@@ -5,6 +5,7 @@ func _initialize() -> void:
 	var catalog := WeaponCatalog.new()
 	assert(catalog.load_file("res://data/weapons.json"))
 	_verify_reload(catalog.weapon("test_cannon"))
+	_verify_reload(catalog.weapon("test_energy_cannon"))
 	_verify_reload(catalog.weapon("weapon_ballistic_heavy"))
 	_verify_reload(catalog.weapon("weapon_missile_rapid"))
 	print("WEAPON_RELOAD_CHECK passed")

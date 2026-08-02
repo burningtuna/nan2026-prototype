@@ -663,6 +663,16 @@ func selected_weapon_maximum_range() -> float:
 	return maximum_range
 
 
+func selected_weapons() -> Array[WeaponRuntime]:
+	var selected: Array[WeaponRuntime] = []
+	for part_name in [&"LeftArm", &"RightArm", &"Backpack"]:
+		for weapon in weapons:
+			if weapon.part_name == part_name and (_weapon_selection_bit(weapon) & selected_weapon_mask) != 0:
+				selected.append(weapon)
+				break
+	return selected
+
+
 func ai_decision_period() -> float:
 	match movement_type:
 		MovementType.AGGRESSIVE:
@@ -1499,19 +1509,33 @@ func _attach_static_part(
 
 func _attach_backpack_weapon(backpack: Dictionary, weapon_spec: WeaponSpec) -> void:
 	var backpack_root := backpack["root"] as Node2D
-	var muzzle := Marker2D.new()
-	muzzle.name = "BackpackMuzzle"
-	muzzle.position = Vector2(0.0, -6.0)
-	backpack_root.add_child(muzzle)
+	var muzzle_positions := _backpack_muzzle_local_positions(backpack)
+	var muzzles: Array[Marker2D] = []
+	for index in muzzle_positions.size():
+		var muzzle := Marker2D.new()
+		muzzle.name = "BackpackMuzzle%d" % (index + 1)
+		muzzle.position = muzzle_positions[index]
+		backpack_root.add_child(muzzle)
+		muzzles.append(muzzle)
 
 	# The test backpack has no weapon art yet, so recoil is applied to an invisible proxy.
 	var recoil_proxy := Sprite2D.new()
 	recoil_proxy.name = "BackpackWeaponProxy"
 	backpack_root.add_child(recoil_proxy)
-	var muzzles: Array[Marker2D] = [muzzle]
 	var weapon := WeaponRuntime.new()
 	weapon.setup(weapon_spec, recoil_proxy, muzzles, &"Backpack", fire_rate_multiplier)
 	weapons.append(weapon)
+
+
+func _backpack_muzzle_local_positions(backpack: Dictionary) -> Array[Vector2]:
+	var mount: Vector2 = backpack["mount"]
+	var anchor_positions := AnchorMap.many(backpack["map"], &"muzzle")
+	if anchor_positions.is_empty():
+		return [Vector2(0.0, -6.0)]
+	var local_positions: Array[Vector2] = []
+	for anchor_position in anchor_positions:
+		local_positions.append(anchor_position - mount)
+	return local_positions
 
 
 func _attach_aiming_arm(

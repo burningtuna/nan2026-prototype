@@ -59,6 +59,8 @@ Marker pixels must use exact opaque RGBA colors without antialiasing. Outer tran
 
 The muzzle marker defines spawn position only. Projectile direction is calculated from the logical aim direction, `WeaponSpec.launch_offset_degrees`, and spread; muzzle flashes use the same result. A positive launch offset rotates clockwise in screen coordinates, and a negative offset rotates counterclockwise. Guided weapons may therefore launch sideways before steering toward their target or first waypoint without requiring a directional muzzle marker.
 
+Armed backpacks use blue `muzzle` markers when present and cycle through multiple markers. Legacy backpack masks without a muzzle marker use the runtime fallback at `(0, -6)` relative to the backpack root.
+
 ## Regeneration
 
 Run the generator from the project root:
