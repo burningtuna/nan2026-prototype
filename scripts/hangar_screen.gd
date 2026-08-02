@@ -61,6 +61,9 @@ func _ready() -> void:
 	_build_interface()
 	_refresh()
 	queue_redraw()
+	if OS.get_cmdline_user_args().has("--hangar-return-smoke"):
+		print("HANGAR_RETURN_CHECK passed")
+		get_tree().quit(0)
 
 
 func _draw() -> void:
@@ -318,6 +321,13 @@ func _update_candidate_details() -> void:
 		_pending_part.power_generation - _pending_part.power_draw,
 		_pending_part.mobility,
 	]
+	if _pending_part.part_type == MechPartSpec.PartType.HEAD:
+		_detail_stats.text += "\nSENSOR %.0f / %.2fs   TRACK %d/%d" % [
+			_pending_part.sensor_range,
+			_pending_part.sensor_period,
+			_pending_part.enemy_track_limit,
+			_pending_part.projectile_track_limit,
+		]
 	if _pending_part.weapon == null:
 		var type_name: String = MechPartSpec.PartType.keys()[_pending_part.part_type]
 		_detail_kind.text = "SYSTEM // %s" % type_name

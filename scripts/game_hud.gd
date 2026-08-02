@@ -16,6 +16,7 @@ var tactical_map: TacticalMap
 var unit_status: Label
 var weapon_status_labels: Array[Label] = []
 var message_status: Label
+var sensor_status: Label
 var wireframe: MechWireframePreview
 var messages: Array[Dictionary] = []
 var tracked_missiles := {}
@@ -52,6 +53,7 @@ func _process(delta: float) -> void:
 	_update_messages(delta)
 	_detect_incoming_missiles()
 	_update_unit_status()
+	_update_sensor_status()
 	_update_weapon_status()
 	if is_instance_valid(player):
 		set_resource_ratios(player.energy_ratio(), player.heat_ratio())
@@ -81,6 +83,11 @@ func _build_interface() -> void:
 	unit_status.position = Vector2(36.0, 180.0)
 	unit_status.size = Vector2(96.0, 10.0)
 	add_child(unit_status)
+
+	sensor_status = _make_label("SENSOR // OFFLINE", 6, NORMAL_COLOR)
+	sensor_status.position = Vector2(36.0, 192.0)
+	sensor_status.size = Vector2(96.0, 10.0)
+	add_child(sensor_status)
 
 	message_status = _make_label("SYSTEM READY", 6, NORMAL_COLOR)
 	message_status.position = Vector2(35.0, 248.0)
@@ -131,6 +138,18 @@ func _update_unit_status() -> void:
 	unit_status.text = "FRAME // %s" % last_hit.to_upper()
 
 
+func _update_sensor_status() -> void:
+	if not is_instance_valid(player):
+		return
+	sensor_status.text = "S %.2fs  E%d/%d P%d/%d" % [
+		player.sensor_period(),
+		player.tracked_enemy_count(),
+		player.enemy_track_limit(),
+		player.tracked_projectile_count(),
+		player.projectile_track_limit(),
+	]
+
+
 func _update_weapon_status() -> void:
 	if not is_instance_valid(player):
 		return
@@ -175,16 +194,6 @@ func _update_messages(delta: float) -> void:
 func _detect_incoming_missiles() -> void:
 	if not is_instance_valid(player) or not is_instance_valid(projectile_layer):
 		return
-	var live_missiles := {}
-	for node in projectile_layer.get_children():
-		var projectile := node as BallisticProjectile
-		if (
-			projectile == null
-			or projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE
-			or projectile.homing_target != player
-		):
-			continue
-		live_missiles[projectile.get_instance_id()] = true
 	for projectile in player.detected_hostile_projectiles(projectile_layer):
 		if (
 			projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE
@@ -194,9 +203,9 @@ func _detect_incoming_missiles() -> void:
 		var instance_id := projectile.get_instance_id()
 		if not tracked_missiles.has(instance_id):
 			_add_message("MISSILE DETECTED")
-			tracked_missiles[instance_id] = true
+			tracked_missiles[instance_id] = projectile
 	for instance_id in tracked_missiles.keys():
-		if not live_missiles.has(instance_id):
+		if not is_instance_valid(tracked_missiles[instance_id]):
 			tracked_missiles.erase(instance_id)
 
 

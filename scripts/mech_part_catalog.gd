@@ -134,6 +134,8 @@ func _add_part(data: Dictionary) -> bool:
 	part.firepower = float(stats.get("firepower", 0.0))
 	part.weight_capacity = float(stats.get("weight_capacity", 0.0))
 	part.sensor_range = float(stats.get("sensor_range", part.sensor_range))
+	part.sensor_period = float(stats.get("sensor_period", part.sensor_period))
+	part.enemy_track_limit = int(stats.get("enemy_track_limit", part.enemy_track_limit))
 	part.projectile_track_limit = int(stats.get("projectile_track_limit", part.projectile_track_limit))
 
 	var wireframe_paths: Array = WIREFRAME_PATHS[part_type]

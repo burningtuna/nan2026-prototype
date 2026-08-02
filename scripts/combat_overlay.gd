@@ -8,18 +8,29 @@ const RANGE_READY_COLOR := Color("65f0d0")
 const RANGE_BLOCKED_COLOR := Color("ff6259")
 const ALLY_MARKER_COLOR := Color("62ed8c")
 const UNIT_MARKER_MARGIN := 24.0
+const TARGET_PANEL_SIZE := Vector2(76.0, 76.0)
+const TARGET_PANEL_MARGIN := 4.0
+const TARGET_PREVIEW := preload("res://scripts/mech_wireframe_preview.gd")
 
 var player: AiMechAgent
 var allies: Array[AiMechAgent] = []
 var enemies: Array[AiMechAgent] = []
 var projectile_layer: Node2D
 var attack_flash_remaining := {}
-var winning_team_number := 0
+var pending_attack_flashes := {}
+var observed_sensor_sequence := -1
+var winning_team_number := -1
+var target_preview: MechWireframePreview
+var displayed_target: AiMechAgent
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_preview = TARGET_PREVIEW.new()
+	target_preview.scale = Vector2.ONE * 0.9
+	target_preview.visible = false
+	add_child(target_preview)
 	set_process(false)
 
 
@@ -41,12 +52,19 @@ func _process(delta: float) -> void:
 			attack_flash_remaining.erase(enemy_id)
 		else:
 			attack_flash_remaining[enemy_id] = remaining
+	if is_instance_valid(player) and player.sensor_snapshot.sequence != observed_sensor_sequence:
+		observed_sensor_sequence = player.sensor_snapshot.sequence
+		for enemy in enemies:
+			var enemy_id := enemy.get_instance_id()
+			if pending_attack_flashes.has(enemy_id) and player.can_detect_unit(enemy):
+				attack_flash_remaining[enemy_id] = 0.45
+		pending_attack_flashes.clear()
+	_update_target_preview()
 	queue_redraw()
 
 
 func _on_enemy_weapon_fired(_weapon: WeaponRuntime, enemy: AiMechAgent) -> void:
-	if is_instance_valid(player) and player.can_detect_unit(enemy):
-		attack_flash_remaining[enemy.get_instance_id()] = 0.45
+	pending_attack_flashes[enemy.get_instance_id()] = true
 
 
 func show_team_victory(team_number: int) -> void:
@@ -55,9 +73,11 @@ func show_team_victory(team_number: int) -> void:
 
 
 func _draw() -> void:
+	_draw_team_victory()
 	if not is_instance_valid(player):
 		return
 	var canvas_transform := get_viewport().get_canvas_transform()
+	_draw_target_panel()
 	var safe_rect := Rect2(
 		Vector2.ONE * UNIT_MARKER_MARGIN,
 		size - Vector2.ONE * UNIT_MARKER_MARGIN * 2.0
@@ -71,7 +91,7 @@ func _draw() -> void:
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not player.can_detect_unit(enemy):
 			continue
-		var enemy_position: Vector2 = canvas_transform * enemy.global_position
+		var enemy_position: Vector2 = canvas_transform * player.observed_unit_position(enemy)
 		if safe_rect.has_point(enemy_position):
 			_draw_target_marker(enemy_position, enemy)
 		else:
@@ -85,13 +105,12 @@ func _draw() -> void:
 			or projectile.homing_target != player
 		):
 			continue
-		var missile_position: Vector2 = canvas_transform * projectile.global_position
+		var missile_position: Vector2 = canvas_transform * player.observed_projectile_position(projectile)
 		_draw_missile_marker(missile_position)
-	_draw_team_victory()
 
 
 func _draw_team_victory() -> void:
-	if winning_team_number <= 0:
+	if winning_team_number < 0:
 		return
 	var banner_size := Vector2(minf(size.x - 32.0, 220.0), 46.0)
 	var banner_rect := Rect2((size - banner_size) * 0.5, banner_size)
@@ -100,7 +119,7 @@ func _draw_team_victory() -> void:
 	draw_string(
 		ThemeDB.fallback_font,
 		banner_rect.position + Vector2(0.0, 29.0),
-		"TEAM %d WIN" % winning_team_number,
+		"DRAW" if winning_team_number == 0 else "TEAM %d WIN" % winning_team_number,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		banner_rect.size.x,
 		18,
@@ -113,7 +132,7 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 		return
 	var cursor_position: Vector2 = canvas_transform * player.manual_aim_position
 	var distance := player.global_position.distance_to(player.manual_aim_position)
-	var maximum_range := player.maximum_weapon_range()
+	var maximum_range := player.selected_weapon_maximum_range()
 	var is_in_range := distance <= maximum_range
 	var color := RANGE_READY_COLOR if is_in_range else RANGE_BLOCKED_COLOR
 
@@ -125,8 +144,20 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 	if label_position.x + label_size.x > size.x - 3.0:
 		label_position.x = cursor_position.x - label_size.x - 10.0
 	label_position.y = clampf(label_position.y, 3.0, size.y - label_size.y - 3.0)
-	draw_rect(Rect2(label_position, label_size), Color(0.02, 0.04, 0.05, 0.82))
-	draw_rect(Rect2(label_position, label_size), color.darkened(0.35), false, 1.0)
+	var label_rect := Rect2(label_position, label_size)
+	var panel_rect := _target_panel_rect()
+	if target_preview.visible and label_rect.intersects(panel_rect):
+		label_position.y = minf(panel_rect.end.y + 3.0, size.y - label_size.y - 3.0)
+	draw_string_outline(
+		ThemeDB.fallback_font,
+		label_position + Vector2(3.0, 8.0),
+		text,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		7,
+		2,
+		Color(0.0, 0.0, 0.0, 0.9)
+	)
 	draw_string(
 		ThemeDB.fallback_font,
 		label_position + Vector2(3.0, 8.0),
@@ -135,6 +166,49 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 		-1.0,
 		7,
 		color
+	)
+
+
+func _update_target_preview() -> void:
+	if not is_instance_valid(player):
+		target_preview.visible = false
+		return
+	var target := player.opponent
+	if not is_instance_valid(target) or not player.can_detect_unit(target):
+		displayed_target = null
+		target_preview.visible = false
+		return
+	if target != displayed_target:
+		displayed_target = target
+		target_preview.display(target.mech_loadout)
+	target_preview.visible = true
+	target_preview.modulate = Color.WHITE
+	target_preview.position = _target_panel_rect().get_center() + Vector2(0.0, 4.0)
+	for part_name in [&"Body", &"Head", &"Legs", &"LeftArm", &"RightArm", &"Backpack"]:
+		target_preview.set_part_durability(part_name, player.observed_part_durability(target, part_name))
+
+
+func _target_panel_rect() -> Rect2:
+	return Rect2(
+		Vector2(size.x - TARGET_PANEL_SIZE.x - TARGET_PANEL_MARGIN, TARGET_PANEL_MARGIN),
+		TARGET_PANEL_SIZE
+	)
+
+
+func _draw_target_panel() -> void:
+	if target_preview == null or not target_preview.visible or not is_instance_valid(displayed_target):
+		return
+	var panel_rect := _target_panel_rect()
+	draw_rect(panel_rect, Color(0.005, 0.01, 0.012, 0.5))
+	draw_rect(panel_rect, TARGET_COLOR.darkened(0.25), false, 1.0)
+	draw_string(
+		ThemeDB.fallback_font,
+		panel_rect.position + Vector2(4.0, 9.0),
+		"TARGET // %s" % displayed_target.name.to_upper().left(10),
+		HORIZONTAL_ALIGNMENT_LEFT,
+		panel_rect.size.x - 8.0,
+		6,
+		LABEL_COLOR
 	)
 
 
@@ -157,11 +231,8 @@ func _draw_target_marker(screen_position: Vector2, enemy: AiMechAgent) -> void:
 		8,
 		PREP_COLOR if state == "ATTACK PREP" else LABEL_COLOR
 	)
-	if enemy.is_preparing_attack():
-		var weapon := enemy.weapons[enemy.preparing_weapon_index]
-		var duration := maxf(weapon.spec.preparation_time * enemy.weapon_range_multiplier, 0.001)
-		var progress := 1.0 - enemy.preparation_time_remaining / duration
-		draw_arc(screen_position, radius + 3.0, -PI * 0.5, -PI * 0.5 + TAU * progress, 32, PREP_COLOR, 2.0)
+	if player.observed_unit_is_preparing(enemy):
+		draw_arc(screen_position, radius + 3.0, 0.0, TAU, 32, PREP_COLOR, 2.0)
 
 
 func _draw_missile_marker(screen_position: Vector2) -> void:
@@ -195,14 +266,10 @@ func _draw_offscreen_unit_marker(screen_position: Vector2, safe_rect: Rect2, col
 
 
 func _enemy_state(enemy: AiMechAgent) -> String:
-	if enemy.is_preparing_attack():
+	if player.observed_unit_is_preparing(enemy):
 		return "ATTACK PREP"
 	if attack_flash_remaining.has(enemy.get_instance_id()):
 		return "ATTACK"
-	if enemy.is_reloading_ballistic():
-		return "RELOADING"
-	if not enemy.has_fireable_weapon():
-		return "NO SHOT"
-	if enemy.velocity.length_squared() > 4.0:
+	if player.observed_unit_velocity(enemy).length_squared() > 4.0:
 		return "MOVING"
-	return "IDLE"
+	return "TRACKED"

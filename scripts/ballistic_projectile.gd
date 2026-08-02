@@ -21,6 +21,11 @@ var trail_started := false
 var hit_candidates: Array[Area2D] = []
 var hit_resolution_queued := false
 var homing_reported := false
+var homing_observation_position := Vector2.ZERO
+var homing_observation_velocity := Vector2.ZERO
+var homing_observation_age := 0.0
+var homing_observation_valid := false
+var homing_observation_enabled := true
 var hit_resolved := false
 var source_hitbox_rids: Array[RID] = []
 var visuals_enabled := true
@@ -35,7 +40,11 @@ func configure(
 	seed: int,
 	spread_degrees: float,
 	family: WeaponSpec.WeaponFamily,
-	target: Node2D
+	target: Node2D,
+	observed_position := Vector2.ZERO,
+	observed_velocity := Vector2.ZERO,
+	target_was_dashing := false,
+	observation_valid := false
 ) -> void:
 	spec = projectile_spec
 	direction = launch_direction.normalized()
@@ -47,7 +56,17 @@ func configure(
 	launch_spread_degrees = spread_degrees
 	weapon_family = family
 	homing_target = target
+	if is_instance_valid(target) and observation_valid:
+		update_homing_observation(observed_position, observed_velocity, target_was_dashing)
 	rotation = direction.angle()
+
+
+func update_homing_observation(position_value: Vector2, velocity_value: Vector2, dashing: bool) -> void:
+	homing_observation_position = position_value
+	homing_observation_velocity = velocity_value
+	homing_observation_age = 0.0
+	homing_observation_valid = true
+	homing_observation_enabled = not dashing
 
 
 func _ready() -> void:
@@ -99,14 +118,17 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_homing_direction(delta: float) -> void:
+	homing_observation_age += delta
 	if (
 		not spec.homing
-		or not is_instance_valid(homing_target)
-		or (homing_target.has_method("is_defeated") and homing_target.is_defeated())
-		or (homing_target.has_method("is_dashing") and homing_target.is_dashing())
+		or not homing_observation_valid
+		or not homing_observation_enabled
 	):
 		return
-	var target_direction := homing_target.global_position - global_position
+	var estimated_target_position := (
+		homing_observation_position + homing_observation_velocity * homing_observation_age
+	)
+	var target_direction := estimated_target_position - global_position
 	if target_direction.length_squared() <= 1.0:
 		return
 	var next_direction := target_direction.normalized()

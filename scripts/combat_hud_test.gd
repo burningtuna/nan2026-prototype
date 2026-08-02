@@ -3,6 +3,8 @@ extends Control
 const SIDEBAR_RATIO := 0.3
 const SIDEBAR_MIN_WIDTH := 136.0
 const SIDEBAR_MAX_WIDTH := 192.0
+const HANGAR_SCENE_PATH := "res://scenes/hangar_screen.tscn"
+const RESULT_DISPLAY_SECONDS := 2.5
 
 @onready var sidebar: PanelContainer = $Sidebar
 @onready var hud: GameHud = $Sidebar/HudStack/GameHud
@@ -10,6 +12,8 @@ const SIDEBAR_MAX_WIDTH := 192.0
 @onready var combat_viewport: SubViewport = $CombatContainer/CombatViewport
 @onready var battle = $CombatContainer/CombatViewport/SampleAssembly
 @onready var overlay: CombatOverlay = $CombatContainer/CombatViewport/OverlayLayer/CombatOverlay
+
+var returning_to_hangar := false
 
 
 func _ready() -> void:
@@ -66,9 +70,21 @@ func _bind_combat() -> void:
 	hud.bind(player, allies, enemies, battle.projectile_layer)
 	overlay.bind(player, allies, enemies, battle.projectile_layer)
 	battle.battle_finished.connect(_on_battle_finished)
-	if battle.winner_team_id >= 0:
+	if battle.battle_completed:
 		_on_battle_finished(battle.winner_team_id)
 
 
 func _on_battle_finished(winner_team_id: int) -> void:
 	overlay.show_team_victory(winner_team_id + 1)
+	if returning_to_hangar:
+		return
+	returning_to_hangar = true
+	_return_to_hangar()
+
+
+func _return_to_hangar() -> void:
+	await get_tree().create_timer(RESULT_DISPLAY_SECONDS).timeout
+	var error := get_tree().change_scene_to_file(HANGAR_SCENE_PATH)
+	if error != OK:
+		returning_to_hangar = false
+		push_error("Unable to return to hangar: %s" % error_string(error))

@@ -30,6 +30,8 @@ enum PartType {
 @export var firepower := 0.0
 @export var weight_capacity := 0.0
 @export var sensor_range := 0.0
+@export var sensor_period := 1.0
+@export var enemy_track_limit := 0
 @export var projectile_track_limit := 0
 
 

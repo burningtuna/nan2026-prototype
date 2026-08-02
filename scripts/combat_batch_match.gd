@@ -36,7 +36,7 @@ func setup(config: Dictionary, team_loadouts: Array, physics_hz: int, timeout_se
 		agent.movement_type = (
 			AiMechAgent.MovementType.AGGRESSIVE
 			if index % 2 == 0
-			else AiMechAgent.MovementType.RANGE_KEEPER
+			else AiMechAgent.MovementType.BALANCED
 		)
 		if String(config["panel_id"]) == "MISSILE":
 			agent.preferred_range = 4000.0

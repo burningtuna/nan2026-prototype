@@ -50,13 +50,13 @@ func _draw() -> void:
 			draw_circle(_radar_position(ally.global_position, center, radius), 2.5, ALLY_COLOR)
 	for enemy in enemies:
 		if is_instance_valid(enemy) and player.can_detect_unit(enemy):
-			draw_circle(_radar_position(enemy.global_position, center, radius), 3.5, THREAT_COLOR)
+			draw_circle(_radar_position(player.observed_unit_position(enemy), center, radius), 3.5, THREAT_COLOR)
 	if not is_instance_valid(projectile_layer):
 		return
 	for projectile in player.detected_hostile_projectiles(projectile_layer):
 		if projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE:
 			continue
-		draw_circle(_radar_position(projectile.global_position, center, radius), 1.25, THREAT_COLOR)
+		draw_circle(_radar_position(player.observed_projectile_position(projectile), center, radius), 1.25, THREAT_COLOR)
 
 
 func _radar_position(world_position: Vector2, center: Vector2, radius: float) -> Vector2:

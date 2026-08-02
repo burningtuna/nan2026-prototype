@@ -2,7 +2,9 @@ class_name AiMechAgent
 extends Node2D
 
 const DEFAULT_SENSOR_RANGE := 2500.0
-const DEFAULT_PROJECTILE_TRACK_LIMIT := 4
+const DEFAULT_SENSOR_PERIOD := 0.25
+const DEFAULT_ENEMY_TRACK_LIMIT := 4
+const DEFAULT_PROJECTILE_TRACK_LIMIT := 8
 const DEFAULT_MAX_ENERGY := 100.0
 const MAX_HEAT := 100.0
 const DASH_ENERGY_COST := 15.0
@@ -21,7 +23,8 @@ signal weapon_fired(weapon: WeaponRuntime)
 
 enum MovementType {
 	AGGRESSIVE,
-	RANGE_KEEPER,
+	BALANCED,
+	DEFENSIVE,
 }
 
 const AnchorMap := preload("res://scripts/sprite_anchor_map.gd")
@@ -134,6 +137,18 @@ var energy_spent_this_frame := false
 var part_durability: Dictionary = {}
 var part_max_durability: Dictionary = {}
 var part_hitboxes: Dictionary = {}
+var sensor_snapshot := SensorSnapshot.new()
+var sensor_time_remaining := 0.0
+var sensor_scan_count := 0
+var ai_decision_time_remaining := 0.0
+var ai_decision_count := 0
+var observed_target_position := Vector2.ZERO
+var observed_target_velocity := Vector2.ZERO
+var observed_target_preparing := false
+var decision_movement_direction := Vector2.ZERO
+var sensor_missile_evasion_active := false
+var sensor_missile_evasion_direction := Vector2.ZERO
+var ai_fire_decision_pending := false
 
 
 func setup(
@@ -189,10 +204,30 @@ func sensor_range() -> float:
 	return DEFAULT_SENSOR_RANGE
 
 
+func sensor_period() -> float:
+	if mech_loadout != null and mech_loadout.head != null:
+		return maxf(mech_loadout.head.sensor_period, 0.01)
+	return DEFAULT_SENSOR_PERIOD
+
+
+func enemy_track_limit() -> int:
+	if mech_loadout != null and mech_loadout.head != null:
+		return maxi(mech_loadout.head.enemy_track_limit, 0)
+	return DEFAULT_ENEMY_TRACK_LIMIT
+
+
 func projectile_track_limit() -> int:
 	if mech_loadout != null and mech_loadout.head != null:
 		return maxi(mech_loadout.head.projectile_track_limit, 0)
 	return DEFAULT_PROJECTILE_TRACK_LIMIT
+
+
+func tracked_enemy_count() -> int:
+	return sensor_snapshot.units.size()
+
+
+func tracked_projectile_count() -> int:
+	return sensor_snapshot.projectiles.size()
 
 
 func movement_speed() -> float:
@@ -238,43 +273,196 @@ func visuals_enabled() -> bool:
 
 
 func can_detect_position(world_position: Vector2) -> bool:
-	return global_position.distance_squared_to(world_position) <= sensor_range() ** 2
+	var maximum_distance := sensor_range()
+	return maximum_distance > 0.0 and global_position.distance_squared_to(world_position) <= maximum_distance ** 2
 
 
 func can_detect_unit(target: Node2D) -> bool:
-	if not is_instance_valid(target):
+	return is_instance_valid(target) and sensor_snapshot.has_unit(target)
+
+
+func observed_unit_position(target: Node2D) -> Vector2:
+	var contact := sensor_snapshot.unit_contact(target)
+	return contact.get("position", global_position)
+
+
+func observed_unit_velocity(target: Node2D) -> Vector2:
+	var contact := sensor_snapshot.unit_contact(target)
+	return contact.get("velocity", Vector2.ZERO)
+
+
+func observed_unit_is_preparing(target: Node2D) -> bool:
+	var contact := sensor_snapshot.unit_contact(target)
+	return bool(contact.get("preparing", false))
+
+
+func observed_part_durability(target: Node2D, part_name: StringName) -> float:
+	var contact := sensor_snapshot.unit_contact(target)
+	var durability: Dictionary = contact.get("durability", {})
+	return float(durability.get(part_name, 0.0))
+
+
+func detected_hostile_projectiles(_projectiles: Node2D = null) -> Array[BallisticProjectile]:
+	return sensor_snapshot.tracked_projectiles()
+
+
+func observed_projectile_position(projectile: BallisticProjectile) -> Vector2:
+	for contact in sensor_snapshot.projectiles:
+		if contact.get("projectile") == projectile:
+			return contact["position"]
+	return global_position
+
+
+func _update_sensor(delta: float) -> bool:
+	sensor_time_remaining -= delta
+	if sensor_time_remaining > 0.0:
 		return false
-	var target_mech := target as AiMechAgent
-	return (
-		(target_mech == null or not target_mech.is_defeated())
-		and can_detect_position(target.global_position)
+	sensor_time_remaining += sensor_period()
+	if sensor_time_remaining <= 0.0:
+		sensor_time_remaining = sensor_period()
+	_scan_sensor()
+	return true
+
+
+func _scan_sensor() -> void:
+	sensor_scan_count += 1
+	sensor_snapshot.clear(sensor_scan_count)
+	var maximum_distance := sensor_range()
+	if maximum_distance <= 0.0:
+		return
+	var maximum_distance_squared := maximum_distance * maximum_distance
+	var unit_contacts: Array[Dictionary] = []
+	for target in opponents:
+		if not is_instance_valid(target) or target.is_defeated():
+			continue
+		var distance_squared := global_position.distance_squared_to(target.global_position)
+		if distance_squared > maximum_distance_squared:
+			continue
+		unit_contacts.append({
+			"target": target,
+			"position": target.global_position,
+			"velocity": target.velocity,
+			"preparing": target.is_preparing_attack(),
+			"dashing": target.is_dashing(),
+			"durability": target._part_durability_snapshot(),
+			"distance_squared": distance_squared,
+		})
+	unit_contacts.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a["distance_squared"]), float(b["distance_squared"])):
+			return (a["target"] as Node).get_instance_id() < (b["target"] as Node).get_instance_id()
+		return float(a["distance_squared"]) < float(b["distance_squared"])
 	)
+	unit_contacts.resize(mini(unit_contacts.size(), enemy_track_limit()))
+	sensor_snapshot.units.assign(unit_contacts)
 
-
-func detected_hostile_projectiles(projectiles: Node2D) -> Array[BallisticProjectile]:
-	var detected: Array[BallisticProjectile] = []
-	var track_limit := projectile_track_limit()
-	if not is_instance_valid(projectiles) or track_limit <= 0:
-		return detected
-	for node in projectiles.get_children():
+	if not is_instance_valid(projectile_layer):
+		return
+	var projectile_contacts: Array[Dictionary] = []
+	for node in projectile_layer.get_children():
 		var projectile := node as BallisticProjectile
 		if (
 			projectile == null
 			or not is_instance_valid(projectile.source_mech)
 			or is_ally_of(projectile.source_mech)
-			or not can_detect_position(projectile.global_position)
 		):
 			continue
-		detected.append(projectile)
-	detected.sort_custom(func(a: BallisticProjectile, b: BallisticProjectile) -> bool:
-		var a_distance := global_position.distance_squared_to(a.global_position)
-		var b_distance := global_position.distance_squared_to(b.global_position)
-		if is_equal_approx(a_distance, b_distance):
-			return a.get_instance_id() < b.get_instance_id()
-		return a_distance < b_distance
-	)
-	detected.resize(mini(detected.size(), track_limit))
-	return detected
+		var distance_squared := global_position.distance_squared_to(projectile.global_position)
+		if distance_squared > maximum_distance_squared:
+			continue
+		var projectile_velocity := projectile.direction * projectile.spec.speed
+		var relative_position := projectile.global_position - global_position
+		var relative_velocity := projectile_velocity - velocity
+		var relative_speed_squared := relative_velocity.length_squared()
+		var approaching := relative_position.dot(relative_velocity) < 0.0
+		var time_to_impact := INF
+		if approaching and relative_speed_squared > 0.001:
+			time_to_impact = maxf(-relative_position.dot(relative_velocity) / relative_speed_squared, 0.0)
+		projectile_contacts.append({
+			"projectile": projectile,
+			"position": projectile.global_position,
+			"velocity": projectile_velocity,
+			"approaching": approaching,
+			"time_to_impact": time_to_impact,
+			"damage": projectile.spec.damage,
+			"distance_squared": distance_squared,
+			"targeting_self": projectile.homing_target == self,
+			"weapon_family": projectile.weapon_family,
+		})
+	projectile_contacts.sort_custom(_projectile_contact_precedes)
+	projectile_contacts.resize(mini(projectile_contacts.size(), projectile_track_limit()))
+	sensor_snapshot.projectiles.assign(projectile_contacts)
+	_update_owned_missile_observations()
+
+
+func _projectile_contact_precedes(a: Dictionary, b: Dictionary) -> bool:
+	if bool(a["approaching"]) != bool(b["approaching"]):
+		return bool(a["approaching"])
+	if not is_equal_approx(float(a["time_to_impact"]), float(b["time_to_impact"])):
+		return float(a["time_to_impact"]) < float(b["time_to_impact"])
+	if not is_equal_approx(float(a["damage"]), float(b["damage"])):
+		return float(a["damage"]) > float(b["damage"])
+	if not is_equal_approx(float(a["distance_squared"]), float(b["distance_squared"])):
+		return float(a["distance_squared"]) < float(b["distance_squared"])
+	return (a["projectile"] as Node).get_instance_id() < (b["projectile"] as Node).get_instance_id()
+
+
+func _update_owned_missile_observations() -> void:
+	if not is_instance_valid(projectile_layer):
+		return
+	for node in projectile_layer.get_children():
+		var projectile := node as BallisticProjectile
+		if (
+			projectile == null
+			or projectile.source_mech != self
+			or not is_instance_valid(projectile.homing_target)
+		):
+			continue
+		var contact := sensor_snapshot.unit_contact(projectile.homing_target)
+		if contact.is_empty():
+			continue
+		projectile.update_homing_observation(
+			contact["position"],
+			contact["velocity"],
+			bool(contact["dashing"])
+		)
+
+
+func _update_sensor_missile_evasion() -> void:
+	var threat: Dictionary = {}
+	for contact in sensor_snapshot.projectiles:
+		if (
+			contact["weapon_family"] == WeaponSpec.WeaponFamily.MISSILE
+			and bool(contact["targeting_self"])
+			and bool(contact["approaching"])
+		):
+			threat = contact
+			break
+	if threat.is_empty():
+		sensor_missile_evasion_active = false
+		sensor_missile_evasion_direction = Vector2.ZERO
+		movement_direction = decision_movement_direction
+		return
+	var incoming_velocity: Vector2 = threat["velocity"]
+	if incoming_velocity.length_squared() <= 0.001:
+		return
+	var evade_direction := incoming_velocity.normalized().rotated(PI * 0.5)
+	var away_from_projectile := global_position - Vector2(threat["position"])
+	if evade_direction.dot(away_from_projectile) < 0.0:
+		evade_direction = -evade_direction
+	sensor_missile_evasion_active = true
+	sensor_missile_evasion_direction = evade_direction
+	movement_direction = evade_direction
+	if (
+		dash_time_remaining <= 0.0
+		and dash_cooldown_remaining <= 0.0
+		and preparing_weapon_index < 0
+		and _consume_dash_resources()
+	):
+		dash_direction = evade_direction
+		dash_time_remaining = dash_duration
+		dash_cooldown_remaining = dash_cooldown
+		dash_count += 1
+		evasion_count += 1
 
 
 func ammo_remaining() -> int:
@@ -290,11 +478,12 @@ func register_hit(part_name: StringName, incoming_direction: Vector2, damage := 
 	last_hit_aspect = _classify_hit_aspect(incoming_direction)
 	aspect_hit_counts[last_hit_aspect] = aspect_hit_counts.get(last_hit_aspect, 0) + 1
 	var was_destroyed := is_part_destroyed(part_name)
+	var was_defeated := is_defeated()
 	if part_durability.has(part_name) and float(part_durability[part_name]) > 0.0:
 		part_durability[part_name] = maxf(float(part_durability[part_name]) - damage, 0.0)
 	hit_received.emit(last_hit_part, last_hit_aspect)
 	if not was_destroyed and is_part_destroyed(part_name):
-		_destroy_part(part_name, incoming_direction)
+		_destroy_part(part_name, incoming_direction, was_defeated)
 	return last_hit_aspect
 
 
@@ -305,15 +494,26 @@ func part_durability_ratio(part_name: StringName) -> float:
 	return clampf(float(part_durability.get(part_name, 0.0)) / maximum, 0.0, 1.0)
 
 
+func _part_durability_snapshot() -> Dictionary:
+	var result := {}
+	for part_name: StringName in part_max_durability:
+		result[part_name] = part_durability_ratio(part_name)
+	return result
+
+
 func is_part_destroyed(part_name: StringName) -> bool:
 	return part_max_durability.has(part_name) and float(part_durability.get(part_name, 0.0)) <= 0.0
 
 
 func is_defeated() -> bool:
+	if is_part_destroyed(&"Body"):
+		return true
+	if weapons.is_empty():
+		return false
 	for weapon in weapons:
 		if not weapon.disabled:
 			return false
-	return not weapons.is_empty()
+	return true
 
 
 func _initialize_part_durability() -> void:
@@ -337,8 +537,7 @@ func _initialize_part_durability() -> void:
 		part_durability[part_name] = maxf(part.armor, 0.0)
 
 
-func _destroy_part(part_name: StringName, incoming_direction: Vector2) -> void:
-	var was_defeated := is_defeated()
+func _destroy_part(part_name: StringName, incoming_direction: Vector2, was_defeated: bool) -> void:
 	var hitbox := part_hitboxes.get(part_name) as PartHitbox
 	var destruction_position := global_position
 	if hitbox != null and hitbox.monitorable:
@@ -353,8 +552,14 @@ func _destroy_part(part_name: StringName, incoming_direction: Vector2) -> void:
 		for boost in boost_sprites:
 			boost.visible = false
 			boost.stop()
+	elif part_name == &"Head":
+		sensor_snapshot.clear(sensor_scan_count + 1)
+		sensor_scan_count += 1
+		sensor_time_remaining = sensor_period()
+		sensor_missile_evasion_active = false
+		sensor_missile_evasion_direction = Vector2.ZERO
 	for weapon in weapons:
-		if weapon.part_name == part_name:
+		if part_name == &"Body" or weapon.part_name == part_name:
 			weapon.disabled = true
 	if not was_defeated and is_defeated():
 		_spawn_wreck_fire_effect(destruction_position, part_name)
@@ -449,6 +654,26 @@ func maximum_weapon_range() -> float:
 	return maximum_range
 
 
+func selected_weapon_maximum_range() -> float:
+	var maximum_range := 0.0
+	for weapon in weapons:
+		if (_weapon_selection_bit(weapon) & selected_weapon_mask) == 0:
+			continue
+		maximum_range = maxf(maximum_range, weapon.spec.max_range * weapon_range_multiplier)
+	return maximum_range
+
+
+func ai_decision_period() -> float:
+	match movement_type:
+		MovementType.AGGRESSIVE:
+			return 0.25
+		MovementType.BALANCED:
+			return 0.5
+		MovementType.DEFENSIVE:
+			return 1.0
+	return 0.5
+
+
 func maximum_weapon_traverse_limit_degrees() -> float:
 	var maximum_limit := 0.0
 	for weapon in weapons:
@@ -506,18 +731,66 @@ func _physics_process(delta: float) -> void:
 		_update_boost_effect()
 		queue_redraw()
 		return
+	var sensor_updated := _update_sensor(delta)
 	if player_controlled:
 		_update_player_weapon_selection()
 		_update_player_movement(delta)
 		_select_opponent(manual_aim_position)
 	else:
-		_select_opponent(global_position)
+		if sensor_updated:
+			_update_sensor_missile_evasion()
+		ai_decision_time_remaining -= delta
+		if ai_decision_time_remaining <= 0.0:
+			_run_ai_decision()
 		_update_random_movement(delta)
 	_aim_at_opponent(delta)
 	_update_weapons(delta)
 	_update_resources(delta)
 	_update_boost_effect()
 	queue_redraw()
+
+
+func _run_ai_decision() -> void:
+	ai_decision_time_remaining += ai_decision_period()
+	if ai_decision_time_remaining <= 0.0:
+		ai_decision_time_remaining = ai_decision_period()
+	ai_decision_count += 1
+	_select_opponent(global_position)
+	var contact := sensor_snapshot.unit_contact(opponent)
+	if contact.is_empty():
+		observed_target_position = global_position
+		observed_target_velocity = Vector2.ZERO
+		observed_target_preparing = false
+	else:
+		observed_target_position = contact["position"]
+		observed_target_velocity = contact["velocity"]
+		observed_target_preparing = bool(contact["preparing"])
+	direction_time_remaining -= ai_decision_period()
+	if direction_time_remaining <= 0.0:
+		_choose_direction()
+	_update_strategy_direction()
+	decision_movement_direction = movement_direction
+	movement_direction = (
+		sensor_missile_evasion_direction
+		if sensor_missile_evasion_active
+		else decision_movement_direction
+	)
+	ai_fire_decision_pending = true
+	_try_start_ai_dash_from_decision()
+
+
+func _try_start_ai_dash_from_decision() -> void:
+	if (
+		dash_time_remaining > 0.0
+		or dash_decision_time_remaining > 0.0
+		or dash_cooldown_remaining > 0.0
+		or preparing_weapon_index >= 0
+	):
+		return
+	var alignment := maxf(torso_forward().dot(movement_direction), 0.0)
+	if alignment < cos(deg_to_rad(10.0)):
+		return
+	_start_random_dash()
 
 
 func _draw() -> void:
@@ -533,11 +806,6 @@ func _draw() -> void:
 
 
 func _update_random_movement(delta: float) -> void:
-	direction_time_remaining -= delta
-	if direction_time_remaining <= 0.0:
-		_choose_direction()
-	_update_strategy_direction()
-
 	var margin := 45.0
 	var safe_arena := arena.grow(-margin)
 	if not safe_arena.has_point(position):
@@ -570,13 +838,6 @@ func _update_random_movement(delta: float) -> void:
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
 	else:
 		dash_decision_time_remaining -= delta
-		if (
-			dash_decision_time_remaining <= 0.0
-			and dash_cooldown_remaining <= 0.0
-			and preparing_weapon_index < 0
-			and alignment >= cos(deg_to_rad(10.0))
-		):
-			_start_random_dash()
 	position += movement_step
 	position = position.clamp(arena.position, arena.end)
 
@@ -685,10 +946,14 @@ func _select_opponent(reference_position: Vector2) -> void:
 func _nearest_opponent(reference_position: Vector2) -> AiMechAgent:
 	var nearest: AiMechAgent
 	var nearest_distance := INF
-	for target in opponents:
-		if not is_instance_valid(target) or target.is_defeated():
+	for contact in sensor_snapshot.units:
+		var target_value = contact.get("target")
+		if not is_instance_valid(target_value):
 			continue
-		var distance := reference_position.distance_squared_to(target.global_position)
+		var target := target_value as AiMechAgent
+		if target == null:
+			continue
+		var distance := reference_position.distance_squared_to(contact["position"])
 		if distance < nearest_distance:
 			nearest = target
 			nearest_distance = distance
@@ -696,7 +961,7 @@ func _nearest_opponent(reference_position: Vector2) -> AiMechAgent:
 
 
 func _aim_target_position() -> Vector2:
-	return manual_aim_position if player_controlled else opponent.global_position
+	return manual_aim_position if player_controlled else observed_target_position
 
 func _choose_direction() -> void:
 	direction_time_remaining = rng.randf_range(0.8, 2.2)
@@ -709,7 +974,7 @@ func _choose_direction() -> void:
 func _update_strategy_direction() -> void:
 	if not is_instance_valid(opponent):
 		return
-	var target_vector := opponent.global_position - global_position
+	var target_vector := observed_target_position - global_position
 	var distance := target_vector.length()
 	if distance <= 1.0:
 		return
@@ -717,7 +982,7 @@ func _update_strategy_direction() -> void:
 	var orbit_direction := toward_target.rotated(PI * 0.5 * maneuver_side)
 
 	if movement_type == MovementType.AGGRESSIVE:
-		var should_evade := opponent.is_preparing_attack()
+		var should_evade := observed_target_preparing
 		if should_evade and not evading:
 			evasion_count += 1
 			dash_decision_time_remaining = 0.0
@@ -730,6 +995,12 @@ func _update_strategy_direction() -> void:
 			movement_direction = orbit_direction
 		return
 
+	if movement_type == MovementType.DEFENSIVE and observed_target_preparing:
+		if not evading:
+			evasion_count += 1
+		evading = true
+		movement_direction = (-toward_target + orbit_direction * 0.65).normalized()
+		return
 	if is_reloading_ballistic():
 		if not reload_evasion_active:
 			reload_evasion_count += 1
@@ -831,9 +1102,14 @@ func _update_weapons(delta: float) -> void:
 		preparation_time_remaining = maxf(preparation_time_remaining - delta, 0.0)
 		if preparation_time_remaining <= 0.0:
 			_finish_preparation()
+		if not player_controlled:
+			ai_fire_decision_pending = false
 		return
 
-	if not player_controlled or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if player_controlled and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		_try_fire_linked_group()
+	elif not player_controlled and ai_fire_decision_pending:
+		ai_fire_decision_pending = false
 		_try_fire_linked_group()
 
 
@@ -856,7 +1132,7 @@ func _try_fire_linked_group() -> void:
 		or dash_time_remaining > 0.0
 		or (
 			not player_controlled
-			and movement_type == MovementType.RANGE_KEEPER
+			and movement_type != MovementType.AGGRESSIVE
 			and is_reloading_ballistic()
 		)
 	):
@@ -871,7 +1147,7 @@ func _try_fire_linked_group() -> void:
 			continue
 		if (
 			not player_controlled
-			and global_position.distance_to(opponent.global_position)
+			and global_position.distance_to(observed_target_position)
 			> weapon.spec.max_range * weapon_range_multiplier
 		):
 			range_blocked_count += 1
@@ -906,7 +1182,7 @@ func _can_complete_preparation(weapon_index: int) -> bool:
 		return weapon_index < weapon_aim_valid.size() and weapon_aim_valid[weapon_index]
 
 	var future_self_position := global_position + velocity * weapon_spec.preparation_move_speed_multiplier * duration
-	var future_target_position := opponent.global_position + opponent.velocity * duration
+	var future_target_position := observed_target_position + observed_target_velocity * duration
 	var future_aim_vector := future_target_position - future_self_position
 	if future_aim_vector.length_squared() <= 1.0:
 		return true
@@ -930,8 +1206,8 @@ func _can_complete_preparation(weapon_index: int) -> bool:
 	var future_traverse := absf(angle_difference(-PI * 0.5, future_local_aim))
 
 	var possible_target_displacement := (
-		opponent.cruise_speed * duration
-		+ opponent.dash_speed * opponent.dash_duration
+		observed_target_velocity.length() * duration
+		+ dash_speed * dash_duration
 	)
 	var target_distance := maxf(future_aim_vector.length(), 1.0)
 	var maneuver_margin := asin(clampf(possible_target_displacement / target_distance, 0.0, 0.95))
@@ -1023,9 +1299,14 @@ func _can_execute_weapon(weapon_index: int) -> bool:
 		return true
 	if not is_instance_valid(opponent):
 		return false
-	if movement_type == MovementType.RANGE_KEEPER and is_reloading_ballistic():
+	if movement_type != MovementType.AGGRESSIVE and is_reloading_ballistic():
 		return false
-	return global_position.distance_to(opponent.global_position) <= (
+	if (
+		weapons[weapon_index].spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+		and sensor_snapshot.unit_contact(opponent).is_empty()
+	):
+		return false
+	return global_position.distance_to(observed_target_position) <= (
 		weapons[weapon_index].spec.max_range * weapon_range_multiplier
 	)
 
@@ -1049,6 +1330,17 @@ func _spawn_projectile(
 ) -> void:
 	var projectile_spec := weapon.spec.projectile
 	var projectile := projectile_spec.projectile_scene.instantiate() as BallisticProjectile
+	var observed_position := Vector2.ZERO
+	var observed_velocity := Vector2.ZERO
+	var observed_dashing := false
+	var observation_valid := false
+	if is_instance_valid(target):
+		var contact := sensor_snapshot.unit_contact(target)
+		if not contact.is_empty():
+			observed_position = contact["position"]
+			observed_velocity = contact["velocity"]
+			observed_dashing = bool(contact["dashing"])
+			observation_valid = true
 	projectile.configure(
 		projectile_spec,
 		direction,
@@ -1058,7 +1350,11 @@ func _spawn_projectile(
 		shot_seed,
 		spread_degrees,
 		weapon.spec.weapon_family,
-		target
+		target,
+		observed_position,
+		observed_velocity,
+		observed_dashing,
+		observation_valid
 	)
 	projectile_layer.add_child(projectile)
 	projectile.global_position = spawn_position

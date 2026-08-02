@@ -96,7 +96,9 @@
         "firepower": 0,
         "weight_capacity": 0,
         "sensor_range": 2200,
-        "projectile_track_limit": 3
+        "sensor_period": 0.5,
+        "enemy_track_limit": 2,
+        "projectile_track_limit": 4
       }
     },
     {
@@ -120,7 +122,9 @@
         "firepower": 0,
         "weight_capacity": 0,
         "sensor_range": 2500,
-        "projectile_track_limit": 4
+        "sensor_period": 0.25,
+        "enemy_track_limit": 4,
+        "projectile_track_limit": 8
       }
     },
     {
@@ -144,7 +148,9 @@
         "firepower": 0,
         "weight_capacity": 0,
         "sensor_range": 3000,
-        "projectile_track_limit": 6
+        "sensor_period": 0.125,
+        "enemy_track_limit": 8,
+        "projectile_track_limit": 16
       }
     },
     {
@@ -358,12 +364,12 @@
       "type": "BACKPACK",
       "display_name": "TEMPEST RACK",
       "designation": "BP-16",
-      "description": "등 장착형 유도 미사일 랙.",
+      "description": "단발 고위력 유도탄으로 초장거리 정밀 타격을 수행하는 등 장착형 발사기.",
       "art_path": "res://Sprites/Backpack-Generator-0001.png",
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ffd28b",
-      "weapon_id": "test_missile",
+      "weapon_id": "weapon_missile_sniper_backpack",
       "stats": {
         "armor": 38,
         "weight": 10,
@@ -371,7 +377,7 @@
         "power_draw": 9,
         "cooling": 0,
         "mobility": -4,
-        "firepower": 48,
+        "firepower": 100,
         "weight_capacity": 0
       }
     },
@@ -601,7 +607,7 @@
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#ff9c87",
-      "weapon_id": "weapon_ballistic_heavy",
+      "weapon_id": "weapon_ballistic_heavy_backpack",
       "stats": {
         "armor": 85,
         "weight": 25,
@@ -618,12 +624,12 @@
       "type": "BACKPACK",
       "display_name": "NOVA BEAM ARRAY",
       "designation": "BP-E03",
-      "description": "막대한 전력과 냉각 성능을 요구하는 등 장착형 빔 캐논.",
+      "description": "막대한 전력과 냉각 성능을 요구하는 등 장착형 초장거리 빔 캐논.",
       "art_path": "res://Sprites/Backpack-Generator-0001.png",
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
       "preview_tint": "#d6f7ff",
-      "weapon_id": "weapon_energy_heavy",
+      "weapon_id": "weapon_energy_heavy_backpack",
       "stats": {
         "armor": 70,
         "weight": 27,
@@ -710,7 +716,7 @@
       "type": "ARM_EQUIPMENT",
       "display_name": "AVALANCHE FLAK CANNON",
       "designation": "AR-S03",
-      "description": "좁은 원뿔 범위에 10개의 관통탄을 발사하는 중량급 장거리 대공포.",
+      "description": "좁은 원뿔 범위에 10개의 관통탄을 발사하는 중량급 대공 산탄포.",
       "art_path": "res://Sprites/Arm-Shotgun-0001.png",
       "anchor_path": "res://Sprites/Arm-Shotgun-0001.anchors.png",
       "wireframe_art_path": "res://Sprites/Wireframe/Arm-Shotgun-0001.png",
@@ -734,7 +740,7 @@
       "type": "BACKPACK",
       "display_name": "AVALANCHE FLAK ARRAY",
       "designation": "BP-S03",
-      "description": "10개의 탄자를 일제사격하는 등 장착형 장거리 대공 포대.",
+      "description": "10개의 탄자를 일제사격하는 등 장착형 중량급 대공 산탄 포대.",
       "art_path": "res://Sprites/Backpack-Generator-0001.png",
       "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
       "splash_art_path": "",
