@@ -12,6 +12,7 @@ const MECH_COLLISION_RESOLVER := preload("res://scripts/mech_collision_resolver.
 const STEEL_FLOOR_TILE := preload("res://Sprites/Environment/Stage-01-Steel-Floor.png")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const WEAPONS_DATA_PATH := "res://data/weapons.json"
+const CAMERA_ZOOM_STEP := 1.15
 
 @export var arena := Rect2(-3000.0, -3000.0, 6000.0, 6000.0)
 @export var framing_margin := Vector2(96.0, 82.0)
@@ -81,6 +82,22 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	MECH_COLLISION_RESOLVER.resolve(agents)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if (
+		camera_mode != CameraMode.CENTERED_TARGET
+		or not event is InputEventMouseButton
+		or not event.pressed
+	):
+		return
+	match event.button_index:
+		MOUSE_BUTTON_WHEEL_UP:
+			adjust_centered_camera_zoom(CAMERA_ZOOM_STEP)
+			get_viewport().set_input_as_handled()
+		MOUSE_BUTTON_WHEEL_DOWN:
+			adjust_centered_camera_zoom(1.0 / CAMERA_ZOOM_STEP)
+			get_viewport().set_input_as_handled()
 
 
 func _process(delta: float) -> void:
@@ -206,6 +223,17 @@ func _run_centered_camera_smoke() -> void:
 	_update_camera(0.0, true)
 	assert(camera.global_position.is_equal_approx(player.global_position))
 	assert(is_equal_approx(camera.zoom.x, centered_camera_zoom))
+	var initial_zoom := centered_camera_zoom
+	for _index in 100:
+		adjust_centered_camera_zoom(1.0 / CAMERA_ZOOM_STEP)
+	var map_fit_zoom := _map_fit_zoom()
+	assert(is_equal_approx(centered_camera_zoom, map_fit_zoom))
+	var visible_size := get_viewport_rect().size / centered_camera_zoom
+	assert(visible_size.x + 0.01 >= arena.size.x)
+	assert(visible_size.y + 0.01 >= arena.size.y)
+	adjust_centered_camera_zoom(CAMERA_ZOOM_STEP)
+	assert(centered_camera_zoom > map_fit_zoom)
+	centered_camera_zoom = initial_zoom
 	for enemy_index in [2, 3]:
 		agents[enemy_index].global_position += Vector2(400.0, 250.0)
 	_update_camera(1.0)
@@ -448,8 +476,30 @@ func _update_centered_sensor_camera() -> void:
 		subject = _camera_player()
 	if subject == null:
 		return
+	centered_camera_zoom = clampf(centered_camera_zoom, _map_fit_zoom(), maximum_zoom)
 	camera.global_position = subject.global_position
-	camera.zoom = Vector2.ONE * clampf(centered_camera_zoom, minimum_zoom, maximum_zoom)
+	camera.zoom = Vector2.ONE * centered_camera_zoom
+
+
+func adjust_centered_camera_zoom(multiplier: float) -> void:
+	if camera_mode != CameraMode.CENTERED_TARGET:
+		return
+	centered_camera_zoom = clampf(
+		centered_camera_zoom * maxf(multiplier, 0.001),
+		_map_fit_zoom(),
+		maximum_zoom
+	)
+
+
+func _map_fit_zoom() -> float:
+	var viewport_size := get_viewport_rect().size
+	if arena.size.x <= 0.0 or arena.size.y <= 0.0:
+		return 0.0001
+	return clampf(
+		minf(viewport_size.x / arena.size.x, viewport_size.y / arena.size.y),
+		0.0001,
+		maximum_zoom
+	)
 
 
 func _update_target_camera_input() -> void:
