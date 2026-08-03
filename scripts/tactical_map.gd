@@ -20,9 +20,13 @@ func _ready() -> void:
 
 func bind(combat_player: AiMechAgent, combat_allies: Array, combat_enemies: Array, projectiles: Node2D) -> void:
 	player = combat_player
+	projectile_layer = projectiles
+	set_roster(combat_allies, combat_enemies)
+
+
+func set_roster(combat_allies: Array, combat_enemies: Array) -> void:
 	allies.assign(combat_allies)
 	enemies.assign(combat_enemies)
-	projectile_layer = projectiles
 	queue_redraw()
 
 

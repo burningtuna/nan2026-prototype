@@ -1,6 +1,8 @@
 extends Node2D
 
 signal battle_finished(winner_team_id: int)
+signal roster_changed
+signal agent_defeated(agent: AiMechAgent)
 
 enum CameraMode {
 	DYNAMIC_FRAMING,
@@ -27,6 +29,8 @@ const CAMERA_ZOOM_STEP := 1.15
 @export var two_vs_two := false
 @export var enable_player_control := false
 @export var randomize_loadouts := false
+@export var solo_player := false
+@export var automatic_battle_completion := true
 
 @onready var camera: Camera2D = $DynamicCamera
 @onready var projectile_layer: Node2D = $Projectiles
@@ -112,7 +116,7 @@ func _process(delta: float) -> void:
 
 
 func _update_battle_result() -> void:
-	if battle_completed or agents.is_empty():
+	if not automatic_battle_completion or battle_completed or agents.is_empty():
 		return
 	_update_last_ally_behavior()
 	var team_has_members := {}
@@ -290,7 +294,7 @@ func _draw() -> void:
 	if agents.size() >= 2:
 		var direction_line_width := 2.0 / maxf(camera.zoom.x, 0.001)
 		for agent in agents:
-			if agent.player_controlled:
+			if agent.player_controlled or agent.unit_class == AiMechAgent.UnitClass.DRONE:
 				continue
 			var forward: Vector2 = agent.torso_forward()
 			var direction_color := Color("ffd34d") if agent.is_preparing_attack() else Color(0.25, 1.0, 0.35, 0.9)
@@ -324,7 +328,11 @@ func _spawn_agents() -> void:
 	var colors := [Color("8fe5ff"), Color("ff9b8f")]
 	var starts := [Vector2(-1000.0, 0.0), Vector2(1000.0, 0.0)]
 	var agent_count := 2
-	if two_vs_two:
+	if solo_player:
+		colors = [Color("71d9e8")]
+		starts = [Vector2.ZERO]
+		agent_count = 1
+	elif two_vs_two:
 		colors = [Color("71d9e8"), Color("8faeff"), Color("ff776d"), Color("ffb05f")]
 		starts = [
 			Vector2(-1000.0, -260.0),
@@ -337,9 +345,9 @@ func _spawn_agents() -> void:
 	var hostile_loadout_signatures := {}
 	for index in agent_count:
 		var agent = AI_MECH.new()
-		var first_enemy_index := 2 if two_vs_two else 1
+		var first_enemy_index := 1 if solo_player else (2 if two_vs_two else 1)
 		agent.team_id = 0 if index < first_enemy_index else 1
-		agent.player_controlled = two_vs_two and enable_player_control and index == 0
+		agent.player_controlled = enable_player_control and index == 0
 		var uses_close_range_build := index == 0 or (two_vs_two and index == 1)
 		if agent.player_controlled:
 			agent.movement_type = AiMechAgent.MovementType.AGGRESSIVE
@@ -375,7 +383,9 @@ func _spawn_agents() -> void:
 		else:
 			loadout = first_loadout if uses_close_range_build else second_loadout
 		var agent_name := "AI-%02d" % (index + 1)
-		if two_vs_two:
+		if solo_player:
+			agent_name = "PLAYER"
+		elif two_vs_two:
 			agent_name = ["PLAYER", "ALLY-01", "ENEMY-01", "ENEMY-02"][index]
 		if randomize_loadouts:
 			var weapon_names: Array[String] = []
@@ -396,19 +406,99 @@ func _spawn_agents() -> void:
 		elif index >= first_enemy_index and configured_loadout != null:
 			hostile_loadout_signatures[_loadout_signature(configured_loadout)] = true
 		agent.position = starts[index]
-		add_child(agent)
-		agents.append(agent)
+		_register_combatant(agent, false)
 
-	if two_vs_two:
+	if two_vs_two and not solo_player:
 		var allies := [agents[0], agents[1]]
 		var enemies := [agents[2], agents[3]]
 		for ally in allies:
 			ally.set_opponents(enemies)
 		for enemy in enemies:
 			enemy.set_opponents(allies)
-	else:
+	elif not solo_player:
 		agents[0].set_opponent(agents[1])
 		agents[1].set_opponent(agents[0])
+	roster_changed.emit()
+
+
+func spawn_endless_mech(spawn_position: Vector2, sequence: int) -> AiMechAgent:
+	if valid_random_loadouts.is_empty():
+		return null
+	var configured_loadout := _random_mech_loadout()
+	var loadout := _weapons_from_mech_loadout(configured_loadout)
+	var agent := AI_MECH.new() as AiMechAgent
+	agent.team_id = 1
+	agent.unit_class = AiMechAgent.UnitClass.BOSS
+	agent.movement_type = AiMechAgent.MovementType.AGGRESSIVE
+	agent.setup(
+		"MECH-%02d" % sequence,
+		projectile_layer,
+		arena,
+		90000 + sequence * 7919,
+		Color("ff776d"),
+		loadout,
+		configured_loadout
+	)
+	agent.position = spawn_position
+	_register_combatant(agent)
+	return agent
+
+
+func add_combatant(agent: AiMechAgent) -> void:
+	_register_combatant(agent)
+
+
+func remove_combatant(agent: AiMechAgent) -> void:
+	if not agents.has(agent):
+		return
+	agents.erase(agent)
+	camera_framed_units.erase(agent.get_instance_id())
+	if is_instance_valid(agent):
+		agent.queue_free()
+	_refresh_opponents()
+	roster_changed.emit()
+
+
+func player_agent() -> AiMechAgent:
+	return _player_agent()
+
+
+func allies_for(agent: AiMechAgent) -> Array[AiMechAgent]:
+	var result: Array[AiMechAgent] = []
+	for candidate in agents:
+		if is_instance_valid(candidate) and candidate != agent and candidate.team_id == agent.team_id:
+			result.append(candidate)
+	return result
+
+
+func enemies_for(agent: AiMechAgent) -> Array[AiMechAgent]:
+	var result: Array[AiMechAgent] = []
+	for candidate in agents:
+		if is_instance_valid(candidate) and candidate.team_id != agent.team_id:
+			result.append(candidate)
+	return result
+
+
+func _register_combatant(agent: AiMechAgent, refresh_roster := true) -> void:
+	add_child(agent)
+	agents.append(agent)
+	agent.defeated.connect(_on_registered_agent_defeated.bind(agent))
+	if refresh_roster:
+		_refresh_opponents()
+		roster_changed.emit()
+
+
+func _on_registered_agent_defeated(agent: AiMechAgent) -> void:
+	agent_defeated.emit(agent)
+	_refresh_opponents()
+	roster_changed.emit()
+
+
+func _refresh_opponents() -> void:
+	for agent in agents:
+		if not is_instance_valid(agent) or agent.is_defeated():
+			continue
+		agent.set_opponents(enemies_for(agent))
 
 
 func _random_mech_loadout(excluded_signatures := {}) -> MechLoadout:

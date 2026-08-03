@@ -1,0 +1,103 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/endless_hud.gd" id="1_hud"]
+
+[sub_resource type="StyleBoxFlat" id="StylePanel"]
+bg_color = Color(0.0196078, 0.0470588, 0.0588235, 0.94)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.901961, 0.862745, 0.85)
+
+[node name="EndlessHud" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_hud")
+
+[node name="ScorePanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -80.0
+offset_top = 5.0
+offset_right = 80.0
+offset_bottom = 31.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Stack" type="VBoxContainer" parent="ScorePanel"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="Score" type="Label" parent="ScorePanel/Stack"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.713726, 0.992157, 0.968627, 1)
+theme_override_font_sizes/font_size = 7
+text = "SCORE 000000  //  HIGH 000000"
+horizontal_alignment = 1
+
+[node name="Time" type="Label" parent="ScorePanel/Stack"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.545098, 0.666667, 0.694118, 1)
+theme_override_font_sizes/font_size = 6
+text = "TIME 00:00  //  TIER 01"
+horizontal_alignment = 1
+
+[node name="ResultPanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -86.0
+offset_top = -55.0
+offset_right = 86.0
+offset_bottom = 55.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Margin" type="MarginContainer" parent="ResultPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="Stack" type="VBoxContainer" parent="ResultPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Title" type="Label" parent="ResultPanel/Margin/Stack"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.388235, 0.34902, 1)
+theme_override_font_sizes/font_size = 13
+text = "COMBAT UNIT DISABLED"
+horizontal_alignment = 1
+
+[node name="ResultScore" type="Label" parent="ResultPanel/Margin/Stack"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.905882, 0.960784, 0.960784, 1)
+theme_override_font_sizes/font_size = 8
+text = "FINAL SCORE  000000\nHIGH SCORE   000000"
+horizontal_alignment = 1
+
+[node name="Retry" type="Button" parent="ResultPanel/Margin/Stack"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "RETRY"
+
+[node name="Hangar" type="Button" parent="ResultPanel/Margin/Stack"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "RETURN TO HANGAR"

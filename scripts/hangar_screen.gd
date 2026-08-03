@@ -10,7 +10,9 @@ const CYAN := Color("5ce1d0")
 const AMBER := Color("f5bd55")
 const RED := Color("e05a55")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
-const COMBAT_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
+const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
+const SKIRMISH_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
+const ENDLESS_SCENE_PATH := "res://scenes/endless_combat.tscn"
 
 const SLOT_NAMES := {
 	MechLoadout.MechSlot.BODY: "BODY",
@@ -39,6 +41,7 @@ var _stat_bars: Dictionary = {}
 var _status_label: Label
 var _validation_label: Label
 var _confirm_button: Button
+var _main_menu_button: Button
 var _overlay: Control
 var _overlay_title: Label
 var _candidate_list: VBoxContainer
@@ -61,6 +64,18 @@ func _ready() -> void:
 	_build_interface()
 	_refresh()
 	queue_redraw()
+	if OS.get_cmdline_user_args().has("--scene-transition-smoke"):
+		call_deferred("_confirm_loadout")
+	if OS.get_cmdline_user_args().has("--endless-entry-smoke"):
+		if SceneTransition.transitioning:
+			SceneTransition.transition_finished.connect(
+				func(_scene_path: String) -> void: _confirm_loadout(),
+				CONNECT_ONE_SHOT
+			)
+		else:
+			call_deferred("_confirm_loadout")
+	if OS.get_cmdline_user_args().has("--hangar-main-menu-smoke"):
+		call_deferred("_return_to_main_menu")
 	if OS.get_cmdline_user_args().has("--hangar-return-smoke"):
 		print("HANGAR_RETURN_CHECK passed")
 		get_tree().quit(0)
@@ -144,6 +159,8 @@ func _build_interface() -> void:
 	_confirm_button.position = Vector2(365, 237)
 	_confirm_button.size = Vector2(101, 19)
 	_confirm_button.text = "CONFIRM LOADOUT"
+	if GameSession.selected_game_mode == GameSession.GameMode.ENDLESS:
+		_confirm_button.text = "DEPLOY ENDLESS"
 	_confirm_button.add_theme_font_size_override("font_size", 8)
 	_confirm_button.add_theme_color_override("font_color", BG)
 	_confirm_button.add_theme_color_override("font_disabled_color", MUTED)
@@ -153,6 +170,17 @@ func _build_interface() -> void:
 	_confirm_button.add_theme_stylebox_override("disabled", _style(Color("17282d"), LINE))
 	_confirm_button.pressed.connect(_confirm_loadout)
 	add_child(_confirm_button)
+
+	_main_menu_button = Button.new()
+	_main_menu_button.position = Vector2(365, 194)
+	_main_menu_button.size = Vector2(101, 16)
+	_main_menu_button.text = "MAIN MENU"
+	_main_menu_button.add_theme_font_size_override("font_size", 7)
+	_main_menu_button.add_theme_stylebox_override("normal", _style(PANEL_ALT, LINE))
+	_main_menu_button.add_theme_stylebox_override("hover", _style(Color("17343a"), CYAN))
+	_main_menu_button.add_theme_stylebox_override("pressed", _style(Color("0a171b"), AMBER))
+	_main_menu_button.pressed.connect(_return_to_main_menu)
+	add_child(_main_menu_button)
 
 	_build_overlay()
 
@@ -367,10 +395,37 @@ func _confirm_loadout() -> void:
 	GameSession.confirm_player_loadout(_working_loadout)
 	_confirmed = true
 	_confirm_button.disabled = true
-	var error := get_tree().change_scene_to_file(COMBAT_SCENE_PATH)
+	if not SceneTransition.transition_failed.is_connected(_on_scene_transition_failed):
+		SceneTransition.transition_failed.connect(_on_scene_transition_failed)
+	var scene_path := (
+		ENDLESS_SCENE_PATH
+		if GameSession.selected_game_mode == GameSession.GameMode.ENDLESS
+		else SKIRMISH_SCENE_PATH
+	)
+	var error := SceneTransition.transition_to(scene_path)
 	if error != OK:
 		_confirm_button.disabled = false
 		push_error("Unable to open combat scene: %s" % error_string(error))
+
+
+func _return_to_main_menu() -> void:
+	_confirm_button.disabled = true
+	_main_menu_button.disabled = true
+	if not SceneTransition.transition_failed.is_connected(_on_scene_transition_failed):
+		SceneTransition.transition_failed.connect(_on_scene_transition_failed)
+	var error := SceneTransition.transition_to(MAIN_MENU_SCENE_PATH)
+	if error != OK:
+		_confirm_button.disabled = false
+		_main_menu_button.disabled = false
+		push_error("Unable to open main menu: %s" % error_string(error))
+
+
+func _on_scene_transition_failed(scene_path: String, error: Error) -> void:
+	if scene_path not in [MAIN_MENU_SCENE_PATH, SKIRMISH_SCENE_PATH, ENDLESS_SCENE_PATH]:
+		return
+	_confirm_button.disabled = false
+	_main_menu_button.disabled = false
+	push_error("Unable to change scene: %s" % error_string(error))
 
 
 func _refresh() -> void:

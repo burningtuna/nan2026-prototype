@@ -1,0 +1,142 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/scene_transition.gd" id="1_transition"]
+[ext_resource type="Texture2D" path="res://Sprites/Environment/Stage-01-Steel-Floor.png" id="2_steel"]
+
+[sub_resource type="StyleBoxFlat" id="StyleLoading"]
+bg_color = Color(0.0156863, 0.0352941, 0.0431373, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.901961, 0.862745, 0.9)
+content_margin_left = 9.0
+content_margin_top = 4.0
+content_margin_right = 9.0
+content_margin_bottom = 4.0
+
+[node name="SceneTransition" type="CanvasLayer"]
+layer = 100
+process_mode = 3
+script = ExtResource("1_transition")
+
+[node name="Curtain" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="TopDoor" type="TextureRect" parent="Curtain"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+anchor_bottom = 0.5
+grow_horizontal = 2
+mouse_filter = 2
+texture_repeat = 2
+texture = ExtResource("2_steel")
+expand_mode = 1
+stretch_mode = 1
+
+[node name="Shade" type="ColorRect" parent="Curtain/TopDoor"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.0352941, 0.0705882, 0.0784314, 0.56)
+
+[node name="Edge" type="ColorRect" parent="Curtain/TopDoor"]
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -7.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.0470588, 0.0901961, 0.0980392, 1)
+
+[node name="EdgeLine" type="ColorRect" parent="Curtain/TopDoor/Edge"]
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -1.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.4, 0.901961, 0.862745, 0.75)
+
+[node name="BottomDoor" type="TextureRect" parent="Curtain"]
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_top = 0.5
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+texture_repeat = 2
+texture = ExtResource("2_steel")
+expand_mode = 1
+stretch_mode = 1
+
+[node name="Shade" type="ColorRect" parent="Curtain/BottomDoor"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.0196078, 0.0470588, 0.054902, 0.64)
+
+[node name="Edge" type="ColorRect" parent="Curtain/BottomDoor"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 7.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.0470588, 0.0901961, 0.0980392, 1)
+
+[node name="EdgeLine" type="ColorRect" parent="Curtain/BottomDoor/Edge"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 1.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.4, 0.901961, 0.862745, 0.75)
+
+[node name="LoadingPanel" type="PanelContainer" parent="Curtain"]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -66.0
+offset_top = -11.0
+offset_right = 66.0
+offset_bottom = 11.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleLoading")
+
+[node name="Status" type="Label" parent="Curtain/LoadingPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.713726, 0.992157, 0.968627, 1)
+theme_override_font_sizes/font_size = 8
+text = "TRANSFER // LOADING"
+horizontal_alignment = 1
+vertical_alignment = 1

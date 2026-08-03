@@ -41,12 +41,22 @@ func _ready() -> void:
 
 func bind(combat_player: AiMechAgent, combat_allies: Array, combat_enemies: Array, projectiles: Node2D) -> void:
 	player = combat_player
+	projectile_layer = projectiles
+	set_roster(combat_allies, combat_enemies)
+	set_process(true)
+	queue_redraw()
+
+
+func set_roster(combat_allies: Array, combat_enemies: Array) -> void:
 	allies.assign(combat_allies)
 	enemies.assign(combat_enemies)
-	projectile_layer = projectiles
 	for enemy in enemies:
-		enemy.weapon_fired.connect(_on_enemy_weapon_fired.bind(enemy))
-	set_process(true)
+		var callback := _on_enemy_weapon_fired.bind(enemy)
+		if not enemy.weapon_fired.is_connected(callback):
+			enemy.weapon_fired.connect(callback)
+	if is_instance_valid(displayed_target) and not enemies.has(displayed_target):
+		displayed_target = null
+		target_preview.visible = false
 	queue_redraw()
 
 
@@ -232,7 +242,11 @@ func _update_target_preview() -> void:
 		if is_instance_valid(player.selected_sensor_target)
 		else player.opponent
 	)
-	if not is_instance_valid(target) or not player.can_detect_unit(target):
+	if (
+		not is_instance_valid(target)
+		or not player.can_detect_unit(target)
+		or target.unit_class == AiMechAgent.UnitClass.DRONE
+	):
 		displayed_target = null
 		target_preview.visible = false
 		return

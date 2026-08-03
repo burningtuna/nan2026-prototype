@@ -43,8 +43,13 @@ func bind(combat_player: AiMechAgent, allies: Array, enemies: Array, projectiles
 	player.hit_received.connect(_on_player_hit_received)
 	player.part_destroyed.connect(_on_player_part_destroyed)
 	player.hit_landed.connect(_on_player_hit_landed)
+	player.parts_repaired.connect(_update_wireframe_durability)
 	_update_wireframe_durability()
 	set_process(true)
+
+
+func set_roster(allies: Array, enemies: Array) -> void:
+	tactical_map.set_roster(allies, enemies)
 
 
 func set_resource_ratios(current_energy_ratio: float, current_heat_ratio: float) -> void:

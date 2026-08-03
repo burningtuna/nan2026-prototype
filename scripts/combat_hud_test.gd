@@ -8,6 +8,9 @@ const HANGAR_SCENE_PATH := "res://scenes/hangar_screen.tscn"
 const TUTORIAL_SCENARIO_PATH := "res://data/scenarios/combat_hud_tutorial.json"
 const RESULT_DISPLAY_SECONDS := 2.5
 
+@export var automatic_return_to_hangar := true
+@export var tutorial_enabled := true
+
 @onready var sidebar: PanelContainer = $Sidebar
 @onready var hud_canvas: Control = $Sidebar/HudStack/HudCanvas
 @onready var hud: GameHud = $Sidebar/HudStack/HudCanvas/GameHud
@@ -95,23 +98,26 @@ func _screen_render_scale() -> Vector2:
 
 
 func _bind_combat() -> void:
-	if battle.agents.size() < 4:
-		push_error("Combat HUD requires a player, ally, and two enemies")
+	if battle.agents.is_empty():
+		push_error("Combat HUD requires at least one combatant")
 		return
-	var player := battle.agents[0] as AiMechAgent
+	var player := battle.player_agent() as AiMechAgent
+	if player == null:
+		push_error("Combat HUD requires a player combatant")
+		return
 	combat_player = player
-	var allies := [battle.agents[1]]
-	var enemies := [battle.agents[2], battle.agents[3]]
+	var allies: Array[AiMechAgent] = battle.allies_for(player)
+	var enemies: Array[AiMechAgent] = battle.enemies_for(player)
 	battle.get_node("UI").visible = false
 	hud.system_message_requested.connect(system_messages.push_message)
 	hud.bind(player, allies, enemies, battle.projectile_layer)
 	overlay.bind(player, allies, enemies, battle.projectile_layer)
-	player.defeated.connect(_on_player_defeated)
-	for ally: AiMechAgent in allies:
-		ally.defeated.connect(_on_ally_defeated.bind(ally))
-	for enemy: AiMechAgent in enemies:
-		enemy.defeated.connect(_on_enemy_defeated.bind(enemy))
-	battle.battle_finished.connect(_on_battle_finished)
+	_connect_roster_messages(allies, enemies)
+	if not player.defeated.is_connected(_on_player_defeated):
+		player.defeated.connect(_on_player_defeated)
+	battle.roster_changed.connect(_refresh_combat_roster)
+	if automatic_return_to_hangar:
+		battle.battle_finished.connect(_on_battle_finished)
 	if battle.battle_completed:
 		_on_battle_finished(battle.winner_team_id)
 	if OS.get_cmdline_user_args().has("--hud-spectator-smoke"):
@@ -122,9 +128,37 @@ func _bind_combat() -> void:
 		call_deferred("_run_combat_presentation_smoke")
 	elif _should_play_tutorial():
 		call_deferred("_play_tutorial")
+	_on_combat_bound()
+
+
+func _refresh_combat_roster() -> void:
+	if not is_instance_valid(combat_player):
+		return
+	var allies: Array[AiMechAgent] = battle.allies_for(combat_player)
+	var enemies: Array[AiMechAgent] = battle.enemies_for(combat_player)
+	hud.set_roster(allies, enemies)
+	overlay.set_roster(allies, enemies)
+	_connect_roster_messages(allies, enemies)
+
+
+func _connect_roster_messages(allies: Array, enemies: Array) -> void:
+	for ally: AiMechAgent in allies:
+		var callback := _on_ally_defeated.bind(ally)
+		if not ally.defeated.is_connected(callback):
+			ally.defeated.connect(callback)
+	for enemy: AiMechAgent in enemies:
+		var callback := _on_enemy_defeated.bind(enemy)
+		if not enemy.defeated.is_connected(callback):
+			enemy.defeated.connect(callback)
+
+
+func _on_combat_bound() -> void:
+	pass
 
 
 func _should_play_tutorial() -> bool:
+	if not tutorial_enabled:
+		return false
 	for argument in OS.get_cmdline_user_args():
 		if argument.ends_with("-smoke"):
 			return false
@@ -251,7 +285,8 @@ func _on_ally_defeated(ally: AiMechAgent) -> void:
 
 
 func _on_enemy_defeated(enemy: AiMechAgent) -> void:
-	system_messages.push_message("ENEMY DESTROYED: %s" % enemy.name.to_upper())
+	if enemy.appears_in_enemy_roster():
+		system_messages.push_message("ENEMY DESTROYED: %s" % enemy.name.to_upper())
 
 
 func _on_battle_finished(winner_team_id: int) -> void:
@@ -264,7 +299,15 @@ func _on_battle_finished(winner_team_id: int) -> void:
 
 func _return_to_hangar() -> void:
 	await get_tree().create_timer(RESULT_DISPLAY_SECONDS).timeout
-	var error := get_tree().change_scene_to_file(HANGAR_SCENE_PATH)
+	if not SceneTransition.transition_failed.is_connected(_on_return_transition_failed):
+		SceneTransition.transition_failed.connect(_on_return_transition_failed)
+	var error := SceneTransition.transition_to(HANGAR_SCENE_PATH)
 	if error != OK:
-		returning_to_hangar = false
-		push_error("Unable to return to hangar: %s" % error_string(error))
+		_on_return_transition_failed(HANGAR_SCENE_PATH, error)
+
+
+func _on_return_transition_failed(scene_path: String, error: Error) -> void:
+	if scene_path != HANGAR_SCENE_PATH:
+		return
+	returning_to_hangar = false
+	push_error("Unable to return to hangar: %s" % error_string(error))

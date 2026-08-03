@@ -21,6 +21,7 @@ signal part_destroyed(part_name: StringName)
 signal hit_landed(weapon_family: WeaponSpec.WeaponFamily)
 signal weapon_fired(weapon: WeaponRuntime)
 signal defeated
+signal parts_repaired
 
 enum MovementType {
 	AGGRESSIVE,
@@ -531,6 +532,30 @@ func is_defeated() -> bool:
 
 func appears_in_enemy_roster() -> bool:
 	return unit_class in [UnitClass.MECH, UnitClass.BOSS]
+
+
+func repair_surviving_parts(maximum_ratio: float) -> float:
+	if is_defeated():
+		return 0.0
+	var repaired_total := 0.0
+	for part_name: StringName in part_max_durability:
+		var current := float(part_durability.get(part_name, 0.0))
+		var maximum := float(part_max_durability[part_name])
+		if current <= 0.0 or maximum <= 0.0 or _part_weapon_is_disabled(part_name):
+			continue
+		var repaired := minf(maximum * maxf(maximum_ratio, 0.0), maximum - current)
+		part_durability[part_name] = current + repaired
+		repaired_total += repaired
+	if repaired_total > 0.0:
+		parts_repaired.emit()
+	return repaired_total
+
+
+func _part_weapon_is_disabled(part_name: StringName) -> bool:
+	for weapon in weapons:
+		if weapon.part_name == part_name and weapon.disabled:
+			return true
+	return false
 
 
 func _initialize_part_durability() -> void:

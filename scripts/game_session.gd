@@ -1,7 +1,16 @@
 extends Node
 
 const LOADOUT_SAVE_PATH := "user://last_loadout.json"
+const STORY_PROGRESS_PATH := "user://story_progress.json"
+const ENDLESS_PROGRESS_PATH := "user://endless_progress.json"
 const LOADOUT_SCHEMA_VERSION := 1
+const PROGRESS_SCHEMA_VERSION := 1
+
+enum GameMode {
+	STORY,
+	SKIRMISH,
+	ENDLESS,
+}
 const SLOT_CONFIG := {
 	"head": [MechLoadout.MechSlot.HEAD, MechPartSpec.PartType.HEAD],
 	"body": [MechLoadout.MechSlot.BODY, MechPartSpec.PartType.BODY],
@@ -13,6 +22,9 @@ const SLOT_CONFIG := {
 
 var player_mech_loadout: MechLoadout
 var loadout_save_path := LOADOUT_SAVE_PATH
+var story_progress_path := STORY_PROGRESS_PATH
+var endless_progress_path := ENDLESS_PROGRESS_PATH
+var selected_game_mode := GameMode.SKIRMISH
 
 
 func confirm_player_loadout(loadout: MechLoadout) -> void:
@@ -78,3 +90,73 @@ func _save_player_loadout(loadout: MechLoadout) -> void:
 	}))
 	file.flush()
 	file.close()
+
+
+func load_endless_high_score() -> int:
+	var document := _load_progress_document(endless_progress_path)
+	return maxi(int(document.get("high_score", 0)), 0)
+
+
+func submit_endless_score(score: int) -> int:
+	var previous_high_score := load_endless_high_score()
+	var high_score := maxi(previous_high_score, maxi(score, 0))
+	if high_score == previous_high_score:
+		return high_score
+	return high_score if _save_progress_document(endless_progress_path, {"high_score": high_score}) else previous_high_score
+
+
+func delete_story_progress() -> bool:
+	return _delete_progress_file(story_progress_path)
+
+
+func delete_endless_score() -> bool:
+	return _delete_progress_file(endless_progress_path)
+
+
+func _load_progress_document(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {}
+	var parser := JSON.new()
+	if parser.parse(file.get_as_text()) != OK or not parser.data is Dictionary:
+		return {}
+	var document: Dictionary = parser.data
+	return document if int(document.get("schema_version", 0)) == PROGRESS_SCHEMA_VERSION else {}
+
+
+func _save_progress_document(path: String, values: Dictionary) -> bool:
+	var document := values.duplicate()
+	document["schema_version"] = PROGRESS_SCHEMA_VERSION
+	var temporary_path := path + ".tmp"
+	var file := FileAccess.open(temporary_path, FileAccess.WRITE)
+	if file == null:
+		push_warning("Unable to save progress: %s" % error_string(FileAccess.get_open_error()))
+		return false
+	file.store_string(JSON.stringify(document))
+	file.flush()
+	file.close()
+	var absolute_path := ProjectSettings.globalize_path(path)
+	var absolute_temporary_path := ProjectSettings.globalize_path(temporary_path)
+	var absolute_backup_path := ProjectSettings.globalize_path(path + ".bak")
+	DirAccess.remove_absolute(absolute_backup_path)
+	if FileAccess.file_exists(path):
+		var backup_error := DirAccess.rename_absolute(absolute_path, absolute_backup_path)
+		if backup_error != OK:
+			DirAccess.remove_absolute(absolute_temporary_path)
+			return false
+	var rename_error := DirAccess.rename_absolute(absolute_temporary_path, absolute_path)
+	if rename_error != OK:
+		DirAccess.remove_absolute(absolute_temporary_path)
+		if FileAccess.file_exists(path + ".bak"):
+			DirAccess.rename_absolute(absolute_backup_path, absolute_path)
+		return false
+	DirAccess.remove_absolute(absolute_backup_path)
+	return true
+
+
+func _delete_progress_file(path: String) -> bool:
+	if not FileAccess.file_exists(path):
+		return true
+	return DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) == OK

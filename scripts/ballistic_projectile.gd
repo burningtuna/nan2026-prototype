@@ -13,6 +13,7 @@ var max_distance := 0.0
 var traveled_distance := 0.0
 var elapsed_time := 0.0
 var source_mech: Node
+var source_team_id := -1
 var source_part: StringName
 var shot_seed := 0
 var launch_spread_degrees := 0.0
@@ -52,6 +53,10 @@ func configure(
 	direction = launch_direction.normalized()
 	max_distance = travel_limit
 	source_mech = shot_source
+	if is_instance_valid(source_mech):
+		var team_value = source_mech.get("team_id")
+		if team_value != null:
+			source_team_id = int(team_value)
 	visuals_enabled = not source_mech.has_method("visuals_enabled") or source_mech.visuals_enabled()
 	source_part = part_name
 	shot_seed = seed
@@ -141,7 +146,7 @@ func _update_homing_direction(delta: float) -> void:
 	var applied_turn := turn_angle if max_turn <= 0.0 else clampf(turn_angle, -max_turn, max_turn)
 	if not homing_reported and absf(applied_turn) > 0.001:
 		homing_reported = true
-		if source_mech.has_method("register_homing_adjustment"):
+		if is_instance_valid(source_mech) and source_mech.has_method("register_homing_adjustment"):
 			source_mech.register_homing_adjustment()
 	direction = direction.rotated(applied_turn).normalized()
 	rotation = direction.angle()
@@ -163,22 +168,25 @@ func _collect_source_hitboxes() -> void:
 func _check_swept_hit(start_position: Vector2, end_position: Vector2) -> bool:
 	if start_position.is_equal_approx(end_position):
 		return false
-	var query := PhysicsRayQueryParameters2D.create(
-		start_position,
-		end_position,
-		2,
-		source_hitbox_rids
-	)
-	query.collide_with_areas = true
-	query.collide_with_bodies = false
-	var result := get_world_2d().direct_space_state.intersect_ray(query)
-	if result.is_empty():
-		return false
-	var hitbox = result.get("collider")
-	if hitbox == null or hitbox.get_script() != PART_HITBOX:
-		return false
-	_apply_hit(hitbox, result.get("position", end_position))
-	return true
+	var ray_start := start_position
+	var exclusions := source_hitbox_rids.duplicate()
+	while true:
+		var query := PhysicsRayQueryParameters2D.create(ray_start, end_position, 2, exclusions)
+		query.collide_with_areas = true
+		query.collide_with_bodies = false
+		var result := get_world_2d().direct_space_state.intersect_ray(query)
+		if result.is_empty():
+			return false
+		var hitbox = result.get("collider")
+		if hitbox == null or hitbox.get_script() != PART_HITBOX:
+			return false
+		if hitbox.mech == source_mech or _is_allied_target(hitbox.mech):
+			exclusions.append(hitbox.get_rid())
+			ray_start = Vector2(result.get("position", ray_start)).move_toward(end_position, 0.01)
+			continue
+		_apply_hit(hitbox, result.get("position", end_position))
+		return true
+	return false
 
 
 func _exit_tree() -> void:
@@ -191,7 +199,7 @@ func _on_area_entered(area: Area2D) -> void:
 		hit_resolved
 		or area.get_script() != PART_HITBOX
 		or area.mech == source_mech
-		or (source_mech.has_method("is_ally_of") and source_mech.is_ally_of(area.mech))
+		or _is_allied_target(area.mech)
 	):
 		return
 	hit_candidates.append(area)
@@ -203,9 +211,15 @@ func _on_area_entered(area: Area2D) -> void:
 func _resolve_hit_candidates() -> void:
 	if hit_resolved or is_queued_for_deletion() or hit_candidates.is_empty():
 		return
-
-	var selected_hitbox: Area2D = hit_candidates[0]
+	var valid_candidates: Array[Area2D] = []
 	for hitbox in hit_candidates:
+		if is_instance_valid(hitbox) and is_instance_valid(hitbox.mech):
+			valid_candidates.append(hitbox)
+	hit_candidates.clear()
+	if valid_candidates.is_empty():
+		return
+	var selected_hitbox: Area2D = valid_candidates[0]
+	for hitbox in valid_candidates:
 		if hitbox.hit_priority > selected_hitbox.hit_priority:
 			selected_hitbox = hitbox
 		elif hitbox.hit_priority == selected_hitbox.hit_priority:
@@ -227,9 +241,22 @@ func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> void:
 		get_parent().add_child(effect)
 		effect.global_position = hit_position
 	hitbox.mech.register_hit(hitbox.part_name, direction, spec.damage)
-	if source_mech.has_method("register_landed_hit"):
+	if is_instance_valid(source_mech) and source_mech.has_method("register_landed_hit"):
 		source_mech.register_landed_hit(weapon_family)
 	queue_free()
+
+
+func _is_allied_target(target: Node) -> bool:
+	if not is_instance_valid(target):
+		return false
+	if is_instance_valid(source_mech) and source_mech.has_method("is_ally_of"):
+		return source_mech.is_ally_of(target)
+	var target_team_value = target.get("team_id")
+	return (
+		source_team_id >= 0
+		and target_team_value != null
+		and int(target_team_value) == source_team_id
+	)
 
 
 func _draw() -> void:

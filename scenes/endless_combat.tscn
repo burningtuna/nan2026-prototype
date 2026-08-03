@@ -1,0 +1,23 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scripts/endless_combat.gd" id="2_screen"]
+[ext_resource type="Script" path="res://scripts/endless_director.gd" id="3_director"]
+[ext_resource type="PackedScene" path="res://scenes/endless_hud.tscn" id="4_hud"]
+
+[node name="EndlessCombat" instance=ExtResource("1_base")]
+script = ExtResource("2_screen")
+automatic_return_to_hangar = false
+tutorial_enabled = false
+
+[node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
+two_vs_two = false
+solo_player = true
+automatic_battle_completion = false
+
+[node name="EndlessHud" parent="CombatContainer/CombatViewport/OverlayLayer" index="3" instance=ExtResource("4_hud")]
+
+[node name="EndlessDirector" type="Node" parent="." index="4"]
+script = ExtResource("3_director")
+
+[editable path="CombatContainer/CombatViewport/SampleAssembly"]
