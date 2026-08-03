@@ -143,6 +143,8 @@ func _draw_weapon_ammo_bars() -> void:
 		draw_rect(bar_rect, AMMO_BAR_BACKGROUND)
 		var ammo_ratio: float
 		var ammo_color := _weapon_ammo_color(weapon.spec.weapon_family)
+		if weapon.disabled:
+			continue
 		if weapon.reload_remaining > 0.0:
 			ammo_ratio = 1.0 - clampf(
 				weapon.reload_remaining / maxf(weapon.spec.reload_duration, 0.001),

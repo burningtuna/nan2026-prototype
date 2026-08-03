@@ -525,7 +525,7 @@ func _update_target_camera_input() -> void:
 		return
 	if not is_instance_valid(player.selected_sensor_target):
 		target_camera_active = false
-	var focus_pressed := Input.is_physical_key_pressed(KEY_Z)
+	var focus_pressed := Input.is_physical_key_pressed(KEY_SHIFT)
 	if focus_pressed and not target_camera_input_was_pressed:
 		if is_instance_valid(player.selected_sensor_target):
 			target_camera_active = not target_camera_active
