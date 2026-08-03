@@ -35,7 +35,7 @@
     {
       "collision_radius": 2.0,
       "color": "ffb02eff",
-      "damage": 1.2,
+      "damage": 12.0,
       "damage_type": "explosive",
       "homing": true,
       "homing_turn_speed_degrees": 90.0,
@@ -384,7 +384,7 @@
       "preparation_time": 1.25,
       "preparation_turn_speed_multiplier": 0.0,
       "projectile_id": "test_missile_projectile",
-      "projectiles_per_shot": 10,
+      "projectiles_per_shot": 1,
       "reload_duration": 15.0,
       "resource_cost": 0.0,
       "resource_type": "NONE",
@@ -393,7 +393,7 @@
       "visual_recoil_distance": 1.5,
       "visual_recoil_limit": 2.5,
       "visual_recoil_recovery": 9.0,
-      "volley_arc_degrees": 120.0,
+      "volley_arc_degrees": 0.0,
       "weapon_family": "MISSILE"
     },
     {
