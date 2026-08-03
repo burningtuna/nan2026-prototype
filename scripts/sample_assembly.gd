@@ -9,6 +9,7 @@ enum CameraMode {
 
 const AI_MECH := preload("res://scripts/ai_mech_agent.gd")
 const MECH_COLLISION_RESOLVER := preload("res://scripts/mech_collision_resolver.gd")
+const PROJECTILE_TRAIL := preload("res://scripts/projectile_trail.gd")
 const STEEL_FLOOR_TILE := preload("res://Sprites/Environment/Stage-01-Steel-Floor.png")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const WEAPONS_DATA_PATH := "res://data/weapons.json"
@@ -212,6 +213,21 @@ func _run_battle_result_smoke() -> void:
 func _run_centered_camera_smoke() -> void:
 	assert(camera_mode == CameraMode.CENTERED_TARGET)
 	assert(agents.size() == 4)
+	var single_missile_trail := PROJECTILE_TRAIL.new() as ProjectileTrail
+	var multi_missile_trail := PROJECTILE_TRAIL.new() as ProjectileTrail
+	single_missile_trail.setup(WeaponSpec.WeaponFamily.MISSILE, Vector2.RIGHT)
+	multi_missile_trail.setup(WeaponSpec.WeaponFamily.MISSILE, Vector2.RIGHT, 1.0, 1.0, true)
+	assert(is_equal_approx(single_missile_trail.sample_spacing, multi_missile_trail.sample_spacing))
+	assert(is_equal_approx(
+		multi_missile_trail.sample_lifetime,
+		single_missile_trail.sample_lifetime * 0.2
+	))
+	assert(is_equal_approx(
+		multi_missile_trail.finish_lifetime,
+		single_missile_trail.finish_lifetime * 0.2
+	))
+	single_missile_trail.free()
+	multi_missile_trail.free()
 	var player := agents[0] as AiMechAgent
 	var ally := agents[1] as AiMechAgent
 	assert(is_equal_approx(player.weapon_range_multiplier, 1.0))

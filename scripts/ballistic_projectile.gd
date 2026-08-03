@@ -29,6 +29,7 @@ var homing_observation_enabled := true
 var hit_resolved := false
 var source_hitbox_rids: Array[RID] = []
 var visuals_enabled := true
+var multi_projectile_launch := false
 
 
 func configure(
@@ -44,7 +45,8 @@ func configure(
 	observed_position := Vector2.ZERO,
 	observed_velocity := Vector2.ZERO,
 	target_was_dashing := false,
-	observation_valid := false
+	observation_valid := false,
+	launched_in_multi_projectile_volley := false
 ) -> void:
 	spec = projectile_spec
 	direction = launch_direction.normalized()
@@ -55,6 +57,7 @@ func configure(
 	shot_seed = seed
 	launch_spread_degrees = spread_degrees
 	weapon_family = family
+	multi_projectile_launch = launched_in_multi_projectile_volley
 	homing_target = target
 	if is_instance_valid(target) and observation_valid:
 		update_homing_observation(observed_position, observed_velocity, target_was_dashing)
@@ -87,7 +90,8 @@ func _ready() -> void:
 			weapon_family,
 			direction,
 			spec.trail_width_multiplier,
-			spec.trail_lifetime_multiplier
+			spec.trail_lifetime_multiplier,
+			multi_projectile_launch
 		)
 		trail.top_level = true
 		trail.z_index = 1

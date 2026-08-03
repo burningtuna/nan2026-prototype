@@ -10,6 +10,8 @@ const ALLY_MARKER_COLOR := Color("62ed8c")
 const UNIT_MARKER_MARGIN := 24.0
 const TARGET_PANEL_SIZE := Vector2(76.0, 76.0)
 const TARGET_PANEL_MARGIN := 4.0
+const ROSTER_ROW_HEIGHT := 10.0
+const ROSTER_HEADER_HEIGHT := 13.0
 const TARGET_PREVIEW := preload("res://scripts/mech_wireframe_preview.gd")
 
 var player: AiMechAgent
@@ -97,7 +99,6 @@ func _draw() -> void:
 	if not combat_hud_visible or not is_instance_valid(player):
 		return
 	var canvas_transform := get_viewport().get_canvas_transform()
-	_draw_target_panel()
 	var safe_rect := Rect2(
 		Vector2.ONE * UNIT_MARKER_MARGIN,
 		size - Vector2.ONE * UNIT_MARKER_MARGIN * 2.0
@@ -118,16 +119,17 @@ func _draw() -> void:
 			_draw_offscreen_unit_marker(enemy_position, safe_rect, TARGET_COLOR)
 	_draw_cursor_range(canvas_transform)
 	_draw_targeting_solution(canvas_transform)
-	if not is_instance_valid(projectile_layer):
-		return
-	for projectile in player.detected_hostile_projectiles(projectile_layer):
-		if (
-			projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE
-			or projectile.homing_target != player
-		):
-			continue
-		var missile_position: Vector2 = canvas_transform * player.observed_projectile_position(projectile)
-		_draw_missile_marker(missile_position)
+	if is_instance_valid(projectile_layer):
+		for projectile in player.detected_hostile_projectiles(projectile_layer):
+			if (
+				projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE
+				or projectile.homing_target != player
+			):
+				continue
+			var missile_position: Vector2 = canvas_transform * player.observed_projectile_position(projectile)
+			_draw_missile_marker(missile_position)
+	_draw_target_panel()
+	_draw_enemy_roster()
 
 
 func _draw_team_victory() -> void:
@@ -169,9 +171,9 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 		label_position.x = cursor_position.x - label_size.x - 10.0
 	label_position.y = clampf(label_position.y, 3.0, size.y - label_size.y - 3.0)
 	var label_rect := Rect2(label_position, label_size)
-	var panel_rect := _target_panel_rect()
-	if target_preview.visible and label_rect.intersects(panel_rect):
-		label_position.y = minf(panel_rect.end.y + 3.0, size.y - label_size.y - 3.0)
+	var sidebar_rect := _target_sidebar_rect()
+	if label_rect.intersects(sidebar_rect):
+		label_position.x = maxf(sidebar_rect.position.x - label_size.x - 3.0, 3.0)
 	draw_string_outline(
 		ThemeDB.fallback_font,
 		label_position + Vector2(3.0, 8.0),
@@ -251,6 +253,39 @@ func _target_panel_rect() -> Rect2:
 	)
 
 
+func _enemy_roster() -> Array[AiMechAgent]:
+	var roster: Array[AiMechAgent] = []
+	for enemy in enemies:
+		if is_instance_valid(enemy) and enemy.appears_in_enemy_roster():
+			roster.append(enemy)
+	return roster
+
+
+func _enemy_roster_rect() -> Rect2:
+	var panel_rect := _target_panel_rect()
+	var roster_size := _enemy_roster().size()
+	if roster_size <= 1:
+		return Rect2(panel_rect.end.x - TARGET_PANEL_SIZE.x, panel_rect.end.y, 0.0, 0.0)
+	var available_height := maxf(size.y - panel_rect.end.y - TARGET_PANEL_MARGIN * 2.0, 0.0)
+	var row_count := mini(
+		roster_size,
+		maxi(floori((available_height - ROSTER_HEADER_HEIGHT) / ROSTER_ROW_HEIGHT), 0)
+	)
+	if row_count <= 0:
+		return Rect2(panel_rect.end.x - TARGET_PANEL_SIZE.x, panel_rect.end.y, 0.0, 0.0)
+	return Rect2(
+		Vector2(panel_rect.position.x, panel_rect.end.y + TARGET_PANEL_MARGIN),
+		Vector2(TARGET_PANEL_SIZE.x, ROSTER_HEADER_HEIGHT + row_count * ROSTER_ROW_HEIGHT)
+	)
+
+
+func _target_sidebar_rect() -> Rect2:
+	var roster_rect := _enemy_roster_rect()
+	if roster_rect.size.y > 0.0:
+		return _target_panel_rect().merge(roster_rect)
+	return _target_panel_rect() if target_preview.visible else Rect2()
+
+
 func _draw_target_panel() -> void:
 	if target_preview == null or not target_preview.visible or not is_instance_valid(displayed_target):
 		return
@@ -266,6 +301,45 @@ func _draw_target_panel() -> void:
 		6,
 		LABEL_COLOR
 	)
+
+
+func _draw_enemy_roster() -> void:
+	var roster := _enemy_roster()
+	var roster_rect := _enemy_roster_rect()
+	if roster.is_empty() or roster_rect.size.y <= 0.0:
+		return
+	var row_count := floori((roster_rect.size.y - ROSTER_HEADER_HEIGHT) / ROSTER_ROW_HEIGHT)
+	draw_rect(roster_rect, Color(0.005, 0.01, 0.012, 0.62))
+	draw_rect(roster_rect, TARGET_COLOR.darkened(0.45), false, 1.0)
+	draw_string(
+		ThemeDB.fallback_font,
+		roster_rect.position + Vector2(4.0, 9.0),
+		"HOSTILES // %d" % roster.size(),
+		HORIZONTAL_ALIGNMENT_LEFT,
+		roster_rect.size.x - 8.0,
+		6,
+		LABEL_COLOR
+	)
+	for index in row_count:
+		var enemy := roster[index]
+		var detected := player.can_detect_unit(enemy)
+		var selected := enemy == displayed_target
+		var class_marker := "B" if enemy.unit_class == AiMechAgent.UnitClass.BOSS else "M"
+		var state_marker := ">" if selected else ("X" if enemy.is_defeated() else ("-" if detected else "?"))
+		var color := LABEL_COLOR if detected else Color("856f73")
+		if selected:
+			color = ALLY_MARKER_COLOR
+		elif enemy.is_defeated():
+			color = TARGET_COLOR.darkened(0.45)
+		draw_string(
+			ThemeDB.fallback_font,
+			roster_rect.position + Vector2(4.0, ROSTER_HEADER_HEIGHT + 7.0 + index * ROSTER_ROW_HEIGHT),
+			"%s%s %s" % [state_marker, class_marker, enemy.name.to_upper().left(9)],
+			HORIZONTAL_ALIGNMENT_LEFT,
+			roster_rect.size.x - 8.0,
+			6,
+			color
+		)
 
 
 func _draw_target_marker(screen_position: Vector2, enemy: AiMechAgent) -> void:

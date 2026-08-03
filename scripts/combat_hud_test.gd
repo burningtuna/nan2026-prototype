@@ -165,6 +165,15 @@ func _run_hud_spectator_smoke() -> void:
 
 func _run_targeting_solution_smoke() -> void:
 	var target := battle.agents[2] as AiMechAgent
+	assert(overlay._enemy_roster().size() == 2)
+	target.unit_class = AiMechAgent.UnitClass.DRONE
+	assert(overlay._enemy_roster().size() == 1)
+	assert(overlay._enemy_roster_rect().size == Vector2.ZERO)
+	target.unit_class = AiMechAgent.UnitClass.BOSS
+	assert(overlay._enemy_roster().size() == 2)
+	assert(overlay._enemy_roster_rect().size.y > 0.0)
+	assert(target.appears_in_enemy_roster())
+	target.unit_class = AiMechAgent.UnitClass.MECH
 	combat_player.sensor_snapshot.units.assign([{
 		"target": target,
 		"position": target.global_position,

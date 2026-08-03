@@ -28,6 +28,12 @@ enum MovementType {
 	DEFENSIVE,
 }
 
+enum UnitClass {
+	DRONE,
+	MECH,
+	BOSS,
+}
+
 const AnchorMap := preload("res://scripts/sprite_anchor_map.gd")
 const MUZZLE_FLASH_SCENE := preload("res://scenes/muzzle_flash.tscn")
 const CASING_EFFECT := preload("res://scripts/casing_effect.gd")
@@ -70,6 +76,7 @@ const BOOST_FRAMES := [
 @export var mech_collision_radius := 28.0
 @export var player_controlled := false
 @export var team_id := 0
+@export var unit_class := UnitClass.MECH
 @export var combat_visuals_enabled := true
 
 var opponent: AiMechAgent
@@ -520,6 +527,10 @@ func is_defeated() -> bool:
 		if not weapon.disabled:
 			return false
 	return true
+
+
+func appears_in_enemy_roster() -> bool:
+	return unit_class in [UnitClass.MECH, UnitClass.BOSS]
 
 
 func _initialize_part_durability() -> void:
@@ -1433,7 +1444,8 @@ func _spawn_projectile(
 		observed_position,
 		observed_velocity,
 		observed_dashing,
-		observation_valid
+		observation_valid,
+		weapon.spec.projectiles_per_shot > 1
 	)
 	projectile_layer.add_child(projectile)
 	projectile.global_position = spawn_position

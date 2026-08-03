@@ -2,6 +2,7 @@ class_name ProjectileTrail
 extends Node2D
 
 const MAX_MISSILE_POINTS := 64
+const MULTI_MISSILE_LIFETIME_MULTIPLIER := 0.2
 
 var weapon_family := WeaponSpec.WeaponFamily.BALLISTIC
 var launch_direction := Vector2.RIGHT
@@ -19,7 +20,8 @@ func setup(
 	family: WeaponSpec.WeaponFamily,
 	direction: Vector2,
 	trail_width_multiplier := 1.0,
-	trail_lifetime_multiplier := 1.0
+	trail_lifetime_multiplier := 1.0,
+	multi_projectile_missile := false
 ) -> void:
 	weapon_family = family
 	launch_direction = direction.normalized()
@@ -30,6 +32,8 @@ func setup(
 	elif weapon_family == WeaponSpec.WeaponFamily.ENERGY:
 		sample_lifetime = 0.16
 	var lifetime_multiplier := maxf(trail_lifetime_multiplier, 0.05)
+	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and multi_projectile_missile:
+		lifetime_multiplier *= MULTI_MISSILE_LIFETIME_MULTIPLIER
 	sample_lifetime *= lifetime_multiplier
 	finish_lifetime *= lifetime_multiplier
 
