@@ -1,4 +1,4 @@
-# DIRECTIVE//12 개발 지침
+# SUBJECT//12 개발 지침
 
 ## 프로젝트 목적
 
@@ -11,7 +11,7 @@ NAN 2026 NHN Game × AI Hackathon 사전 과제에 개인 자격으로 제출할
 - 개발 형태: 개인 참가, AI 개발 도구 적극 활용
 - 게임 내 언어: 영어
 - 문서 언어: 한국어
-- 가제: `DIRECTIVE//12`
+- 가제: `SUBJECT//12`
 - 한 줄 소개: `Assemble a mech. Lead your wingman. Survive the arena.`
 
 심사자가 별도 설치나 계정 없이 링크를 열어 즉시 플레이할 수 있어야 한다. 외부 API, 서버, API 키 또는 유료 서비스에 의존하지 않는다.

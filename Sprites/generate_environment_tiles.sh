@@ -17,4 +17,4 @@ if [[ ! -e "${OUTPUT_DIR}/Stage-01-Steel-Floor.png" || "${FORCE_SPRITES:-0}" == 
         -depth 8 "PNG32:${OUTPUT_DIR}/Stage-01-Steel-Floor.png"
 fi
 
-echo "Generated DIRECTIVE//12 environment tiles in ${OUTPUT_DIR}"
+echo "Generated SUBJECT//12 environment tiles in ${OUTPUT_DIR}"

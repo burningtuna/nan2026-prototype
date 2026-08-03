@@ -1,6 +1,6 @@
 # Sprite Test Set
 
-This directory contains the first top-down test mech set for `DIRECTIVE//12`. The head, torso, weapons and backpack are the primary visible surfaces. Standard biped legs use a GTA2-like top view and sit mostly beneath the torso; heavy, quadruped and special legs may extend beyond the torso silhouette.
+This directory contains the first top-down test mech set for `SUBJECT//12`. The head, torso, weapons and backpack are the primary visible surfaces. Standard biped legs use a GTA2-like top view and sit mostly beneath the torso; heavy, quadruped and special legs may extend beyond the torso silhouette.
 
 ## Art Files
 

@@ -174,4 +174,4 @@ render "Backpack-Generator-0001.anchors.png" "24x12" \
     -fill "#FF0000" -draw "point 11,6" \
     -fill "#00FFFF" -draw "point 4,10 point 19,10"
 
-echo "Generated DIRECTIVE//12 test sprites in ${SCRIPT_DIR}"
+echo "Generated SUBJECT//12 test sprites in ${SCRIPT_DIR}"

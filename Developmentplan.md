@@ -1,4 +1,4 @@
-# DIRECTIVE//12 개발 계획
+# SUBJECT//12 개발 계획
 
 이 문서는 실제 구현 순서, 단계별 완료 조건과 일정 축소 기준을 관리한다. 프로젝트 원칙은 `Agents.md`, 전투 규칙은 `Gamesystem.md`, 서사는 `Storyline.md`를 따른다.
 

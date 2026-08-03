@@ -103,7 +103,7 @@ func _draw_panel(rect: Rect2) -> void:
 
 
 func _build_interface() -> void:
-	_make_label(self, "DIRECTIVE//12", Vector2(9, 5), Vector2(130, 18), 14, CYAN)
+	_make_label(self, "SUBJECT//12", Vector2(9, 5), Vector2(130, 18), 14, CYAN)
 	_make_label(self, "HANGAR / LOADOUT ASSEMBLY", Vector2(105, 7), Vector2(220, 16), 9, MUTED)
 	_make_label(self, "FRAME 01", Vector2(405, 7), Vector2(67, 16), 9, AMBER, HORIZONTAL_ALIGNMENT_RIGHT)
 	_make_label(self, "01  PART CONFIGURATION", Vector2(14, 43), Vector2(156, 14), 8, MUTED)

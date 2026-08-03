@@ -115,4 +115,4 @@ render "Backpack-Generator-0001.png" "32x22" \
 render "Backpack-Generator-0001.anchors.png" "32x22" \
     -fill "#FF0000" -draw "point 15,10"
 
-echo "Generated DIRECTIVE//12 front wireframe sprites in ${OUTPUT_DIR}"
+echo "Generated SUBJECT//12 front wireframe sprites in ${OUTPUT_DIR}"
