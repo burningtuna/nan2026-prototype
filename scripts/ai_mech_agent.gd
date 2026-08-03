@@ -147,6 +147,7 @@ var range_blocked_count := 0
 var manual_aim_position := Vector2.ZERO
 var current_energy := DEFAULT_MAX_ENERGY
 var current_heat := 0.0
+var heat_generation_locked := false
 var energy_spent_this_frame := false
 var part_durability: Dictionary = {}
 var part_max_durability: Dictionary = {}
@@ -185,6 +186,7 @@ func setup(
 	_initialize_part_durability()
 	current_energy = energy_capacity()
 	current_heat = 0.0
+	heat_generation_locked = false
 
 
 func set_opponent(target: AiMechAgent) -> void:
@@ -980,10 +982,10 @@ func _try_start_player_dash(input_direction: Vector2) -> void:
 
 
 func _consume_dash_resources() -> bool:
-	if current_energy < DASH_ENERGY_COST:
+	if heat_generation_locked or current_energy < DASH_ENERGY_COST:
 		return false
 	current_energy -= DASH_ENERGY_COST
-	current_heat = minf(current_heat + DASH_HEAT_COST, MAX_HEAT)
+	_add_heat(DASH_HEAT_COST)
 	energy_spent_this_frame = true
 	return true
 
@@ -996,6 +998,15 @@ func _update_resources(delta: float) -> void:
 			maximum_energy
 		)
 	current_heat = maxf(current_heat - cooling_rate() * delta, 0.0)
+	if heat_generation_locked and is_zero_approx(current_heat):
+		current_heat = 0.0
+		heat_generation_locked = false
+
+
+func _add_heat(amount: float) -> void:
+	current_heat = minf(current_heat + maxf(amount, 0.0), MAX_HEAT)
+	if current_heat >= MAX_HEAT:
+		heat_generation_locked = true
 
 
 func _update_player_weapon_selection() -> void:
@@ -1348,7 +1359,7 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 		current_energy = maxf(current_energy - weapon.spec.resource_cost, 0.0)
 		energy_spent_this_frame = true
 	if weapon.spec.heat_cost > 0.0:
-		current_heat = minf(current_heat + weapon.spec.heat_cost, MAX_HEAT)
+		_add_heat(weapon.spec.heat_cost)
 
 	var aim_vector := _aim_target_position() - muzzle.global_position
 	if aim_vector.length_squared() <= 1.0:
@@ -1432,7 +1443,9 @@ func _has_weapon_resources(weapon: WeaponRuntime) -> bool:
 		and current_energy < weapon.spec.resource_cost
 	):
 		return false
-	return current_heat + weapon.spec.heat_cost <= MAX_HEAT
+	if weapon.spec.heat_cost > 0.0 and heat_generation_locked:
+		return false
+	return true
 
 
 func _spawn_projectile(
