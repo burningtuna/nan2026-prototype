@@ -20,6 +20,7 @@ signal hit_received(part_name: StringName, aspect: StringName)
 signal part_destroyed(part_name: StringName)
 signal hit_landed(weapon_family: WeaponSpec.WeaponFamily)
 signal weapon_fired(weapon: WeaponRuntime)
+signal defeated
 
 enum MovementType {
 	AGGRESSIVE,
@@ -566,9 +567,12 @@ func _destroy_part(part_name: StringName, incoming_direction: Vector2, was_defea
 	for weapon in weapons:
 		if part_name == &"Body" or weapon.part_name == part_name:
 			weapon.disabled = true
-	if not was_defeated and is_defeated():
+	var became_defeated := not was_defeated and is_defeated()
+	if became_defeated:
 		_spawn_wreck_fire_effect(destruction_position, part_name)
 	part_destroyed.emit(part_name)
+	if became_defeated:
+		defeated.emit()
 
 
 func _spawn_part_destruction_effect(

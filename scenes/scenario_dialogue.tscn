@@ -1,0 +1,78 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/scenario_dialogue.gd" id="1_dialogue"]
+
+[sub_resource type="StyleBoxFlat" id="StyleDialoguePanel"]
+bg_color = Color(0.0196078, 0.0470588, 0.0588235, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.901961, 0.862745, 0.9)
+
+[node name="ScenarioDialogue" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1_dialogue")
+
+[node name="Dimmer" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.00392157, 0.0117647, 0.0156863, 0.68)
+
+[node name="DialoguePanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = -98.0
+offset_right = -18.0
+offset_bottom = -14.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleDialoguePanel")
+
+[node name="Margin" type="MarginContainer" parent="DialoguePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 7
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
+
+[node name="Content" type="VBoxContainer" parent="DialoguePanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Speaker" type="Label" parent="DialoguePanel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.901961, 0.862745, 1)
+theme_override_font_sizes/font_size = 8
+text = "SPEAKER"
+
+[node name="Dialogue" type="Label" parent="DialoguePanel/Margin/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.905882, 0.960784, 0.960784, 1)
+theme_override_font_sizes/font_size = 10
+text = "Dialogue"
+autowrap_mode = 2
+
+[node name="AdvanceHint" type="Label" parent="DialoguePanel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.545098, 0.666667, 0.694118, 1)
+theme_override_font_sizes/font_size = 6
+text = "LMB / ENTER / SPACE  //  NEXT"
+horizontal_alignment = 2

@@ -1,6 +1,8 @@
 class_name GameHud
 extends Control
 
+signal system_message_requested(text: String)
+
 const NORMAL_COLOR := Color("a9c0ca")
 const ACTIVE_COLOR := Color("66e6dc")
 const WEAPON_SELECTED_COLOR := Color("62ed8c")
@@ -13,21 +15,17 @@ const AMMO_BAR_POSITION := Vector2(46.0, 101.0)
 const AMMO_BAR_SIZE := Vector2(88.0, 2.0)
 const WEAPON_SLOT_RECT := Rect2(32.0, 86.0, 103.0, 19.0)
 const WIREFRAME_PREVIEW := preload("res://scripts/mech_wireframe_preview.gd")
-const MESSAGE_DURATION := 4.0
 const PART_NAMES: Array[StringName] = [
 	&"Body", &"Head", &"Legs", &"LeftArm", &"RightArm", &"Backpack",
 ]
 
 var player: AiMechAgent
-var projectile_layer: Node2D
 var tactical_map: TacticalMap
 var unit_status: Label
 var weapon_status_labels: Array[Label] = []
 var message_status: Label
 var sensor_status: Label
 var wireframe: MechWireframePreview
-var messages: Array[Dictionary] = []
-var tracked_missiles := {}
 var energy_ratio := 1.0
 var heat_ratio := 0.0
 
@@ -39,16 +37,13 @@ func _ready() -> void:
 
 func bind(combat_player: AiMechAgent, allies: Array, enemies: Array, projectiles: Node2D) -> void:
 	player = combat_player
-	projectile_layer = projectiles
 	if player.mech_loadout != null:
 		wireframe.display(player.mech_loadout)
-	tactical_map.bind(player, allies, enemies, projectile_layer)
+	tactical_map.bind(player, allies, enemies, projectiles)
 	player.hit_received.connect(_on_player_hit_received)
 	player.part_destroyed.connect(_on_player_part_destroyed)
 	player.hit_landed.connect(_on_player_hit_landed)
 	_update_wireframe_durability()
-	_add_message("WASD MOVE / MOUSE AIM / LMB FIRE")
-	_add_message("TAB TARGET / Z FOCUS")
 	set_process(true)
 
 
@@ -58,9 +53,7 @@ func set_resource_ratios(current_energy_ratio: float, current_heat_ratio: float)
 	queue_redraw()
 
 
-func _process(delta: float) -> void:
-	_update_messages(delta)
-	_detect_incoming_missiles()
+func _process(_delta: float) -> void:
 	_update_unit_status()
 	_update_sensor_status()
 	_update_weapon_status()
@@ -254,36 +247,8 @@ func _weapon_for_part(part_name: StringName) -> WeaponRuntime:
 	return null
 
 
-func _update_messages(delta: float) -> void:
-	for index in range(messages.size() - 1, -1, -1):
-		messages[index]["remaining"] = float(messages[index]["remaining"]) - delta
-		if float(messages[index]["remaining"]) <= 0.0:
-			messages.remove_at(index)
-	message_status.text = "SYSTEM READY" if messages.is_empty() else String(messages.back()["text"])
-
-
-func _detect_incoming_missiles() -> void:
-	if not is_instance_valid(player) or not is_instance_valid(projectile_layer):
-		return
-	for projectile in player.detected_hostile_projectiles(projectile_layer):
-		if (
-			projectile.weapon_family != WeaponSpec.WeaponFamily.MISSILE
-			or projectile.homing_target != player
-		):
-			continue
-		var instance_id := projectile.get_instance_id()
-		if not tracked_missiles.has(instance_id):
-			_add_message("MISSILE DETECTED")
-			tracked_missiles[instance_id] = projectile
-	for instance_id in tracked_missiles.keys():
-		if not is_instance_valid(tracked_missiles[instance_id]):
-			tracked_missiles.erase(instance_id)
-
-
 func _add_message(text_value: String) -> void:
-	messages.append({"text": text_value, "remaining": MESSAGE_DURATION})
-	if messages.size() > 8:
-		messages.pop_front()
+	system_message_requested.emit(text_value)
 
 
 func _on_player_hit_received(part_name: StringName, aspect: StringName) -> void:

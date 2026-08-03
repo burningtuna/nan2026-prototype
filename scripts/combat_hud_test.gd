@@ -5,6 +5,7 @@ const SIDEBAR_MIN_WIDTH := 136.0
 const SIDEBAR_MAX_WIDTH := 192.0
 const HUD_DESIGN_SIZE := Vector2(144.0, 270.0)
 const HANGAR_SCENE_PATH := "res://scenes/hangar_screen.tscn"
+const TUTORIAL_SCENARIO_PATH := "res://data/scenarios/combat_hud_tutorial.json"
 const RESULT_DISPLAY_SECONDS := 2.5
 
 @onready var sidebar: PanelContainer = $Sidebar
@@ -14,10 +15,16 @@ const RESULT_DISPLAY_SECONDS := 2.5
 @onready var combat_viewport: SubViewport = $CombatContainer/CombatViewport
 @onready var battle = $CombatContainer/CombatViewport/SampleAssembly
 @onready var overlay: CombatOverlay = $CombatContainer/CombatViewport/OverlayLayer/CombatOverlay
+@onready var system_messages: SystemMessageFeed = \
+	$CombatContainer/CombatViewport/OverlayLayer/SystemMessageFeed
+@onready var scenario_dialogue: ScenarioDialogue = \
+	$CombatContainer/CombatViewport/OverlayLayer/ScenarioDialogue
 
 var returning_to_hangar := false
 var combat_player: AiMechAgent
 var player_hud_visible := true
+var battle_process_mode_before_dialogue := Node.PROCESS_MODE_INHERIT
+var dialogue_paused_battle := false
 
 
 func _ready() -> void:
@@ -26,6 +33,8 @@ func _ready() -> void:
 	_update_layout()
 	call_deferred("_update_layout")
 	call_deferred("_bind_combat")
+	scenario_dialogue.dialogue_started.connect(_on_dialogue_started)
+	scenario_dialogue.dialogue_finished.connect(_on_dialogue_finished)
 
 
 func _process(_delta: float) -> void:
@@ -94,8 +103,14 @@ func _bind_combat() -> void:
 	var allies := [battle.agents[1]]
 	var enemies := [battle.agents[2], battle.agents[3]]
 	battle.get_node("UI").visible = false
+	hud.system_message_requested.connect(system_messages.push_message)
 	hud.bind(player, allies, enemies, battle.projectile_layer)
 	overlay.bind(player, allies, enemies, battle.projectile_layer)
+	player.defeated.connect(_on_player_defeated)
+	for ally: AiMechAgent in allies:
+		ally.defeated.connect(_on_ally_defeated.bind(ally))
+	for enemy: AiMechAgent in enemies:
+		enemy.defeated.connect(_on_enemy_defeated.bind(enemy))
 	battle.battle_finished.connect(_on_battle_finished)
 	if battle.battle_completed:
 		_on_battle_finished(battle.winner_team_id)
@@ -103,6 +118,21 @@ func _bind_combat() -> void:
 		call_deferred("_run_hud_spectator_smoke")
 	if OS.get_cmdline_user_args().has("--targeting-solution-smoke"):
 		call_deferred("_run_targeting_solution_smoke")
+	if OS.get_cmdline_user_args().has("--combat-presentation-smoke"):
+		call_deferred("_run_combat_presentation_smoke")
+	elif _should_play_tutorial():
+		call_deferred("_play_tutorial")
+
+
+func _should_play_tutorial() -> bool:
+	for argument in OS.get_cmdline_user_args():
+		if argument.ends_with("-smoke"):
+			return false
+	return true
+
+
+func _play_tutorial() -> void:
+	scenario_dialogue.play_file(TUTORIAL_SCENARIO_PATH)
 
 
 func _set_player_hud_visible(value: bool) -> void:
@@ -163,6 +193,56 @@ func _run_targeting_solution_smoke() -> void:
 	assert(overlay.displayed_target == target)
 	print("TARGETING_SOLUTION_CHECK passed")
 	get_tree().quit(0)
+
+
+func _run_combat_presentation_smoke() -> void:
+	system_messages.clear()
+	combat_player.hit_landed.emit(WeaponSpec.WeaponFamily.BALLISTIC)
+	combat_player.hit_received.emit(&"Body", &"FRONT")
+	combat_player.part_destroyed.emit(&"Head")
+	(battle.agents[2] as AiMechAgent).defeated.emit()
+	combat_player.defeated.emit()
+	assert(system_messages.message_count() == 4)
+	system_messages._process(5.0)
+	assert(system_messages.message_count() == 0)
+	assert(scenario_dialogue.play_file(TUTORIAL_SCENARIO_PATH))
+	assert(scenario_dialogue.active)
+	assert(scenario_dialogue.current_speaker() == "전투 관제")
+	assert(battle.process_mode == Node.PROCESS_MODE_DISABLED)
+	var line_count := scenario_dialogue.dialogue.size()
+	for _index in line_count:
+		scenario_dialogue.advance()
+	assert(not scenario_dialogue.active)
+	assert(battle.process_mode == Node.PROCESS_MODE_INHERIT)
+	print("COMBAT_PRESENTATION_CHECK passed")
+	get_tree().quit(0)
+
+
+func _on_dialogue_started(_scenario_id: String) -> void:
+	if dialogue_paused_battle:
+		return
+	battle_process_mode_before_dialogue = battle.process_mode
+	battle.process_mode = Node.PROCESS_MODE_DISABLED
+	dialogue_paused_battle = true
+
+
+func _on_dialogue_finished(_scenario_id: String) -> void:
+	if not dialogue_paused_battle:
+		return
+	battle.process_mode = battle_process_mode_before_dialogue
+	dialogue_paused_battle = false
+
+
+func _on_player_defeated() -> void:
+	system_messages.push_message("COMBAT UNIT DISABLED")
+
+
+func _on_ally_defeated(ally: AiMechAgent) -> void:
+	system_messages.push_message("ALLY DISABLED: %s" % ally.name.to_upper())
+
+
+func _on_enemy_defeated(enemy: AiMechAgent) -> void:
+	system_messages.push_message("ENEMY DESTROYED: %s" % enemy.name.to_upper())
 
 
 func _on_battle_finished(winner_team_id: int) -> void:
