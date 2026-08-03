@@ -82,6 +82,7 @@ size = Vector2i(335, 270)
 render_target_update_mode = 4
 
 [node name="SampleAssembly" parent="CombatContainer/CombatViewport" instance=ExtResource("2_battle")]
+camera_mode = 1
 two_vs_two = true
 enable_player_control = true
 randomize_loadouts = true

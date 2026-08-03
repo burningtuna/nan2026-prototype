@@ -48,6 +48,7 @@ func bind(combat_player: AiMechAgent, allies: Array, enemies: Array, projectiles
 	player.hit_landed.connect(_on_player_hit_landed)
 	_update_wireframe_durability()
 	_add_message("WASD MOVE / MOUSE AIM / LMB FIRE")
+	_add_message("TAB TARGET / Z FOCUS")
 	set_process(true)
 
 

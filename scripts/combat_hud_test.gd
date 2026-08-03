@@ -32,6 +32,10 @@ func _process(_delta: float) -> void:
 	if not is_instance_valid(combat_player):
 		return
 	_set_player_hud_visible(not combat_player.is_defeated())
+	overlay.set_target_focus(
+		battle.target_camera_active,
+		battle.focused_camera_target()
+	)
 
 
 func _update_layout() -> void:
@@ -97,6 +101,8 @@ func _bind_combat() -> void:
 		_on_battle_finished(battle.winner_team_id)
 	if OS.get_cmdline_user_args().has("--hud-spectator-smoke"):
 		call_deferred("_run_hud_spectator_smoke")
+	if OS.get_cmdline_user_args().has("--targeting-solution-smoke"):
+		call_deferred("_run_targeting_solution_smoke")
 
 
 func _set_player_hud_visible(value: bool) -> void:
@@ -124,6 +130,38 @@ func _run_hud_spectator_smoke() -> void:
 	assert(not overlay.combat_hud_visible)
 	assert(not overlay.target_preview.visible)
 	print("COMBAT_HUD_SPECTATOR_CHECK passed")
+	get_tree().quit(0)
+
+
+func _run_targeting_solution_smoke() -> void:
+	var target := battle.agents[2] as AiMechAgent
+	combat_player.sensor_snapshot.units.assign([{
+		"target": target,
+		"position": target.global_position,
+		"velocity": Vector2(80.0, 20.0),
+		"preparing": false,
+		"dashing": false,
+		"durability": target._part_durability_snapshot(),
+	}])
+	combat_player.selected_sensor_target = target
+	combat_player.selected_weapon_mask = AiMechAgent.WEAPON_SELECT_ALL
+	overlay.set_target_focus(true, target)
+	var weapon := overlay._targeting_weapon()
+	assert(weapon != null)
+	var longest_range := 0.0
+	for selected_weapon in combat_player.selected_weapons():
+		longest_range = maxf(longest_range, selected_weapon.spec.max_range)
+	assert(is_equal_approx(weapon.spec.max_range, longest_range))
+	var lead := overlay._intercept_position(
+		combat_player.global_position,
+		target.global_position,
+		Vector2(80.0, 20.0),
+		weapon.spec.projectile.speed
+	)
+	assert(not lead.is_equal_approx(target.global_position))
+	overlay._update_target_preview()
+	assert(overlay.displayed_target == target)
+	print("TARGETING_SOLUTION_CHECK passed")
 	get_tree().quit(0)
 
 

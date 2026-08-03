@@ -122,6 +122,8 @@ var linked_fire_cooldown := 0.0
 var next_weapon_index := 0
 var selected_weapon_mask := WEAPON_SELECT_ALL
 var dash_input_was_pressed := false
+var target_select_input_was_pressed := false
+var selected_sensor_target: AiMechAgent
 var rng := RandomNumberGenerator.new()
 var weapon_specs: Array[WeaponSpec] = []
 var mech_loadout: MechLoadout
@@ -653,17 +655,39 @@ func has_fireable_weapon() -> bool:
 func maximum_weapon_range() -> float:
 	var maximum_range := 0.0
 	for weapon in weapons:
-		maximum_range = maxf(maximum_range, weapon.spec.max_range * weapon_range_multiplier)
+		maximum_range = maxf(maximum_range, weapon_maximum_range(weapon))
 	return maximum_range
 
 
 func selected_weapon_maximum_range() -> float:
-	var maximum_range := 0.0
-	for weapon in weapons:
-		if (_weapon_selection_bit(weapon) & selected_weapon_mask) == 0:
-			continue
-		maximum_range = maxf(maximum_range, weapon.spec.max_range * weapon_range_multiplier)
-	return maximum_range
+	var weapon := selected_range_weapon()
+	return weapon_maximum_range(weapon) if weapon != null else 0.0
+
+
+func selected_range_weapon() -> WeaponRuntime:
+	var result: WeaponRuntime
+	var longest_range := -1.0
+	for weapon in selected_weapons():
+		var maximum_range := weapon_maximum_range(weapon)
+		if maximum_range > longest_range:
+			longest_range = maximum_range
+			result = weapon
+	return result
+
+
+func weapon_effective_range(weapon: WeaponRuntime) -> float:
+	return weapon.spec.effective_range * weapon_range_multiplier if weapon != null else 0.0
+
+
+func weapon_maximum_range(weapon: WeaponRuntime) -> float:
+	return weapon.spec.max_range * weapon_range_multiplier if weapon != null else 0.0
+
+
+func weapon_aim_origin(weapon: WeaponRuntime) -> Vector2:
+	if weapon == null or weapon.muzzles.is_empty():
+		return global_position
+	var muzzle_index := clampi(weapon.next_muzzle, 0, weapon.muzzles.size() - 1)
+	return weapon.muzzles[muzzle_index].global_position
 
 
 func selected_weapons() -> Array[WeaponRuntime]:
@@ -747,8 +771,12 @@ func _physics_process(delta: float) -> void:
 	var sensor_updated := _update_sensor(delta)
 	if player_controlled:
 		_update_player_weapon_selection()
+		_update_player_target_selection()
 		_update_player_movement(delta)
-		_select_opponent(manual_aim_position)
+		if is_instance_valid(selected_sensor_target):
+			opponent = selected_sensor_target
+		else:
+			_select_opponent(manual_aim_position)
 	else:
 		if sensor_updated:
 			_update_sensor_missile_evasion()
@@ -941,6 +969,34 @@ func _update_player_weapon_selection() -> void:
 		selected_weapon_mask = WEAPON_SELECT_ALL
 
 
+func _update_player_target_selection() -> void:
+	if (
+		is_instance_valid(selected_sensor_target)
+		and (
+			selected_sensor_target.is_defeated()
+			or not sensor_snapshot.has_unit(selected_sensor_target)
+		)
+	):
+		selected_sensor_target = null
+	var select_pressed := Input.is_physical_key_pressed(KEY_TAB)
+	if select_pressed and not target_select_input_was_pressed:
+		_cycle_sensor_target()
+	target_select_input_was_pressed = select_pressed
+
+
+func _cycle_sensor_target() -> void:
+	var targets: Array[AiMechAgent] = []
+	for contact in sensor_snapshot.units:
+		var target := contact.get("target") as AiMechAgent
+		if is_instance_valid(target) and not target.is_defeated():
+			targets.append(target)
+	if targets.is_empty():
+		selected_sensor_target = null
+		return
+	var current_index := targets.find(selected_sensor_target)
+	selected_sensor_target = targets[(current_index + 1) % targets.size()]
+
+
 func _weapon_selection_bit(weapon: WeaponRuntime) -> int:
 	match weapon.part_name:
 		&"LeftArm":
@@ -1025,7 +1081,7 @@ func _update_strategy_direction() -> void:
 	if is_preparing_attack():
 		evading = false
 		return
-	if _has_ready_weapon_in_range(distance):
+	if _has_ready_weapon_in_range():
 		evading = false
 		movement_direction = toward_target
 		return
@@ -1126,12 +1182,13 @@ func _update_weapons(delta: float) -> void:
 		_try_fire_linked_group()
 
 
-func _has_ready_weapon_in_range(distance: float) -> bool:
+func _has_ready_weapon_in_range() -> bool:
 	for weapon in weapons:
 		if (
 			weapon.can_fire()
 			and _has_weapon_resources(weapon)
-			and distance <= weapon.spec.max_range * weapon_range_multiplier
+			and weapon_aim_origin(weapon).distance_to(observed_target_position)
+			<= weapon_maximum_range(weapon)
 		):
 			return true
 	return false
@@ -1160,8 +1217,8 @@ func _try_fire_linked_group() -> void:
 			continue
 		if (
 			not player_controlled
-			and global_position.distance_to(observed_target_position)
-			> weapon.spec.max_range * weapon_range_multiplier
+			and weapon_aim_origin(weapon).distance_to(observed_target_position)
+			> weapon_maximum_range(weapon)
 		):
 			range_blocked_count += 1
 			continue
@@ -1264,7 +1321,11 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 	var base_direction := aim_vector.normalized()
 	var projectile_target := opponent
 	if player_controlled and weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE:
-		projectile_target = _nearest_opponent(manual_aim_position)
+		projectile_target = (
+			selected_sensor_target
+			if is_instance_valid(selected_sensor_target)
+			else _nearest_opponent(manual_aim_position)
+		)
 	var volley_rng := RandomNumberGenerator.new()
 	volley_rng.seed = rng.randi()
 	for projectile_index in volley_size:
@@ -1321,9 +1382,8 @@ func _can_execute_weapon(weapon_index: int) -> bool:
 		and sensor_snapshot.unit_contact(opponent).is_empty()
 	):
 		return false
-	return global_position.distance_to(observed_target_position) <= (
-		weapons[weapon_index].spec.max_range * weapon_range_multiplier
-	)
+	var weapon := weapons[weapon_index]
+	return weapon_aim_origin(weapon).distance_to(observed_target_position) <= weapon_maximum_range(weapon)
 
 
 func _has_weapon_resources(weapon: WeaponRuntime) -> bool:
@@ -1359,7 +1419,7 @@ func _spawn_projectile(
 	projectile.configure(
 		projectile_spec,
 		direction,
-		weapon.spec.max_range * weapon_range_multiplier,
+		weapon_maximum_range(weapon),
 		self,
 		weapon.part_name,
 		shot_seed,

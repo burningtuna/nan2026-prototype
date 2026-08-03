@@ -21,6 +21,8 @@ var pending_attack_flashes := {}
 var observed_sensor_sequence := -1
 var winning_team_number := -1
 var combat_hud_visible := true
+var target_focus_active := false
+var focused_target: AiMechAgent
 var target_preview: MechWireframePreview
 var displayed_target: AiMechAgent
 
@@ -84,6 +86,12 @@ func set_combat_hud_visible(value: bool) -> void:
 	queue_redraw()
 
 
+func set_target_focus(value: bool, target: AiMechAgent) -> void:
+	target_focus_active = value and is_instance_valid(target)
+	focused_target = target if target_focus_active else null
+	queue_redraw()
+
+
 func _draw() -> void:
 	_draw_team_victory()
 	if not combat_hud_visible or not is_instance_valid(player):
@@ -109,6 +117,7 @@ func _draw() -> void:
 		else:
 			_draw_offscreen_unit_marker(enemy_position, safe_rect, TARGET_COLOR)
 	_draw_cursor_range(canvas_transform)
+	_draw_targeting_solution(canvas_transform)
 	if not is_instance_valid(projectile_layer):
 		return
 	for projectile in player.detected_hostile_projectiles(projectile_layer):
@@ -143,8 +152,10 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 	if not is_instance_valid(player) or not player.player_controlled:
 		return
 	var cursor_position: Vector2 = canvas_transform * player.manual_aim_position
-	var distance := player.global_position.distance_to(player.manual_aim_position)
-	var maximum_range := player.selected_weapon_maximum_range()
+	var range_weapon := player.selected_range_weapon()
+	var range_origin := player.weapon_aim_origin(range_weapon)
+	var distance := range_origin.distance_to(player.manual_aim_position)
+	var maximum_range := player.weapon_maximum_range(range_weapon)
 	var is_in_range := distance <= maximum_range
 	var color := RANGE_READY_COLOR if is_in_range else RANGE_BLOCKED_COLOR
 	var selected_weapons := player.selected_weapons()
@@ -214,7 +225,11 @@ func _update_target_preview() -> void:
 	if not is_instance_valid(player):
 		target_preview.visible = false
 		return
-	var target := player.opponent
+	var target := (
+		player.selected_sensor_target
+		if is_instance_valid(player.selected_sensor_target)
+		else player.opponent
+	)
 	if not is_instance_valid(target) or not player.can_detect_unit(target):
 		displayed_target = null
 		target_preview.visible = false
@@ -256,6 +271,8 @@ func _draw_target_panel() -> void:
 func _draw_target_marker(screen_position: Vector2, enemy: AiMechAgent) -> void:
 	var radius := 16.0
 	draw_arc(screen_position, radius, 0.0, TAU, 32, TARGET_COLOR, 1.5)
+	if enemy == player.selected_sensor_target:
+		draw_arc(screen_position, radius + 3.0, 0.0, TAU, 32, ALLY_MARKER_COLOR, 1.5)
 	for angle in [0.0, PI * 0.5, PI, PI * 1.5]:
 		var start := screen_position + Vector2.from_angle(angle) * (radius + 3.0)
 		var finish := screen_position + Vector2.from_angle(angle) * (radius + 8.0)
@@ -274,6 +291,112 @@ func _draw_target_marker(screen_position: Vector2, enemy: AiMechAgent) -> void:
 	)
 	if player.observed_unit_is_preparing(enemy):
 		draw_arc(screen_position, radius + 3.0, 0.0, TAU, 32, PREP_COLOR, 2.0)
+
+
+func _draw_targeting_solution(canvas_transform: Transform2D) -> void:
+	if (
+		not target_focus_active
+		or not is_instance_valid(player)
+		or not is_instance_valid(focused_target)
+		or not player.can_detect_unit(focused_target)
+	):
+		return
+	var weapon := _targeting_weapon()
+	if weapon == null or weapon.spec.projectile == null:
+		return
+	var origin := player.weapon_aim_origin(weapon)
+	var target_position := player.observed_unit_position(focused_target)
+	var target_velocity := player.observed_unit_velocity(focused_target)
+	var lead_position := _intercept_position(
+		origin,
+		target_position,
+		target_velocity,
+		weapon.spec.projectile.speed
+	)
+	var aim_vector := lead_position - origin
+	if aim_vector.is_zero_approx():
+		return
+	var aim_direction := aim_vector.normalized()
+	var effective_range := player.weapon_effective_range(weapon)
+	var maximum_range := player.weapon_maximum_range(weapon)
+	var effective_end := origin + aim_direction * effective_range
+	var maximum_end := origin + aim_direction * maximum_range
+	var origin_screen: Vector2 = canvas_transform * origin
+	var effective_screen: Vector2 = canvas_transform * effective_end
+	var maximum_screen: Vector2 = canvas_transform * maximum_end
+	var target_screen: Vector2 = canvas_transform * target_position
+	var lead_screen: Vector2 = canvas_transform * lead_position
+	draw_line(origin_screen, effective_screen, RANGE_READY_COLOR, 1.5)
+	if maximum_range > effective_range:
+		draw_line(effective_screen, maximum_screen, PREP_COLOR, 1.5)
+	var lead_distance := aim_vector.length()
+	var status_color := RANGE_READY_COLOR
+	if lead_distance > maximum_range:
+		status_color = RANGE_BLOCKED_COLOR
+	elif lead_distance > effective_range:
+		status_color = PREP_COLOR
+	draw_arc(target_screen, 4.0, 0.0, TAU, 16, TARGET_COLOR, 1.0)
+	draw_line(lead_screen - Vector2(4.0, 0.0), lead_screen + Vector2(4.0, 0.0), status_color, 1.0)
+	draw_line(lead_screen - Vector2(0.0, 4.0), lead_screen + Vector2(0.0, 4.0), status_color, 1.0)
+	var label := "%s  LEAD %d  R%d" % [
+		weapon.spec.display_name.to_upper().trim_prefix("TEST ").left(16),
+		roundi(target_position.distance_to(lead_position)),
+		roundi(maximum_range),
+	]
+	draw_string_outline(
+		ThemeDB.fallback_font,
+		lead_screen + Vector2(6.0, -6.0),
+		label,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		6,
+		2,
+		Color(0.0, 0.0, 0.0, 0.9)
+	)
+	draw_string(
+		ThemeDB.fallback_font,
+		lead_screen + Vector2(6.0, -6.0),
+		label,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		6,
+		status_color
+	)
+
+
+func _targeting_weapon() -> WeaponRuntime:
+	return player.selected_range_weapon()
+
+
+func _intercept_position(
+	origin: Vector2,
+	target_position: Vector2,
+	target_velocity: Vector2,
+	projectile_speed: float
+) -> Vector2:
+	if projectile_speed <= 0.0:
+		return target_position
+	var relative_position := target_position - origin
+	var quadratic_a := target_velocity.length_squared() - projectile_speed * projectile_speed
+	var quadratic_b := 2.0 * relative_position.dot(target_velocity)
+	var quadratic_c := relative_position.length_squared()
+	var intercept_time := -1.0
+	if absf(quadratic_a) < 0.001:
+		if absf(quadratic_b) > 0.001:
+			intercept_time = -quadratic_c / quadratic_b
+	else:
+		var discriminant := quadratic_b * quadratic_b - 4.0 * quadratic_a * quadratic_c
+		if discriminant >= 0.0:
+			var root := sqrt(discriminant)
+			var first_time := (-quadratic_b - root) / (2.0 * quadratic_a)
+			var second_time := (-quadratic_b + root) / (2.0 * quadratic_a)
+			if first_time > 0.0 and second_time > 0.0:
+				intercept_time = minf(first_time, second_time)
+			else:
+				intercept_time = maxf(first_time, second_time)
+	if intercept_time <= 0.0:
+		return target_position
+	return target_position + target_velocity * intercept_time
 
 
 func _draw_missile_marker(screen_position: Vector2) -> void:

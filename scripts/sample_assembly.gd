@@ -2,6 +2,11 @@ extends Node2D
 
 signal battle_finished(winner_team_id: int)
 
+enum CameraMode {
+	DYNAMIC_FRAMING,
+	CENTERED_TARGET,
+}
+
 const AI_MECH := preload("res://scripts/ai_mech_agent.gd")
 const MECH_COLLISION_RESOLVER := preload("res://scripts/mech_collision_resolver.gd")
 const STEEL_FLOOR_TILE := preload("res://Sprites/Environment/Stage-01-Steel-Floor.png")
@@ -15,6 +20,8 @@ const WEAPONS_DATA_PATH := "res://data/weapons.json"
 @export var camera_position_smoothing := 4.0
 @export var zoom_in_smoothing := 3.0
 @export var zoom_out_smoothing := 2.0
+@export var camera_mode := CameraMode.DYNAMIC_FRAMING
+@export var centered_camera_zoom := 0.25
 @export var two_vs_two := false
 @export var enable_player_control := false
 @export var randomize_loadouts := false
@@ -28,6 +35,7 @@ const WEAPONS_DATA_PATH := "res://data/weapons.json"
 var agents: Array = []
 var smoke_test_enabled := false
 var battle_result_smoke_enabled := false
+var centered_camera_smoke_enabled := false
 var smoke_elapsed := 0.0
 var observed_min_distance := INF
 var observed_max_distance := 0.0
@@ -44,12 +52,15 @@ var winner_team_id := -1
 var battle_completed := false
 var camera_dynamic_zoom_started := false
 var camera_framed_units := {}
+var target_camera_active := false
+var target_camera_input_was_pressed := false
 
 
 func _ready() -> void:
 	process_physics_priority = 100
 	smoke_test_enabled = OS.get_cmdline_user_args().has("--camera-smoke")
 	battle_result_smoke_enabled = OS.get_cmdline_user_args().has("--battle-result-smoke")
+	centered_camera_smoke_enabled = OS.get_cmdline_user_args().has("--centered-camera-smoke")
 	weapon_catalog = WeaponCatalog.new()
 	if not weapon_catalog.load_file(WEAPONS_DATA_PATH):
 		push_error("Unable to initialize combat weapon catalog")
@@ -64,6 +75,8 @@ func _ready() -> void:
 	queue_redraw()
 	if battle_result_smoke_enabled:
 		call_deferred("_run_battle_result_smoke")
+	if centered_camera_smoke_enabled:
+		call_deferred("_run_centered_camera_smoke")
 
 
 func _physics_process(_delta: float) -> void:
@@ -71,6 +84,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_target_camera_input()
 	_update_camera(delta)
 	_update_battle_result()
 	_update_status()
@@ -178,6 +192,47 @@ func _run_battle_result_smoke() -> void:
 		get_tree().quit(0)
 
 
+func _run_centered_camera_smoke() -> void:
+	assert(camera_mode == CameraMode.CENTERED_TARGET)
+	assert(agents.size() == 4)
+	var player := agents[0] as AiMechAgent
+	var ally := agents[1] as AiMechAgent
+	assert(is_equal_approx(player.weapon_range_multiplier, 1.0))
+	assert(_loadout_signature(player.mech_loadout) == _loadout_signature(ally.mech_loadout))
+	assert(_loadout_signature(player.mech_loadout) != _loadout_signature(agents[2].mech_loadout))
+	assert(_loadout_signature(player.mech_loadout) != _loadout_signature(agents[3].mech_loadout))
+	assert(_loadout_signature(agents[2].mech_loadout) != _loadout_signature(agents[3].mech_loadout))
+
+	_update_camera(0.0, true)
+	assert(camera.global_position.is_equal_approx(player.global_position))
+	assert(is_equal_approx(camera.zoom.x, centered_camera_zoom))
+	for enemy_index in [2, 3]:
+		agents[enemy_index].global_position += Vector2(400.0, 250.0)
+	_update_camera(1.0)
+	assert(camera.global_position.is_equal_approx(player.global_position))
+	assert(is_equal_approx(camera.zoom.x, centered_camera_zoom))
+
+	player.selected_sensor_target = agents[2]
+	target_camera_active = true
+	_update_camera(0.0)
+	assert(camera.global_position.is_equal_approx(agents[2].global_position))
+	assert(is_equal_approx(camera.zoom.x, centered_camera_zoom))
+	player.selected_sensor_target = null
+	_update_target_camera_input()
+	_update_camera(0.0)
+	assert(not target_camera_active)
+	assert(camera.global_position.is_equal_approx(player.global_position))
+
+	_destroy_agent_body(player)
+	_update_battle_result()
+	_update_camera(0.0)
+	assert(_camera_player() == ally)
+	assert(camera.global_position.is_equal_approx(ally.global_position))
+	assert(is_equal_approx(camera.zoom.x, centered_camera_zoom))
+	print("CENTERED_CAMERA_CHECK passed")
+	get_tree().quit(0)
+
+
 func _destroy_agent_body(agent: AiMechAgent) -> void:
 	var durability := float(agent.part_durability[&"Body"])
 	agent.register_hit(&"Body", Vector2.RIGHT, durability)
@@ -234,10 +289,17 @@ func _spawn_agents() -> void:
 			Vector2(1000.0, 260.0),
 		]
 		agent_count = 4
+	var player_combat_loadout: MechLoadout
+	var hostile_loadout_signatures := {}
 	for index in agent_count:
 		var agent = AI_MECH.new()
+		var first_enemy_index := 2 if two_vs_two else 1
+		agent.team_id = 0 if index < first_enemy_index else 1
+		agent.player_controlled = two_vs_two and enable_player_control and index == 0
 		var uses_close_range_build := index == 0 or (two_vs_two and index == 1)
-		if uses_close_range_build:
+		if agent.player_controlled:
+			agent.movement_type = AiMechAgent.MovementType.AGGRESSIVE
+		elif uses_close_range_build:
 			agent.fire_rate_multiplier = 0.5
 			agent.weapon_range_multiplier = 0.5
 			agent.movement_type = AiMechAgent.MovementType.AGGRESSIVE
@@ -250,16 +312,21 @@ func _spawn_agents() -> void:
 			agent.movement_type = AiMechAgent.MovementType.BALANCED
 			agent.preferred_range = 2000.0
 			agent.evasion_range = 1500.0
-		var first_enemy_index := 2 if two_vs_two else 1
-		agent.team_id = 0 if index < first_enemy_index else 1
-		agent.player_controlled = two_vs_two and enable_player_control and index == 0
 		var configured_loadout: MechLoadout
 		var loadout: Array[WeaponSpec]
 		if agent.player_controlled and GameSession.player_mech_loadout != null:
 			configured_loadout = GameSession.player_mech_loadout.copy()
 			loadout = _weapons_from_mech_loadout(configured_loadout)
+		elif two_vs_two and index == 1 and player_combat_loadout != null:
+			configured_loadout = player_combat_loadout.copy()
+			loadout = _weapons_from_mech_loadout(configured_loadout)
 		elif randomize_loadouts:
-			configured_loadout = _random_mech_loadout()
+			var excluded_signatures := {}
+			if index >= first_enemy_index:
+				if player_combat_loadout != null:
+					excluded_signatures[_loadout_signature(player_combat_loadout)] = true
+				excluded_signatures.merge(hostile_loadout_signatures)
+			configured_loadout = _random_mech_loadout(excluded_signatures)
 			loadout = _weapons_from_mech_loadout(configured_loadout)
 		else:
 			loadout = first_loadout if uses_close_range_build else second_loadout
@@ -280,6 +347,10 @@ func _spawn_agents() -> void:
 			loadout,
 			configured_loadout
 		)
+		if index == 0 and configured_loadout != null:
+			player_combat_loadout = configured_loadout.copy()
+		elif index >= first_enemy_index and configured_loadout != null:
+			hostile_loadout_signatures[_loadout_signature(configured_loadout)] = true
 		agent.position = starts[index]
 		add_child(agent)
 		agents.append(agent)
@@ -296,10 +367,28 @@ func _spawn_agents() -> void:
 		agents[1].set_opponent(agents[0])
 
 
-func _random_mech_loadout() -> MechLoadout:
-	return valid_random_loadouts[
-		loadout_rng.randi_range(0, valid_random_loadouts.size() - 1)
-	].copy()
+func _random_mech_loadout(excluded_signatures := {}) -> MechLoadout:
+	var candidates: Array[MechLoadout] = []
+	for candidate in valid_random_loadouts:
+		if not excluded_signatures.has(_loadout_signature(candidate)):
+			candidates.append(candidate)
+	if candidates.is_empty():
+		candidates.assign(valid_random_loadouts)
+	return candidates[loadout_rng.randi_range(0, candidates.size() - 1)].copy()
+
+
+func _loadout_signature(loadout: MechLoadout) -> String:
+	var part_ids: Array[String] = []
+	for part in [
+		loadout.head,
+		loadout.body,
+		loadout.left_arm,
+		loadout.right_arm,
+		loadout.backpack,
+		loadout.legs,
+	]:
+		part_ids.append(part.part_id if part != null else "-")
+	return "|".join(part_ids)
 
 
 func _load_random_weapon_pools() -> bool:
@@ -347,6 +436,48 @@ func _weapons_from_mech_loadout(loadout: MechLoadout) -> Array[WeaponSpec]:
 
 
 func _update_camera(delta: float, snap := false) -> void:
+	if camera_mode == CameraMode.CENTERED_TARGET:
+		_update_centered_sensor_camera()
+		return
+	_update_dynamic_camera(delta, snap)
+
+
+func _update_centered_sensor_camera() -> void:
+	var subject := focused_camera_target()
+	if subject == null:
+		subject = _camera_player()
+	if subject == null:
+		return
+	camera.global_position = subject.global_position
+	camera.zoom = Vector2.ONE * clampf(centered_camera_zoom, minimum_zoom, maximum_zoom)
+
+
+func _update_target_camera_input() -> void:
+	var player := _player_agent()
+	if player == null or player.is_defeated():
+		target_camera_active = false
+		return
+	if not is_instance_valid(player.selected_sensor_target):
+		target_camera_active = false
+	var focus_pressed := Input.is_physical_key_pressed(KEY_Z)
+	if focus_pressed and not target_camera_input_was_pressed:
+		if is_instance_valid(player.selected_sensor_target):
+			target_camera_active = not target_camera_active
+	target_camera_input_was_pressed = focus_pressed
+
+
+func focused_camera_target() -> AiMechAgent:
+	if camera_mode != CameraMode.CENTERED_TARGET or not target_camera_active:
+		return null
+	var player := _player_agent()
+	if player == null or not is_instance_valid(player.selected_sensor_target):
+		return null
+	if not player.sensor_snapshot.has_unit(player.selected_sensor_target):
+		return null
+	return player.selected_sensor_target
+
+
+func _update_dynamic_camera(delta: float, snap := false) -> void:
 	var player := _camera_player()
 	if player == null:
 		return

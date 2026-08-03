@@ -69,6 +69,7 @@ func _initialize() -> void:
 	assert(is_equal_approx(_decision_period(AiMechAgent.MovementType.DEFENSIVE), 1.0))
 	_verify_freed_projectile_snapshot()
 	_verify_sensor_guided_missile()
+	_verify_target_cycle()
 	_verify_backpack_muzzle_positions()
 	assert(not target.is_defeated())
 	target.combat_visuals_enabled = false
@@ -189,6 +190,26 @@ func _verify_freed_projectile_snapshot() -> void:
 	snapshot.projectiles.append({"projectile": projectile})
 	projectile.free()
 	assert(snapshot.tracked_projectiles().is_empty())
+
+
+func _verify_target_cycle() -> void:
+	var player := AiMechAgent.new()
+	var first := AiMechAgent.new()
+	var second := AiMechAgent.new()
+	player.sensor_snapshot.units.assign([
+		{"target": first},
+		{"target": second},
+	])
+	player._cycle_sensor_target()
+	assert(player.selected_sensor_target == first)
+	player._cycle_sensor_target()
+	assert(player.selected_sensor_target == second)
+	player.sensor_snapshot.units.clear()
+	player._cycle_sensor_target()
+	assert(player.selected_sensor_target == null)
+	player.free()
+	first.free()
+	second.free()
 
 
 func _verify_backpack_muzzle_positions() -> void:
