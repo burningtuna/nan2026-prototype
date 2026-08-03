@@ -79,6 +79,7 @@ const BOOST_FRAMES := [
 @export var team_id := 0
 @export var unit_class := UnitClass.MECH
 @export var combat_visuals_enabled := true
+@export var incoming_damage_multiplier := 1.0
 
 var opponent: AiMechAgent
 var opponents: Array[AiMechAgent] = []
@@ -496,7 +497,10 @@ func register_hit(part_name: StringName, incoming_direction: Vector2, damage := 
 	var was_destroyed := is_part_destroyed(part_name)
 	var was_defeated := is_defeated()
 	if part_durability.has(part_name) and float(part_durability[part_name]) > 0.0:
-		part_durability[part_name] = maxf(float(part_durability[part_name]) - damage, 0.0)
+		part_durability[part_name] = maxf(
+			float(part_durability[part_name]) - damage * maxf(incoming_damage_multiplier, 0.0),
+			0.0
+		)
 	hit_received.emit(last_hit_part, last_hit_aspect)
 	if not was_destroyed and is_part_destroyed(part_name):
 		_destroy_part(part_name, incoming_direction, was_defeated)

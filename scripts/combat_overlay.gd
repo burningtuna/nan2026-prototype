@@ -174,6 +174,10 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 	var is_in_range := distance <= maximum_range
 	var color := RANGE_READY_COLOR if is_in_range else RANGE_BLOCKED_COLOR
 	var selected_weapons := player.selected_weapons()
+	var displayed_weapons: Array[WeaponRuntime] = []
+	for weapon in selected_weapons:
+		if not weapon.disabled:
+			displayed_weapons.append(weapon)
 	var heat_status_text := ""
 	var heat_status_color := Color.WHITE
 	if player.heat_generation_locked:
@@ -190,7 +194,7 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 	draw_arc(cursor_position, 5.0, 0.0, TAU, 16, color, 1.0)
 	draw_line(cursor_position + Vector2(7.0, 0.0), cursor_position + Vector2(11.0, 0.0), color, 1.0)
 	var text := "D%04d / R%04d" % [roundi(distance), roundi(maximum_range)]
-	var label_size := Vector2(120.0, 11.0 + heat_status_height + selected_weapons.size() * 8.0)
+	var label_size := Vector2(120.0, 11.0 + heat_status_height + displayed_weapons.size() * 8.0)
 	var label_position := cursor_position + Vector2(10.0, -13.0)
 	if label_position.x + label_size.x > size.x - 3.0:
 		label_position.x = cursor_position.x - label_size.x - 10.0
@@ -239,10 +243,10 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 			6,
 			heat_status_color
 		)
-	for index in selected_weapons.size():
-		var weapon := selected_weapons[index]
+	for index in displayed_weapons.size():
+		var weapon := displayed_weapons[index]
 		var weapon_name := weapon.spec.display_name.to_upper().trim_prefix("TEST ").left(16)
-		var weapon_text := "%s %02d/%02d" % [
+		var weapon_text := "%s RELOADING..." % weapon_name if weapon.is_reloading() else "%s %02d/%02d" % [
 			weapon_name,
 			weapon.ammo,
 			weapon.spec.magazine_capacity,

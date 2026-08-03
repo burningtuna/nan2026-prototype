@@ -13,6 +13,7 @@ var recoil_offset := 0.0
 var next_muzzle := 0
 var rest_position := Vector2.ZERO
 var fire_rate_multiplier := 1.0
+var reload_duration_multiplier := 1.0
 var reload_remaining := 0.0
 var reload_count := 0
 var reload_completed_count := 0
@@ -65,9 +66,13 @@ func fire() -> Marker2D:
 	var magazine_cost := _magazine_cost()
 	if magazine_cost > 0:
 		ammo -= magazine_cost
-		if ammo < magazine_cost and spec.reload_duration > 0.0:
-			reload_remaining = spec.reload_duration
-			reload_count += 1
+		if ammo < magazine_cost:
+			var duration := reload_duration()
+			if duration > 0.0:
+				reload_remaining = duration
+				reload_count += 1
+			else:
+				ammo = spec.magazine_capacity
 	cooldown_remaining = spec.fire_interval() / maxf(fire_rate_multiplier, 0.001)
 	recoil_offset = minf(
 		recoil_offset + spec.visual_recoil_distance,
@@ -81,6 +86,10 @@ func fire() -> Marker2D:
 
 func is_reloading() -> bool:
 	return reload_remaining > 0.0
+
+
+func reload_duration() -> float:
+	return maxf(spec.reload_duration * reload_duration_multiplier, 0.0)
 
 
 func _magazine_cost() -> int:

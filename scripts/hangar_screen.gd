@@ -13,6 +13,8 @@ const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
 const SKIRMISH_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
 const ENDLESS_SCENE_PATH := "res://scenes/endless_combat.tscn"
+const ENDLESS_INTRO_PATH := "res://data/scenarios/endless_intro.json"
+const SCENARIO_DIALOGUE_SCENE := preload("res://scenes/scenario_dialogue.tscn")
 
 const SLOT_NAMES := {
 	MechLoadout.MechSlot.BODY: "BODY",
@@ -55,6 +57,7 @@ var _equip_button: Button
 var _pending_part: MechPartSpec
 var _active_slot := MechLoadout.MechSlot.BODY
 var _confirmed := false
+var _scenario_dialogue: ScenarioDialogue
 
 
 func _ready() -> void:
@@ -63,22 +66,41 @@ func _ready() -> void:
 	_working_loadout = _initial_loadout()
 	_build_interface()
 	_refresh()
+	_scenario_dialogue = SCENARIO_DIALOGUE_SCENE.instantiate() as ScenarioDialogue
+	add_child(_scenario_dialogue)
+	if (
+		GameSession.selected_game_mode == GameSession.GameMode.ENDLESS
+		and not GameSession.endless_intro_shown
+		and _scenario_dialogue.play_file(ENDLESS_INTRO_PATH)
+	):
+		GameSession.endless_intro_shown = true
 	queue_redraw()
 	if OS.get_cmdline_user_args().has("--scene-transition-smoke"):
 		call_deferred("_confirm_loadout")
 	if OS.get_cmdline_user_args().has("--endless-entry-smoke"):
 		if SceneTransition.transitioning:
 			SceneTransition.transition_finished.connect(
-				func(_scene_path: String) -> void: _confirm_loadout(),
+				func(_scene_path: String) -> void: _run_endless_hangar_entry_smoke(),
 				CONNECT_ONE_SHOT
 			)
 		else:
-			call_deferred("_confirm_loadout")
+			call_deferred("_run_endless_hangar_entry_smoke")
 	if OS.get_cmdline_user_args().has("--hangar-main-menu-smoke"):
 		call_deferred("_return_to_main_menu")
 	if OS.get_cmdline_user_args().has("--hangar-return-smoke"):
 		print("HANGAR_RETURN_CHECK passed")
 		get_tree().quit(0)
+
+
+func _run_endless_hangar_entry_smoke() -> void:
+	assert(GameSession.selected_game_mode == GameSession.GameMode.ENDLESS)
+	assert(_scenario_dialogue.active)
+	assert(_scenario_dialogue.current_text() == "무한 모드입니다. 뱀파이어 서바이버 처럼 최대한 오래 살아남는게 목적입니다.")
+	_scenario_dialogue.advance()
+	assert(_scenario_dialogue.current_text() == "다른 모드와 별개의 장비 스탯을 사용합니다. 재장전 스트레스 없이 열, EN 관리가 목표가 됩니다.")
+	_scenario_dialogue.advance()
+	assert(not _scenario_dialogue.active)
+	_confirm_loadout()
 
 
 func _draw() -> void:

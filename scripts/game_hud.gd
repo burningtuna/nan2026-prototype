@@ -152,7 +152,7 @@ func _draw_weapon_ammo_bars() -> void:
 			continue
 		if weapon.reload_remaining > 0.0:
 			ammo_ratio = 1.0 - clampf(
-				weapon.reload_remaining / maxf(weapon.spec.reload_duration, 0.001),
+				weapon.reload_remaining / maxf(weapon.reload_duration(), 0.001),
 				0.0,
 				1.0
 			)

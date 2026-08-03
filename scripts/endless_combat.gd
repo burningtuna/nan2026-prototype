@@ -15,6 +15,7 @@ func _process(delta: float) -> void:
 
 func _on_combat_bound() -> void:
 	var smoke := OS.get_cmdline_user_args().has("--endless-smoke")
+	_apply_endless_player_balance()
 	if not director.setup(battle, combat_player, not smoke):
 		push_error("Unable to initialize Endless Mode")
 		return
@@ -32,6 +33,17 @@ func _on_combat_bound() -> void:
 	if OS.get_cmdline_user_args().has("--endless-entry-smoke"):
 		call_deferred("_run_endless_entry_smoke")
 
+
+func _apply_endless_player_balance() -> void:
+	if not GameSession.endless_player_balance_enabled:
+		return
+	combat_player.incoming_damage_multiplier = GameSession.endless_player_damage_multiplier
+	for weapon in combat_player.weapons:
+		weapon.reload_duration_multiplier = (
+			GameSession.endless_missile_reload_multiplier
+			if weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+			else GameSession.endless_other_reload_multiplier
+		)
 
 func _on_tier_changed(next_tier: int, _elapsed: float) -> void:
 	system_messages.push_message("THREAT TIER %02d" % (next_tier + 1))
@@ -75,6 +87,17 @@ func _on_endless_transition_failed(scene_path: String, error: Error) -> void:
 func _run_endless_smoke() -> void:
 	assert(battle.agents.size() == 1)
 	assert(not battle.automatic_battle_completion)
+	assert(is_equal_approx(
+		combat_player.incoming_damage_multiplier,
+		GameSession.endless_player_damage_multiplier
+	))
+	for weapon in combat_player.weapons:
+		var expected_reload_multiplier := (
+			GameSession.endless_missile_reload_multiplier
+			if weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+			else GameSession.endless_other_reload_multiplier
+		)
+		assert(is_equal_approx(weapon.reload_duration_multiplier, expected_reload_multiplier))
 	director.spawn_remaining = 999.0
 	var head_drone := director.spawn_drone(DroneAgent.DroneKind.HEAD)
 	assert(head_drone != null and head_drone.unit_class == AiMechAgent.UnitClass.DRONE)
@@ -98,13 +121,19 @@ func _run_endless_smoke() -> void:
 
 	var repair_part: StringName = &"Body"
 	var maximum := float(combat_player.part_max_durability[repair_part])
+	var durability_before_hit := float(combat_player.part_durability[repair_part])
+	combat_player.register_hit(repair_part, Vector2.RIGHT, 10.0)
+	assert(is_equal_approx(
+		float(combat_player.part_durability[repair_part]),
+		durability_before_hit - 10.0 * GameSession.endless_player_damage_multiplier
+	))
 	combat_player.part_durability[repair_part] = maximum * 0.4
 	var destroyed_part: StringName = &"Head"
 	combat_player.part_durability[destroyed_part] = 0.0
 	combat_player.register_hit(
 		&"LeftArm",
 		Vector2.RIGHT,
-		float(combat_player.part_durability[&"LeftArm"])
+		100000.0
 	)
 	assert(combat_player._part_weapon_is_disabled(&"LeftArm"))
 	director.elapsed_seconds = 59.9
@@ -117,6 +146,9 @@ func _run_endless_smoke() -> void:
 			mech = agent
 			break
 	assert(mech != null and mech.appears_in_enemy_roster())
+	assert(is_equal_approx(mech.incoming_damage_multiplier, 1.0))
+	for weapon in mech.weapons:
+		assert(is_equal_approx(weapon.reload_duration_multiplier, 1.0))
 	mech.register_hit(&"Body", Vector2.RIGHT, float(mech.part_durability[&"Body"]))
 	assert(director.score == 310)
 	assert(is_equal_approx(combat_player.part_durability[repair_part], maximum * 0.6))
@@ -126,7 +158,7 @@ func _run_endless_smoke() -> void:
 	combat_player.register_hit(
 		&"Body",
 		Vector2.RIGHT,
-		float(combat_player.part_durability[&"Body"])
+		100000.0
 	)
 	await get_tree().process_frame
 	assert(not director.running)
