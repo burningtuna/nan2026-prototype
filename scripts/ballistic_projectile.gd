@@ -118,6 +118,8 @@ func _physics_process(delta: float) -> void:
 	var end_position := start_position + direction * frame_distance
 	if _check_swept_hit(start_position, end_position):
 		return
+	if _check_proximity_fuse(start_position, end_position):
+		return
 	global_position = end_position
 	traveled_distance += frame_distance
 	if visuals_enabled:
@@ -192,6 +194,29 @@ func _check_swept_hit(start_position: Vector2, end_position: Vector2) -> bool:
 	return false
 
 
+func _check_proximity_fuse(start_position: Vector2, end_position: Vector2) -> bool:
+	if (
+		weapon_family != WeaponSpec.WeaponFamily.MISSILE
+		or spec.proximity_fuse_radius <= 0.0
+		or not is_instance_valid(homing_target)
+		or homing_target == source_mech
+		or _is_allied_target(homing_target)
+	):
+		return false
+	var fuse_position := Geometry2D.get_closest_point_to_segment(
+		homing_target.global_position,
+		start_position,
+		end_position
+	)
+	if (
+		fuse_position.distance_squared_to(homing_target.global_position)
+		> spec.proximity_fuse_radius ** 2
+	):
+		return false
+	_detonate(fuse_position)
+	return true
+
+
 func _exit_tree() -> void:
 	if is_instance_valid(trail):
 		trail.finish()
@@ -238,14 +263,11 @@ func _resolve_hit_candidates() -> void:
 func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> void:
 	if hit_resolved:
 		return
+	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and spec.splash_radius > 0.0:
+		_detonate(hit_position)
+		return
 	hit_resolved = true
-	if visuals_enabled:
-		var effect = IMPACT_EFFECT.new()
-		effect.setup(weapon_family, direction, shot_seed)
-		effect.scale = Vector2.ONE * 3.0
-		effect.z_index = 3
-		get_parent().add_child(effect)
-		effect.global_position = hit_position
+	_spawn_impact_effect(hit_position)
 	hitbox.mech.register_hit(hitbox.part_name, direction, spec.damage)
 	if is_instance_valid(source_mech) and source_mech.has_method("register_landed_hit"):
 		source_mech.register_landed_hit(weapon_family)
@@ -255,16 +277,66 @@ func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> void:
 func _apply_environment_hit(target: Node, hit_position: Vector2) -> void:
 	if hit_resolved:
 		return
+	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and spec.splash_radius > 0.0:
+		target.receive_projectile_hit(spec.damage, direction, hit_position)
+		_detonate(hit_position)
+		return
 	hit_resolved = true
-	if visuals_enabled:
-		var effect = IMPACT_EFFECT.new()
-		effect.setup(weapon_family, direction, shot_seed)
-		effect.scale = Vector2.ONE * 3.0
-		effect.z_index = 3
-		get_parent().add_child(effect)
-		effect.global_position = hit_position
+	_spawn_impact_effect(hit_position)
 	target.receive_projectile_hit(spec.damage, direction, hit_position)
 	queue_free()
+
+
+func _detonate(hit_position: Vector2) -> void:
+	if hit_resolved:
+		return
+	hit_resolved = true
+	_spawn_impact_effect(hit_position)
+	var damaged_hitboxes := 0
+	var radius_squared := spec.splash_radius ** 2
+	var scene_tree := source_mech.get_tree() if is_instance_valid(source_mech) else get_tree()
+	if scene_tree == null:
+		queue_free()
+		return
+	for target in scene_tree.get_nodes_in_group(&"mech_combatants"):
+		if (
+			not is_instance_valid(target)
+			or target == source_mech
+			or _is_allied_target(target)
+			or (target.has_method("is_defeated") and target.is_defeated())
+		):
+			continue
+		for node in target.find_children("*", "Area2D", true, false):
+			var hitbox := node as Area2D
+			if (
+				hitbox == null
+				or hitbox.get_script() != PART_HITBOX
+				or hitbox.global_position.distance_squared_to(hit_position) > radius_squared
+			):
+				continue
+			var impact_direction := (hitbox.global_position - hit_position).normalized()
+			if impact_direction.is_zero_approx():
+				impact_direction = direction
+			hitbox.mech.register_hit(hitbox.part_name, impact_direction, spec.damage)
+			damaged_hitboxes += 1
+	if (
+		damaged_hitboxes > 0
+		and is_instance_valid(source_mech)
+		and source_mech.has_method("register_landed_hit")
+	):
+		source_mech.register_landed_hit(weapon_family)
+	queue_free()
+
+
+func _spawn_impact_effect(hit_position: Vector2) -> void:
+	if not visuals_enabled:
+		return
+	var effect = IMPACT_EFFECT.new()
+	effect.setup(weapon_family, direction, shot_seed)
+	effect.scale = Vector2.ONE * maxf(spec.splash_radius / 12.0, 3.0)
+	effect.z_index = 3
+	get_parent().add_child(effect)
+	effect.global_position = hit_position
 
 
 func _is_allied_target(target: Node) -> bool:

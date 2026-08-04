@@ -76,6 +76,9 @@ func _add_projectile(data: Dictionary) -> bool:
 	spec.damage = float(data.get("damage", spec.damage))
 	spec.damage_type = StringName(str(data.get("damage_type", spec.damage_type)))
 	spec.penetration = float(data.get("penetration", spec.penetration))
+	spec.proximity_fuse_radius = float(
+		data.get("proximity_fuse_radius", spec.proximity_fuse_radius)
+	)
 	spec.splash_radius = float(data.get("splash_radius", spec.splash_radius))
 	spec.color = Color(str(data.get("color", spec.color.to_html(true))))
 	spec.lifetime = float(data.get("lifetime", spec.lifetime))

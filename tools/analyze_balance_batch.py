@@ -127,11 +127,14 @@ def main():
     by_factor = defaultdict(new_record)
     durations = []
     outcomes = defaultdict(int)
+    team_wins = defaultdict(int)
 
     for match in matches:
         duration = match["elapsed_ticks"] / physics_hz
         durations.append(duration)
         outcomes[match["outcome"]] += 1
+        if match["outcome"] == "WIN":
+            team_wins[match["winner_team_index"]] += 1
         panel = match["panel_id"]
         by_panel[panel]["durations"].append(duration)
         by_panel[panel]["appearances"] += 1
@@ -169,7 +172,12 @@ def main():
         f"- Expected appearances per combination: {len(matches) * 2 // len(builds)}",
         "- Teams: two identical chassis per team; one aggressive and one range-keeper AI",
         "- Weapons: two valid identical arm-mounted rapid weapons per mech; same panel on both teams",
-        "- Matchup schedule: every unordered pair once per weapon panel",
+        (
+            f"- Matchup schedule: balanced cyclic sample, "
+            f"{base.get('appearances_per_build')} opponents per combination"
+            if base.get("appearances_per_build", 0)
+            else "- Matchup schedule: every unordered pair once per weapon panel"
+        ),
         f"- Timeout: {timeout_seconds:.0f} seconds",
         "- Every experimental loadout passed `MechLoadout.is_valid()` before execution",
         "",
@@ -180,6 +188,7 @@ def main():
         f"- P90: **{p90_duration:.1f}s**",
         f"- Timeouts: **{outcomes['TIMEOUT']}/{len(matches)} ({timeout_rate:.1%})**",
         f"- Completed wins: {outcomes['WIN']}; draws: {outcomes['DRAW']}",
+        f"- Physical side wins: team 0 **{team_wins[0]}**, team 1 **{team_wins[1]}**",
         "",
         "### Duration By Weapon Panel",
         "",
@@ -301,9 +310,10 @@ def main():
             "",
             "## Interpretation Limits",
             "",
-            "- Defeat currently occurs when both weapon arms are destroyed, not when HEAD/BODY/LEGS reaches zero.",
+            "- Defeat occurs when BODY is destroyed or every installed weapon is disabled.",
+            "- Physical team-side imbalance can confound chassis rankings even when each chassis receives equal side appearances.",
             "- Armor tiers share collision artwork, so this measures durability/stat effects rather than silhouette size.",
-            "- Penetration, splash radius, and damage-type resistance are not implemented in damage resolution.",
+            "- Area splash damage, penetration, and damage-type resistance are not implemented in damage resolution.",
             "- Timeout results are reported separately and counted as 0.5 only in the descriptive score.",
             "- Weapon panels use different arm-part durability and stats, because only real catalog loadouts were allowed.",
             "",

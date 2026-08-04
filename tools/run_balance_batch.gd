@@ -29,7 +29,6 @@ const WEAPON_PANELS := [
 	{"id": "MISSILE", "arm_part_id": "wasp_micro_missile_arm"},
 	{"id": "SCATTER", "arm_part_id": "cyclone_flechette_arm"},
 ]
-
 var weapon_catalog: WeaponCatalog
 var part_catalog: MechPartCatalog
 var builds: Array[Dictionary] = []
@@ -43,6 +42,7 @@ var maximum_matches := 0
 var output_path := DEFAULT_OUTPUT_PATH
 var shard_index := 0
 var shard_count := 1
+var appearances_per_build := 0
 
 
 func _initialize() -> void:
@@ -112,6 +112,8 @@ func _parse_arguments() -> void:
 			shard_index = maxi(int(argument.get_slice("=", 1)), 0)
 		elif argument.begins_with("--shard-count="):
 			shard_count = maxi(int(argument.get_slice("=", 1)), 1)
+		elif argument.begins_with("--appearances-per-build="):
+			appearances_per_build = maxi(int(argument.get_slice("=", 1)), 0)
 	if shard_index >= shard_count:
 		push_error("Shard index must be smaller than shard count")
 		shard_index = 0
@@ -151,27 +153,71 @@ func _build_experiment() -> bool:
 				)
 				return false
 
+	if appearances_per_build > 0:
+		if appearances_per_build % 2 != 0 or appearances_per_build >= builds.size():
+			push_error("Appearances per build must be even and smaller than the build count")
+			return false
+		_build_sampled_schedule()
+	else:
+		_build_full_schedule()
+	return true
+
+
+func _build_sampled_schedule() -> void:
+	var match_index := 0
+	var panel_counts: Array[Array] = []
+	var global_panel_counts := [0, 0, 0, 0]
+	for _build in builds:
+		panel_counts.append([0, 0, 0, 0])
+	for distance in range(1, appearances_per_build / 2 + 1):
+		for first_index in builds.size():
+			var second_index := (first_index + distance) % builds.size()
+			var panel_index := 0
+			var best_score := 1 << 30
+			for candidate in WEAPON_PANELS.size():
+				var score: int = int(
+					maxi(panel_counts[first_index][candidate], panel_counts[second_index][candidate]) * 100000
+					+ (panel_counts[first_index][candidate] + panel_counts[second_index][candidate]) * 10000
+					+ global_panel_counts[candidate] * 10
+					+ candidate
+				)
+				if score < best_score:
+					best_score = score
+					panel_index = candidate
+			panel_counts[first_index][panel_index] += 1
+			panel_counts[second_index][panel_index] += 1
+			global_panel_counts[panel_index] += 1
+			_append_config(first_index, second_index, panel_index, match_index, true)
+			match_index += 1
+
+
+func _build_full_schedule() -> void:
 	var match_index := 0
 	for first_index in builds.size():
 		for second_index in range(first_index + 1, builds.size()):
 			for panel_index in WEAPON_PANELS.size():
-				var first_on_team_zero := panel_index % 2 == 0
-				var team_zero_build: Dictionary = builds[first_index if first_on_team_zero else second_index]
-				var team_one_build: Dictionary = builds[second_index if first_on_team_zero else first_index]
-				configs.append({
-					"match_index": match_index,
-					"seed": 20260802 + match_index * 104729,
-					"panel_id": WEAPON_PANELS[panel_index]["id"],
-					"panel_index": panel_index,
-					"team_build_ids": [team_zero_build["id"], team_one_build["id"]],
-					"team_build_indices": [
-						first_index if first_on_team_zero else second_index,
-						second_index if first_on_team_zero else first_index,
-					],
-					"team_ids": [match_index * 2, match_index * 2 + 1],
-				})
+				_append_config(first_index, second_index, panel_index, match_index, panel_index % 2 == 0)
 				match_index += 1
-	return true
+
+
+func _append_config(
+	first_index: int,
+	second_index: int,
+	panel_index: int,
+	match_index: int,
+	first_on_team_zero: bool
+) -> void:
+	var team_zero_index := first_index if first_on_team_zero else second_index
+	var team_one_index := second_index if first_on_team_zero else first_index
+	configs.append({
+		"match_index": match_index,
+		"seed": 20260802 + match_index * 104729,
+		"panel_id": WEAPON_PANELS[panel_index]["id"],
+		"panel_index": panel_index,
+		"team_build_ids": [builds[team_zero_index]["id"], builds[team_one_index]["id"]],
+		"team_build_indices": [team_zero_index, team_one_index],
+		"team_ids": [match_index * 2, match_index * 2 + 1],
+	})
 
 
 func _start_available_matches() -> void:
@@ -214,6 +260,7 @@ func _write_results() -> bool:
 		"timeout_seconds": timeout_seconds,
 		"shard_index": shard_index,
 		"shard_count": shard_count,
+		"appearances_per_build": appearances_per_build,
 		"arena": [-3000.0, -3000.0, 6000.0, 6000.0],
 		"builds": builds,
 		"weapon_panels": WEAPON_PANELS,

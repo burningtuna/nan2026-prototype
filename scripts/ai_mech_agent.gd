@@ -9,6 +9,13 @@ const DEFAULT_MAX_ENERGY := 100.0
 const MAX_HEAT := 100.0
 const DASH_ENERGY_COST := 15.0
 const DASH_HEAT_COST := 15.0
+const MIN_LOADOUT_MOBILITY := 10.0
+const MAX_LOADOUT_MOBILITY := 108.0
+const MIN_LOADOUT_WEIGHT := 23.0
+const MAX_LOADOUT_WEIGHT := 138.0
+const MIN_DASH_SPEED_MULTIPLIER := 1.0 / 3.0
+const MIN_DASH_DISTANCE_MULTIPLIER := 0.5
+const MAX_DASH_DISTANCE_MULTIPLIER := 1.5
 const ENERGY_FULL_RECHARGE_SECONDS := 10.0
 const MOBILITY_SPEED_MULTIPLIER := 2.0
 const WEAPON_SELECT_LEFT := 1
@@ -264,6 +271,39 @@ func movement_speed() -> float:
 	return cruise_speed * MOBILITY_SPEED_MULTIPLIER * movement_speed_multiplier
 
 
+func effective_dash_speed() -> float:
+	if mech_loadout == null:
+		return dash_speed
+	var mobility := float(mech_loadout.stats().get("mobility", MAX_LOADOUT_MOBILITY))
+	var ratio := clampf(
+		inverse_lerp(MIN_LOADOUT_MOBILITY, MAX_LOADOUT_MOBILITY, mobility),
+		0.0,
+		1.0
+	)
+	return dash_speed * lerpf(MIN_DASH_SPEED_MULTIPLIER, 1.0, ratio)
+
+
+func effective_dash_distance() -> float:
+	if mech_loadout == null:
+		return dash_speed * dash_duration
+	var weight := float(mech_loadout.stats().get("weight", MIN_LOADOUT_WEIGHT))
+	var ratio := clampf(
+		inverse_lerp(MIN_LOADOUT_WEIGHT, MAX_LOADOUT_WEIGHT, weight),
+		0.0,
+		1.0
+	)
+	var distance_multiplier := lerpf(
+		MAX_DASH_DISTANCE_MULTIPLIER,
+		MIN_DASH_DISTANCE_MULTIPLIER,
+		ratio
+	)
+	return dash_speed * dash_duration * distance_multiplier
+
+
+func effective_dash_duration() -> float:
+	return effective_dash_distance() / maxf(effective_dash_speed(), 0.001)
+
+
 func energy_capacity() -> float:
 	if mech_loadout == null:
 		return DEFAULT_MAX_ENERGY
@@ -481,7 +521,7 @@ func _update_sensor_missile_evasion() -> void:
 		and _consume_dash_resources()
 	):
 		dash_direction = evade_direction
-		dash_time_remaining = dash_duration
+		dash_time_remaining = effective_dash_duration()
 		dash_cooldown_remaining = dash_cooldown
 		dash_count += 1
 		evasion_count += 1
@@ -926,7 +966,7 @@ func _update_random_movement(delta: float) -> void:
 	dash_cooldown_remaining = maxf(dash_cooldown_remaining - delta, 0.0)
 	if dash_time_remaining > 0.0:
 		var dash_step := minf(delta, dash_time_remaining)
-		movement_step += dash_direction * dash_speed * dash_step
+		movement_step += dash_direction * effective_dash_speed() * dash_step
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
 	else:
 		dash_decision_time_remaining -= delta
@@ -950,7 +990,7 @@ func _update_player_movement(delta: float) -> void:
 	var movement_step := velocity * delta
 	if dash_time_remaining > 0.0:
 		var dash_step := minf(delta, dash_time_remaining)
-		movement_step += dash_direction * dash_speed * dash_step
+		movement_step += dash_direction * effective_dash_speed() * dash_step
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
 	_apply_movement_step(movement_step)
 	if input_direction.length_squared() > 0.0:
@@ -995,7 +1035,7 @@ func _try_start_player_dash(input_direction: Vector2) -> void:
 	if not _consume_dash_resources():
 		return
 	dash_direction = travel_direction
-	dash_time_remaining = dash_duration
+	dash_time_remaining = effective_dash_duration()
 	dash_cooldown_remaining = dash_cooldown
 	dash_count += 1
 
@@ -1178,7 +1218,7 @@ func _start_random_dash() -> void:
 		dash_decision_time_remaining = 0.5
 		return
 	dash_direction = torso_forward()
-	dash_time_remaining = dash_duration
+	dash_time_remaining = effective_dash_duration()
 	dash_cooldown_remaining = dash_cooldown
 	dash_decision_time_remaining = rng.randf_range(1.2, 3.2)
 	dash_count += 1
@@ -1347,7 +1387,7 @@ func _can_complete_preparation(weapon_index: int) -> bool:
 
 	var possible_target_displacement := (
 		observed_target_velocity.length() * duration
-		+ dash_speed * dash_duration
+		+ effective_dash_distance()
 	)
 	var target_distance := maxf(future_aim_vector.length(), 1.0)
 	var maneuver_margin := asin(clampf(possible_target_displacement / target_distance, 0.0, 0.95))
