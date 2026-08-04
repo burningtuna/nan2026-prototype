@@ -1,0 +1,48 @@
+{
+  "scenes": {
+    "res://scenes/story_stage_select.tscn": {
+      "title": "STAGE SELECT",
+      "objective": "Select any prototype scenario for direct deployment.",
+      "progress": "Stage 04 survivor results carry into the Stage 05 briefing.",
+      "show_controls": false
+    },
+    "res://scenes/story_map_test.tscn": {
+      "title": "STORY MAP TEST",
+      "objective": "Advance through the test field and activate its marked zones.",
+      "progress": "Hostiles remaining: {enemies_remaining}"
+    },
+    "res://scenes/stage_01.tscn": {
+      "title": "STAGE 01 // TARGET PRACTICE",
+      "objective": "Destroy all four stationary training targets.",
+      "progress": "Targets remaining: {enemies_remaining}"
+    },
+    "res://scenes/stage_02.tscn": {
+      "title": "STAGE 02 // TEAM ENGAGEMENT",
+      "objective": "Fight with your allied unit and eliminate the opposing team.",
+      "progress": "Enemies remaining: {enemies_remaining} // Allied units active: {allies_remaining}"
+    },
+    "res://scenes/stage_03.tscn": {
+      "title": "STAGE 03 // BOSS ENGAGEMENT",
+      "objective": "Coordinate with your allied unit and destroy the boss.",
+      "progress": "Boss units remaining: {enemies_remaining} // Allied units active: {allies_remaining}"
+    },
+    "res://scenes/stage_04.tscn": {
+      "title": "STAGE 04 // FIELD ADVANCE",
+      "phases": {
+        "advance": {
+          "objective": "Advance to the destination. Enter rescue zones and eliminate their guards.",
+          "progress": "Allies rescued: {rescued}/{rescue_total} // Hostiles active: {enemies_remaining}"
+        },
+        "boss": {
+          "objective": "The destination is secured. Destroy the command boss.",
+          "progress": "Allies rescued: {rescued}/{rescue_total} // Boss units remaining: {enemies_remaining}"
+        }
+      }
+    },
+    "res://scenes/stage_05.tscn": {
+      "title": "STAGE 05 // BEAM SURVIVAL",
+      "objective": "Destroy 20 drones while evading the predicted vertical instant-kill beam.",
+      "progress": "Drones destroyed: {drones_defeated}/{drone_target} // Active drones: {drones_active} // Prior survivors: {survivors}"
+    }
+  }
+}

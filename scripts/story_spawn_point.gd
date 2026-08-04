@@ -15,6 +15,13 @@ enum SpawnMode {
 @export_enum("Aggressive", "Balanced", "Defensive") var movement_type := 0
 @export var random_seed := 1200
 @export var team_color := Color("ff776d")
+@export_group("Combat Tuning")
+@export var stationary := false
+@export var weapons_disabled := false
+@export_enum("Drone", "Mech", "Boss") var unit_class := 1
+@export_range(0.0, 5.0, 0.05) var movement_speed_scale := 1.0
+@export_range(0.0, 5.0, 0.05) var fire_rate_scale := 1.0
+@export_range(0.05, 5.0, 0.05) var incoming_damage_scale := 1.0
 @export_group("Fixed Loadout")
 @export var head_id := "raven_sensor"
 @export var body_id := "kestrel_core"

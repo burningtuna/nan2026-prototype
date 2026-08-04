@@ -1,0 +1,12 @@
+{
+  "title": "CONTROL GUIDE",
+  "entries": [
+    {"key": "WASD", "description": "MOVE UNIT"},
+    {"key": "MOUSE", "description": "AIM / FIRE SELECTED WEAPONS"},
+    {"key": "SPACE", "description": "DASH"},
+    {"key": "SHIFT", "description": "TOGGLE PLAYER / TARGET CAMERA"},
+    {"key": "TAB", "description": "CYCLE SENSOR TARGET"},
+    {"key": "1 / 2 / 3", "description": "SELECT WEAPON MOUNTS"},
+    {"key": "4", "description": "SELECT ALL WEAPONS"}
+  ]
+}

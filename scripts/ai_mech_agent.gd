@@ -86,6 +86,7 @@ const BOOST_FRAMES := [
 @export var team_id := 0
 @export var unit_class := UnitClass.MECH
 @export var combat_visuals_enabled := true
+@export var combat_actions_enabled := true
 @export var incoming_damage_multiplier := 1.0
 
 var opponent: AiMechAgent
@@ -855,6 +856,17 @@ func _physics_process(delta: float) -> void:
 		dash_time_remaining = 0.0
 		preparing_weapon_index = -1
 		preparation_time_remaining = 0.0
+		_update_resources(delta)
+		_update_boost_effect()
+		queue_redraw()
+		return
+	if not combat_actions_enabled:
+		velocity = Vector2.ZERO
+		dash_time_remaining = 0.0
+		preparing_weapon_index = -1
+		preparation_time_remaining = 0.0
+		for weapon in weapons:
+			weapon.tick(delta)
 		_update_resources(delta)
 		_update_boost_effect()
 		queue_redraw()

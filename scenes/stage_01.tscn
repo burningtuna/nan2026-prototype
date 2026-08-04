@@ -1,0 +1,85 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scripts/stage_01.gd" id="2_screen"]
+[ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
+[ext_resource type="Script" path="res://scripts/story_walkable_area.gd" id="4_walkable"]
+[ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="5_spawn"]
+
+[node name="Stage01" instance=ExtResource("1_base")]
+script = ExtResource("2_screen")
+automatic_return_to_hangar = false
+tutorial_enabled = false
+
+[node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
+arena = Rect2(-1500, -1000, 3000, 2000)
+centered_camera_zoom = 0.32
+two_vs_two = false
+enable_player_control = true
+randomize_loadouts = false
+automatic_agent_spawn = false
+
+[node name="Title" parent="CombatContainer/CombatViewport/SampleAssembly/UI" index="0"]
+text = "STAGE 01 // TARGET PRACTICE"
+
+[node name="Hint" parent="CombatContainer/CombatViewport/SampleAssembly/UI" index="1"]
+text = "DESTROY ALL FOUR DISABLED TARGETS"
+
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="1"]
+script = ExtResource("3_stage")
+stage_id = "stage_01"
+battle_path = NodePath("../SampleAssembly")
+editor_guides_visible_in_game = false
+
+[node name="WalkableArea" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage"]
+polygon = PackedVector2Array(-1450, -950, 1450, -950, 1450, 950, -1450, 950)
+color = Color(0.08, 0.13, 0.15, 0.8)
+script = ExtResource("4_walkable")
+
+[node name="Spawns" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="PlayerSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-1050, 0)
+script = ExtResource("5_spawn")
+unit_id = "PLAYER"
+team_id = 0
+player_controlled = true
+team_color = Color(0.443137, 0.85098, 0.909804, 1)
+
+[node name="Dummy01" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(250, -520)
+rotation = 3.14159
+script = ExtResource("5_spawn")
+unit_id = "DUMMY-01"
+stationary = true
+weapons_disabled = true
+random_seed = 9119
+
+[node name="Dummy02" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(720, -180)
+rotation = 3.14159
+script = ExtResource("5_spawn")
+unit_id = "DUMMY-02"
+stationary = true
+weapons_disabled = true
+random_seed = 17038
+
+[node name="Dummy03" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(720, 300)
+rotation = 3.14159
+script = ExtResource("5_spawn")
+unit_id = "DUMMY-03"
+stationary = true
+weapons_disabled = true
+random_seed = 24957
+
+[node name="Dummy04" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(180, 560)
+rotation = 3.14159
+script = ExtResource("5_spawn")
+unit_id = "DUMMY-04"
+stationary = true
+weapons_disabled = true
+random_seed = 32876
+
+[editable path="CombatContainer/CombatViewport/SampleAssembly"]

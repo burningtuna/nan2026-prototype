@@ -1,0 +1,47 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scripts/stage_05.gd" id="2_screen"]
+[ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
+[ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="4_spawn"]
+[ext_resource type="Script" path="res://scripts/vertical_beam_hazard.gd" id="5_beam"]
+
+[node name="Stage05" instance=ExtResource("1_base")]
+script = ExtResource("2_screen")
+automatic_return_to_hangar = false
+tutorial_enabled = false
+finish_from_team_result = false
+
+[node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
+arena = Rect2(-1200, -900, 2400, 1800)
+camera_mode = 1
+centered_camera_zoom = 0.35
+two_vs_two = false
+enable_player_control = true
+randomize_loadouts = false
+solo_player = true
+automatic_battle_completion = false
+automatic_agent_spawn = false
+
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="1"]
+script = ExtResource("3_stage")
+stage_id = "stage_05"
+battle_path = NodePath("../SampleAssembly")
+editor_guides_visible_in_game = false
+
+[node name="PlayerSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage"]
+script = ExtResource("4_spawn")
+unit_id = "PLAYER"
+team_id = 0
+player_controlled = true
+team_color = Color(0.443137, 0.85098, 0.909804, 1)
+
+[node name="VerticalBeamHazard" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+z_index = 12
+script = ExtResource("5_beam")
+warning_duration = 2.0
+firing_duration = 0.35
+cooldown_duration = 3.0
+beam_width = 200.0
+
+[editable path="CombatContainer/CombatViewport/SampleAssembly"]

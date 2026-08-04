@@ -1,11 +1,21 @@
 extends CanvasLayer
 
 const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
+const CONTROL_GUIDE_PATH := "res://data/pause/control_guide.json"
+const HANGAR_STATS_PATH := "res://data/pause/hangar_stats.json"
+const SCENARIO_OBJECTIVES_PATH := "res://data/pause/scenario_objectives.json"
+const HANGAR_SCENE_PATH := "res://scenes/hangar_screen.tscn"
 const ACTIVE_SCENES := [
 	"res://scenes/hangar_screen.tscn",
 	"res://scenes/combat_hud_test.tscn",
 	"res://scenes/endless_combat.tscn",
 	"res://scenes/story_map_test.tscn",
+	"res://scenes/story_stage_select.tscn",
+	"res://scenes/stage_01.tscn",
+	"res://scenes/stage_02.tscn",
+	"res://scenes/stage_03.tscn",
+	"res://scenes/stage_04.tscn",
+	"res://scenes/stage_05.tscn",
 ]
 const PANEL := Color("0b171c")
 const LINE := Color("31535b")
@@ -18,13 +28,25 @@ var overlay: Control
 var main_menu_button: Button
 var return_button: Button
 var status_label: Label
+var subtitle_label: Label
+var content_stack: VBoxContainer
 var was_paused := false
+var control_guide := {}
+var hangar_stats := {}
+var scenario_objectives := {}
+var current_content_kind := ""
+var rendered_texts: Array[String] = []
 
 
 func _ready() -> void:
 	layer = 90
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	control_guide = _load_document(CONTROL_GUIDE_PATH)
+	hangar_stats = _load_document(HANGAR_STATS_PATH)
+	scenario_objectives = _load_document(SCENARIO_OBJECTIVES_PATH)
 	_build_interface()
+	if OS.get_cmdline_user_args().has("--pause-menu-smoke"):
+		call_deferred("_run_pause_menu_smoke")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -54,8 +76,8 @@ func _build_interface() -> void:
 
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.position = Vector2(-155.0, -112.0)
-	panel.size = Vector2(310.0, 224.0)
+	panel.position = Vector2(-210.0, -122.0)
+	panel.size = Vector2(420.0, 244.0)
 	panel.add_theme_stylebox_override("panel", _panel_style())
 	overlay.add_child(panel)
 
@@ -73,18 +95,18 @@ func _build_interface() -> void:
 	var title := _label("SYSTEM // PAUSED", 13, TEXT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(title)
-	var subtitle := _label("CONTROL GUIDE", 7, CYAN)
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stack.add_child(subtitle)
+	subtitle_label = _label("SYSTEM INFORMATION", 7, CYAN)
+	subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stack.add_child(subtitle_label)
 
 	var rule := HSeparator.new()
 	rule.add_theme_color_override("separator", LINE)
 	stack.add_child(rule)
 
-	_add_control_row(stack, "SHIFT", "TOGGLE PLAYER / TARGET CAMERA")
-	_add_control_row(stack, "TAB", "CYCLE SENSOR TARGET")
-	_add_control_row(stack, "WASD", "MOVE UNIT")
-	_add_control_row(stack, "1 / 2 / 3 / 4", "LEFT / RIGHT / BACKPACK / ALL")
+	content_stack = VBoxContainer.new()
+	content_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_stack.add_theme_constant_override("separation", 2)
+	stack.add_child(content_stack)
 
 	status_label = _label("ESC CLOSES THIS MENU", 6, MUTED)
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -108,11 +130,27 @@ func _add_control_row(parent: VBoxContainer, key_text: String, description: Stri
 	row.add_theme_constant_override("separation", 8)
 	parent.add_child(row)
 	var key := _label(key_text, 7, CYAN)
-	key.custom_minimum_size.x = 78.0
+	key.custom_minimum_size.x = 92.0
 	row.add_child(key)
 	var detail := _label(description, 7, TEXT)
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(detail)
+
+
+func _add_section_title(value: String) -> void:
+	rendered_texts.append(value)
+	var label := _label(value, 7, CYAN)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	content_stack.add_child(label)
+
+
+func _add_wrapped_text(value: String, color := TEXT) -> void:
+	rendered_texts.append(value)
+	var label := _label(value, 7, color)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_stack.add_child(label)
 
 
 func _label(value: String, font_size: int, color: Color) -> Label:
@@ -163,6 +201,7 @@ func _open_menu() -> void:
 	was_paused = get_tree().paused
 	status_label.text = "ESC CLOSES THIS MENU"
 	main_menu_button.disabled = false
+	_populate_content()
 	overlay.visible = true
 	get_tree().paused = true
 	return_button.grab_focus()
@@ -182,3 +221,109 @@ func _return_to_main_menu() -> void:
 		return
 	_open_menu()
 	status_label.text = "TRANSFER FAILED // %s" % error_string(error)
+
+
+func _populate_content() -> void:
+	rendered_texts.clear()
+	for child in content_stack.get_children():
+		content_stack.remove_child(child)
+		child.queue_free()
+	var current_scene := get_tree().current_scene
+	var scene_path := current_scene.scene_file_path if current_scene != null else ""
+	if scene_path == HANGAR_SCENE_PATH:
+		current_content_kind = "hangar_stats"
+		subtitle_label.text = str(hangar_stats.get("title", "ASSEMBLY STAT GUIDE"))
+		_add_entries(hangar_stats.get("entries", []))
+		return
+	var scenes: Dictionary = scenario_objectives.get("scenes", {})
+	var scenario: Dictionary = scenes.get(scene_path, {})
+	if not scenario.is_empty():
+		current_content_kind = "scenario"
+		subtitle_label.text = "CURRENT OBJECTIVE"
+		_add_scenario_content(scenario, current_scene)
+		if bool(scenario.get("show_controls", true)):
+			_add_separator()
+			_add_section_title(str(control_guide.get("title", "CONTROL GUIDE")))
+			_add_entries(control_guide.get("entries", []))
+		return
+	current_content_kind = "controls"
+	subtitle_label.text = str(control_guide.get("title", "CONTROL GUIDE"))
+	_add_entries(control_guide.get("entries", []))
+
+
+func _add_scenario_content(scenario: Dictionary, current_scene: Node) -> void:
+	var context := {}
+	if current_scene != null and current_scene.has_method("pause_menu_context"):
+		context = current_scene.pause_menu_context()
+	var content := scenario
+	var phases: Dictionary = scenario.get("phases", {})
+	var phase := str(context.get("phase", ""))
+	if phases.has(phase):
+		content = scenario.duplicate(true)
+		content.merge(phases[phase], true)
+	_add_section_title(str(content.get("title", scenario.get("title", "MISSION"))))
+	_add_wrapped_text(_format_text(str(content.get("objective", "NO OBJECTIVE DATA")), context))
+	var progress := _format_text(str(content.get("progress", "")), context)
+	if not progress.is_empty():
+		_add_wrapped_text(progress, MUTED)
+
+
+func _add_entries(entries) -> void:
+	if not entries is Array:
+		return
+	for entry in entries:
+		if entry is Dictionary:
+			rendered_texts.append("%s // %s" % [entry.get("key", ""), entry.get("description", "")])
+			_add_control_row(
+				content_stack,
+				str(entry.get("key", "")),
+				str(entry.get("description", ""))
+			)
+
+
+func _add_separator() -> void:
+	var separator := HSeparator.new()
+	separator.add_theme_color_override("separator", LINE)
+	content_stack.add_child(separator)
+
+
+func _format_text(value: String, context: Dictionary) -> String:
+	return value.format(context)
+
+
+func _load_document(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		push_error("Pause menu data is missing: %s" % path)
+		return {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		push_error("Unable to open pause menu data: %s" % path)
+		return {}
+	var parser := JSON.new()
+	if parser.parse(file.get_as_text()) != OK or not parser.data is Dictionary:
+		push_error("Invalid pause menu JSON: %s" % path)
+		return {}
+	return parser.data
+
+
+func _run_pause_menu_smoke() -> void:
+	await get_tree().process_frame
+	assert(_is_available_in_current_scene())
+	_open_menu()
+	assert(overlay.visible and get_tree().paused)
+	assert(not current_content_kind.is_empty())
+	assert(content_stack.get_child_count() > 0)
+	var scene_path := get_tree().current_scene.scene_file_path
+	if scene_path == HANGAR_SCENE_PATH:
+		assert(current_content_kind == "hangar_stats")
+		assert(rendered_texts.any(func(value: String) -> bool: return value.begins_with("ARMOR //")))
+	else:
+		var scenes: Dictionary = scenario_objectives.get("scenes", {})
+		if scenes.has(scene_path):
+			assert(current_content_kind == "scenario")
+			for value in rendered_texts:
+				assert(not value.contains("{"))
+	_close_menu()
+	assert(not overlay.visible and not get_tree().paused)
+	print("PAUSE_MENU_CHECK passed // %s" % get_tree().current_scene.scene_file_path)
+	get_tree().quit(0)

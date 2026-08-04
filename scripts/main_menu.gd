@@ -1,7 +1,7 @@
 extends Control
 
 const HANGAR_SCENE_PATH := "res://scenes/hangar_screen.tscn"
-const STORY_TEST_SCENE_PATH := "res://scenes/story_map_test.tscn"
+const STORY_TEST_SCENE_PATH := "res://scenes/story_stage_select.tscn"
 const TITLE_ART := preload("res://Sprites/Title/Subject-12-Hangar-Gemini-0001.png")
 const BG := Color("071014")
 const PANEL := Color("0d1b20")

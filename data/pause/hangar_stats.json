@@ -1,0 +1,11 @@
+{
+  "title": "ASSEMBLY STAT GUIDE",
+  "entries": [
+    {"key": "ARMOR", "description": "Total durability supplied by all equipped parts."},
+    {"key": "FIREPOWER", "description": "Combined offensive rating of installed weapons."},
+    {"key": "MOBILITY", "description": "Movement performance supplied mainly by legs and frame parts."},
+    {"key": "COOLING", "description": "Heat dissipation capacity. Higher values recover from heat faster."},
+    {"key": "POWER", "description": "Generation minus consumption. Negative output makes the build invalid."},
+    {"key": "WEIGHT", "description": "Current mass versus leg capacity. Exceeding capacity makes the build invalid."}
+  ]
+}

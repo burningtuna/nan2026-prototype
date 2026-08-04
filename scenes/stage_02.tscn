@@ -1,0 +1,75 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scripts/stage_02.gd" id="2_screen"]
+[ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
+[ext_resource type="Script" path="res://scripts/story_walkable_area.gd" id="4_walkable"]
+[ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="5_spawn"]
+
+[node name="Stage02" instance=ExtResource("1_base")]
+script = ExtResource("2_screen")
+automatic_return_to_hangar = false
+tutorial_enabled = false
+
+[node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
+arena = Rect2(-1500, -1000, 3000, 2000)
+centered_camera_zoom = 0.3
+two_vs_two = true
+enable_player_control = true
+randomize_loadouts = false
+automatic_agent_spawn = false
+
+[node name="Title" parent="CombatContainer/CombatViewport/SampleAssembly/UI" index="0"]
+text = "STAGE 02 // TEAM ENGAGEMENT"
+
+[node name="Hint" parent="CombatContainer/CombatViewport/SampleAssembly/UI" index="1"]
+text = "ELIMINATE THE HOSTILE FIRETEAM"
+
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="1"]
+script = ExtResource("3_stage")
+stage_id = "stage_02"
+battle_path = NodePath("../SampleAssembly")
+editor_guides_visible_in_game = false
+
+[node name="WalkableArea" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage"]
+polygon = PackedVector2Array(-1450, -950, 1450, -950, 1450, 950, -1450, 950)
+color = Color(0.07, 0.12, 0.17, 0.8)
+script = ExtResource("4_walkable")
+
+[node name="Spawns" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="PlayerSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-950, -280)
+script = ExtResource("5_spawn")
+unit_id = "PLAYER"
+team_id = 0
+player_controlled = true
+team_color = Color(0.443137, 0.85098, 0.909804, 1)
+
+[node name="AllySpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-950, 280)
+script = ExtResource("5_spawn")
+unit_id = "ALLY-01"
+team_id = 0
+movement_type = 1
+random_seed = 9119
+team_color = Color(0.560784, 0.682353, 1, 1)
+
+[node name="Enemy01" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(950, -280)
+rotation = 3.14159
+script = ExtResource("5_spawn")
+unit_id = "ENEMY-01"
+movement_type = 1
+random_seed = 17038
+
+[node name="Enemy02" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(950, 280)
+rotation = 3.14159
+script = ExtResource("5_spawn")
+unit_id = "ENEMY-02"
+movement_type = 1
+random_seed = 24957
+team_color = Color(1, 0.690196, 0.372549, 1)
+
+[editable path="CombatContainer/CombatViewport/SampleAssembly"]

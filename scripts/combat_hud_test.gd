@@ -50,6 +50,22 @@ func _process(_delta: float) -> void:
 	)
 
 
+func pause_menu_context() -> Dictionary:
+	var context := {
+		"enemies_remaining": 0,
+		"allies_remaining": 0,
+	}
+	if not is_instance_valid(combat_player):
+		return context
+	for enemy: AiMechAgent in battle.enemies_for(combat_player):
+		if is_instance_valid(enemy) and not enemy.is_defeated():
+			context["enemies_remaining"] += 1
+	for ally: AiMechAgent in battle.allies_for(combat_player):
+		if is_instance_valid(ally) and not ally.is_defeated():
+			context["allies_remaining"] += 1
+	return context
+
+
 func _update_layout() -> void:
 	var target_sidebar_width := (
 		clampf(size.x * SIDEBAR_RATIO, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)

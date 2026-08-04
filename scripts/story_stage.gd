@@ -121,6 +121,16 @@ func _spawn_point(point: StorySpawnPoint) -> AiMechAgent:
 	)
 	if agent == null:
 		return null
+	agent.unit_class = point.unit_class
+	agent.movement_speed_multiplier *= point.movement_speed_scale
+	agent.fire_rate_multiplier *= point.fire_rate_scale
+	agent.incoming_damage_multiplier *= point.incoming_damage_scale
+	if point.stationary:
+		agent.cruise_speed = 0.0
+		agent.dash_speed = 0.0
+		agent.acceleration = 0.0
+	if point.weapons_disabled:
+		agent.combat_actions_enabled = false
 	agent.set_movement_constraint(self)
 	spawned_points[point_id] = agent
 	last_valid_positions[agent.get_instance_id()] = agent.global_position

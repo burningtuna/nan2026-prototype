@@ -1,0 +1,362 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scripts/stage_04.gd" id="2_screen"]
+[ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
+[ext_resource type="Script" path="res://scripts/story_walkable_area.gd" id="4_walkable"]
+[ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="5_spawn"]
+[ext_resource type="Script" path="res://scripts/story_trigger_area.gd" id="6_trigger"]
+[ext_resource type="Script" path="res://scripts/story_blocker.gd" id="7_blocker"]
+
+[node name="Stage04" instance=ExtResource("1_base")]
+script = ExtResource("2_screen")
+automatic_return_to_hangar = false
+tutorial_enabled = false
+finish_from_team_result = false
+
+[node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
+arena = Rect2(-2800, -900, 6000, 1800)
+centered_camera_zoom = 0.32
+two_vs_two = false
+enable_player_control = true
+randomize_loadouts = false
+automatic_battle_completion = false
+automatic_agent_spawn = false
+
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="1"]
+script = ExtResource("3_stage")
+stage_id = "stage_04"
+battle_path = NodePath("../SampleAssembly")
+editor_guides_visible_in_game = true
+
+[node name="WalkableField" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage"]
+polygon = PackedVector2Array(-2700, -720, 3100, -720, 3100, 720, -2700, 720)
+color = Color(0.0588, 0.1098, 0.1255, 1)
+script = ExtResource("4_walkable")
+
+[node name="FieldBands" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="Band1" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage/FieldBands"]
+polygon = PackedVector2Array(-2600, -620, -1700, -620, -1700, 620, -2600, 620)
+color = Color(0.0863, 0.1765, 0.1882, 0.72)
+
+[node name="Band2" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage/FieldBands"]
+polygon = PackedVector2Array(-700, -620, 200, -620, 200, 620, -700, 620)
+color = Color(0.102, 0.1451, 0.1961, 0.68)
+
+[node name="Band3" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage/FieldBands"]
+polygon = PackedVector2Array(1200, -620, 2100, -620, 2100, 620, 1200, 620)
+color = Color(0.149, 0.1216, 0.1725, 0.68)
+
+[node name="DestinationPad" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage/FieldBands"]
+polygon = PackedVector2Array(2380, -400, 2980, -400, 2980, 400, 2380, 400)
+color = Color(0.2314, 0.1098, 0.098, 0.75)
+
+[node name="Geometry" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="NorthBarrier1" type="Area2D" parent="CombatContainer/CombatViewport/StoryStage/Geometry"]
+position = Vector2(-980, -540)
+script = ExtResource("7_blocker")
+blocker_size = Vector2(360, 100)
+display_color = Color(0.1451, 0.2549, 0.2784, 1)
+
+[node name="SouthBarrier2" type="Area2D" parent="CombatContainer/CombatViewport/StoryStage/Geometry"]
+position = Vector2(30, 540)
+script = ExtResource("7_blocker")
+blocker_size = Vector2(360, 100)
+display_color = Color(0.1451, 0.2549, 0.2784, 1)
+
+[node name="NorthBarrier3" type="Area2D" parent="CombatContainer/CombatViewport/StoryStage/Geometry"]
+position = Vector2(1030, -540)
+script = ExtResource("7_blocker")
+blocker_size = Vector2(360, 100)
+display_color = Color(0.1804, 0.2118, 0.2863, 1)
+
+[node name="SouthBarrier4" type="Area2D" parent="CombatContainer/CombatViewport/StoryStage/Geometry"]
+position = Vector2(2030, 540)
+script = ExtResource("7_blocker")
+blocker_size = Vector2(360, 100)
+display_color = Color(0.2392, 0.1804, 0.2235, 1)
+
+[node name="Spawns" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="Player" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-2500, 0)
+script = ExtResource("5_spawn")
+unit_id = "PLAYER"
+team_id = 0
+player_controlled = true
+team_color = Color(0.4431, 0.851, 0.9098, 1)
+
+[node name="RoadWave1A" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-2020, -280)
+script = ExtResource("5_spawn")
+unit_id = "PATROL-01A"
+spawn_mode = 1
+spawn_group = &"ROAD_WAVE_1"
+unit_class = 0
+random_seed = 4101
+
+[node name="RoadWave1B" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-1880, 300)
+script = ExtResource("5_spawn")
+unit_id = "PATROL-01B"
+spawn_mode = 1
+spawn_group = &"ROAD_WAVE_1"
+random_seed = 4102
+
+[node name="RoadWave2A" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-120, -330)
+script = ExtResource("5_spawn")
+unit_id = "PATROL-02A"
+spawn_mode = 1
+spawn_group = &"ROAD_WAVE_2"
+unit_class = 0
+random_seed = 4201
+
+[node name="RoadWave2B" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(80, 310)
+script = ExtResource("5_spawn")
+unit_id = "PATROL-02B"
+spawn_mode = 1
+spawn_group = &"ROAD_WAVE_2"
+random_seed = 4202
+
+[node name="RoadWave3A" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(920, -300)
+script = ExtResource("5_spawn")
+unit_id = "PATROL-03A"
+spawn_mode = 1
+spawn_group = &"ROAD_WAVE_3"
+random_seed = 4301
+
+[node name="RoadWave3B" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(1080, 300)
+script = ExtResource("5_spawn")
+unit_id = "PATROL-03B"
+spawn_mode = 1
+spawn_group = &"ROAD_WAVE_3"
+unit_class = 0
+random_seed = 4302
+
+[node name="RoadWave4A" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(1940, -320)
+script = ExtResource("5_spawn")
+unit_id = "PATROL-04A"
+spawn_mode = 1
+spawn_group = &"ROAD_WAVE_4"
+random_seed = 4401
+
+[node name="RoadWave4B" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(2100, 320)
+script = ExtResource("5_spawn")
+unit_id = "PATROL-04B"
+spawn_mode = 1
+spawn_group = &"ROAD_WAVE_4"
+random_seed = 4402
+
+[node name="Rescue1Ally" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-1450, -120)
+script = ExtResource("5_spawn")
+unit_id = "SURVIVOR-01"
+team_id = 0
+spawn_mode = 1
+spawn_group = &"RESCUE_1_ALLY"
+stationary = true
+weapons_disabled = true
+incoming_damage_scale = 0.25
+
+[node name="Rescue1EnemyA" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-1280, -360)
+script = ExtResource("5_spawn")
+unit_id = "JAILER-01A"
+spawn_mode = 1
+spawn_group = &"RESCUE_1_ENEMIES"
+random_seed = 4511
+
+[node name="Rescue1EnemyB" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-1260, 180)
+script = ExtResource("5_spawn")
+unit_id = "JAILER-01B"
+spawn_mode = 1
+spawn_group = &"RESCUE_1_ENEMIES"
+unit_class = 0
+random_seed = 4512
+
+[node name="Rescue2Ally" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-450, 170)
+script = ExtResource("5_spawn")
+unit_id = "SURVIVOR-02"
+team_id = 0
+spawn_mode = 1
+spawn_group = &"RESCUE_2_ALLY"
+stationary = true
+weapons_disabled = true
+incoming_damage_scale = 0.25
+
+[node name="Rescue2EnemyA" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-620, -160)
+script = ExtResource("5_spawn")
+unit_id = "JAILER-02A"
+spawn_mode = 1
+spawn_group = &"RESCUE_2_ENEMIES"
+random_seed = 4521
+
+[node name="Rescue2EnemyB" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-260, -220)
+script = ExtResource("5_spawn")
+unit_id = "JAILER-02B"
+spawn_mode = 1
+spawn_group = &"RESCUE_2_ENEMIES"
+unit_class = 0
+random_seed = 4522
+
+[node name="Rescue3Ally" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(560, -160)
+script = ExtResource("5_spawn")
+unit_id = "SURVIVOR-03"
+team_id = 0
+spawn_mode = 1
+spawn_group = &"RESCUE_3_ALLY"
+stationary = true
+weapons_disabled = true
+incoming_damage_scale = 0.25
+
+[node name="Rescue3EnemyA" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(400, 190)
+script = ExtResource("5_spawn")
+unit_id = "JAILER-03A"
+spawn_mode = 1
+spawn_group = &"RESCUE_3_ENEMIES"
+random_seed = 4531
+
+[node name="Rescue3EnemyB" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(760, 220)
+script = ExtResource("5_spawn")
+unit_id = "JAILER-03B"
+spawn_mode = 1
+spawn_group = &"RESCUE_3_ENEMIES"
+unit_class = 0
+random_seed = 4532
+
+[node name="Rescue4Ally" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(1550, 150)
+script = ExtResource("5_spawn")
+unit_id = "SURVIVOR-04"
+team_id = 0
+spawn_mode = 1
+spawn_group = &"RESCUE_4_ALLY"
+stationary = true
+weapons_disabled = true
+incoming_damage_scale = 0.25
+
+[node name="Rescue4EnemyA" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(1370, -190)
+script = ExtResource("5_spawn")
+unit_id = "JAILER-04A"
+spawn_mode = 1
+spawn_group = &"RESCUE_4_ENEMIES"
+random_seed = 4541
+
+[node name="Rescue4EnemyB" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(1740, -210)
+script = ExtResource("5_spawn")
+unit_id = "JAILER-04B"
+spawn_mode = 1
+spawn_group = &"RESCUE_4_ENEMIES"
+unit_class = 0
+random_seed = 4542
+
+[node name="Boss" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(2780, 0)
+script = ExtResource("5_spawn")
+unit_id = "COMMAND-BOSS"
+spawn_mode = 1
+spawn_group = &"BOSS_WAVE"
+unit_class = 2
+movement_speed_scale = 0.85
+fire_rate_scale = 1.35
+incoming_damage_scale = 0.65
+random_seed = 4999
+team_color = Color(1, 0.2863, 0.2196, 1)
+
+[node name="Triggers" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="RoadWave1" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(-2200, 0)
+script = ExtResource("6_trigger")
+trigger_id = &"ROAD_1"
+area_size = Vector2(180, 1300)
+spawn_group = &"ROAD_WAVE_1"
+message = "HOSTILE PATROL DETECTED"
+
+[node name="Rescue1" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(-1450, 0)
+script = ExtResource("6_trigger")
+trigger_id = &"RESCUE_1"
+area_size = Vector2(620, 760)
+spawn_group = &"RESCUE_1_ENEMIES"
+message = "RESCUE SITE 1 // CLEAR ALL HOSTILES"
+display_color = Color(0.3608, 0.8824, 0.8157, 1)
+
+[node name="RoadWave2" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(-850, 0)
+script = ExtResource("6_trigger")
+trigger_id = &"ROAD_2"
+area_size = Vector2(160, 1300)
+spawn_group = &"ROAD_WAVE_2"
+message = "SECOND PATROL INBOUND"
+
+[node name="Rescue2" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(-450, 0)
+script = ExtResource("6_trigger")
+trigger_id = &"RESCUE_2"
+area_size = Vector2(620, 760)
+spawn_group = &"RESCUE_2_ENEMIES"
+message = "RESCUE SITE 2 // CLEAR ALL HOSTILES"
+display_color = Color(0.3608, 0.8824, 0.8157, 1)
+
+[node name="RoadWave3" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(150, 0)
+script = ExtResource("6_trigger")
+trigger_id = &"ROAD_3"
+area_size = Vector2(160, 1300)
+spawn_group = &"ROAD_WAVE_3"
+message = "HOSTILE SCREEN AHEAD"
+
+[node name="Rescue3" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(560, 0)
+script = ExtResource("6_trigger")
+trigger_id = &"RESCUE_3"
+area_size = Vector2(620, 760)
+spawn_group = &"RESCUE_3_ENEMIES"
+message = "RESCUE SITE 3 // CLEAR ALL HOSTILES"
+display_color = Color(0.3608, 0.8824, 0.8157, 1)
+
+[node name="RoadWave4" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(1160, 0)
+script = ExtResource("6_trigger")
+trigger_id = &"ROAD_4"
+area_size = Vector2(160, 1300)
+spawn_group = &"ROAD_WAVE_4"
+message = "FINAL PATROL DEPLOYING"
+
+[node name="Rescue4" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(1550, 0)
+script = ExtResource("6_trigger")
+trigger_id = &"RESCUE_4"
+area_size = Vector2(620, 760)
+spawn_group = &"RESCUE_4_ENEMIES"
+message = "RESCUE SITE 4 // CLEAR ALL HOSTILES"
+display_color = Color(0.3608, 0.8824, 0.8157, 1)
+
+[node name="Destination" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(2500, 0)
+script = ExtResource("6_trigger")
+trigger_id = &"DESTINATION"
+area_size = Vector2(300, 1100)
+spawn_group = &"BOSS_WAVE"
+message = "COMMAND UNIT SIGNATURE CONFIRMED"
+display_color = Color(1, 0.302, 0.2196, 1)
+
+[editable path="CombatContainer/CombatViewport/SampleAssembly"]
