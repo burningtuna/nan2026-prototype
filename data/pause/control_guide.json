@@ -1,12 +1,12 @@
 {
-  "title": "CONTROL GUIDE",
+  "title": "조작 안내",
   "entries": [
-    {"key": "WASD", "description": "MOVE UNIT"},
-    {"key": "MOUSE", "description": "AIM / FIRE SELECTED WEAPONS"},
-    {"key": "SPACE", "description": "DASH"},
-    {"key": "SHIFT", "description": "TOGGLE PLAYER / TARGET CAMERA"},
-    {"key": "TAB", "description": "CYCLE SENSOR TARGET"},
-    {"key": "1 / 2 / 3", "description": "SELECT WEAPON MOUNTS"},
-    {"key": "4", "description": "SELECT ALL WEAPONS"}
+    {"key": "WASD", "description": "기체 이동"},
+    {"key": "MOUSE", "description": "조준 / 선택한 무기 발사"},
+    {"key": "SPACE", "description": "대시"},
+    {"key": "SHIFT", "description": "플레이어 / 표적 카메라 전환"},
+    {"key": "TAB", "description": "센서 표적 순환 선택"},
+    {"key": "1 / 2 / 3", "description": "무기 장착부 선택"},
+    {"key": "4", "description": "모든 무기 선택"}
   ]
 }

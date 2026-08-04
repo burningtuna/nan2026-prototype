@@ -1,48 +1,48 @@
 {
   "scenes": {
-    "res://scenes/story_stage_select.tscn": {
-      "title": "STAGE SELECT",
-      "objective": "Select any prototype scenario for direct deployment.",
-      "progress": "Stage 04 survivor results carry into the Stage 05 briefing.",
-      "show_controls": false
-    },
-    "res://scenes/story_map_test.tscn": {
-      "title": "STORY MAP TEST",
-      "objective": "Advance through the test field and activate its marked zones.",
-      "progress": "Hostiles remaining: {enemies_remaining}"
-    },
-    "res://scenes/stage_01.tscn": {
-      "title": "STAGE 01 // TARGET PRACTICE",
-      "objective": "Destroy all four stationary training targets.",
-      "progress": "Targets remaining: {enemies_remaining}"
-    },
-    "res://scenes/stage_02.tscn": {
-      "title": "STAGE 02 // TEAM ENGAGEMENT",
-      "objective": "Fight with your allied unit and eliminate the opposing team.",
-      "progress": "Enemies remaining: {enemies_remaining} // Allied units active: {allies_remaining}"
-    },
-    "res://scenes/stage_03.tscn": {
-      "title": "STAGE 03 // BOSS ENGAGEMENT",
-      "objective": "Coordinate with your allied unit and destroy the boss.",
-      "progress": "Boss units remaining: {enemies_remaining} // Allied units active: {allies_remaining}"
-    },
-    "res://scenes/stage_04.tscn": {
-      "title": "STAGE 04 // FIELD ADVANCE",
-      "phases": {
-        "advance": {
-          "objective": "Advance to the destination. Enter rescue zones and eliminate their guards.",
-          "progress": "Allies rescued: {rescued}/{rescue_total} // Hostiles active: {enemies_remaining}"
-        },
-        "boss": {
-          "objective": "The destination is secured. Destroy the command boss.",
-          "progress": "Allies rescued: {rescued}/{rescue_total} // Boss units remaining: {enemies_remaining}"
-        }
-      }
-    },
-    "res://scenes/stage_05.tscn": {
-      "title": "STAGE 05 // BEAM SURVIVAL",
-      "objective": "Destroy 20 drones while evading the predicted vertical instant-kill beam.",
-      "progress": "Drones destroyed: {drones_defeated}/{drone_target} // Active drones: {drones_active} // Prior survivors: {survivors}"
-    }
+	"res://scenes/story_stage_select.tscn": {
+	  "title": "스테이지 선택",
+	  "objective": "플레이할 프로토타입 시나리오를 선택하세요.",
+	  "progress": "스테이지 4의 아군 생존 결과는 스테이지 5 브리핑에 반영됩니다.",
+	  "show_controls": false
+	},
+	"res://scenes/story_map_test.tscn": {
+	  "title": "스토리 맵 테스트",
+	  "objective": "테스트 전장을 전진하며 표시된 구역을 활성화하세요.",
+	  "progress": "남은 적: {enemies_remaining}"
+	},
+	"res://scenes/stage_01.tscn": {
+	  "title": "스테이지 01 // 표적 훈련",
+	  "objective": "정지된 훈련 표적 4기를 모두 파괴하세요.",
+	  "progress": "남은 표적: {enemies_remaining}"
+	},
+	"res://scenes/stage_02.tscn": {
+	  "title": "스테이지 02 // 팀 교전",
+	  "objective": "아군기와 함께 적 팀을 전멸시키세요.",
+	  "progress": "남은 적: {enemies_remaining} // 전투 가능한 아군: {allies_remaining}"
+	},
+	"res://scenes/stage_03.tscn": {
+	  "title": "스테이지 03 // 보스 교전",
+	  "objective": "아군기와 협력하여 보스를 파괴하세요.",
+	  "progress": "남은 보스: {enemies_remaining} // 전투 가능한 아군: {allies_remaining}"
+	},
+	"res://scenes/stage_04.tscn": {
+	  "title": "스테이지 04 // 전장 돌파",
+	  "phases": {
+		"advance": {
+		  "objective": "목적지로 전진하세요. 구조 구역에 진입해 주변의 적을 제거하면 아군을 구할 수 있습니다.",
+		  "progress": "구조한 아군: {rescued}/{rescue_total} // 현재 활성화된 적: {enemies_remaining}"
+		},
+		"boss": {
+		  "objective": "목적지에 도달했습니다. 지휘 보스를 파괴하세요.",
+		  "progress": "구조한 아군: {rescued}/{rescue_total} // 남은 보스: {enemies_remaining}"
+		}
+	  }
+	},
+	"res://scenes/stage_05.tscn": {
+	  "title": "스테이지 05 // 빔 생존전",
+	  "objective": "예고되는 수직 즉사 빔을 피하며 드론 20기를 파괴하세요.",
+	  "progress": "파괴한 드론: {drones_defeated}/{drone_target} // 활성 드론: {drones_active} // 이전 스테이지 생존 아군: {survivors}"
+	}
   }
 }

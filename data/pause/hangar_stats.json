@@ -1,11 +1,11 @@
 {
-  "title": "ASSEMBLY STAT GUIDE",
+  "title": "조립 스탯 안내",
   "entries": [
-    {"key": "ARMOR", "description": "Total durability supplied by all equipped parts."},
-    {"key": "FIREPOWER", "description": "Combined offensive rating of installed weapons."},
-    {"key": "MOBILITY", "description": "Movement performance supplied mainly by legs and frame parts."},
-    {"key": "COOLING", "description": "Heat dissipation capacity. Higher values recover from heat faster."},
-    {"key": "POWER", "description": "Generation minus consumption. Negative output makes the build invalid."},
-    {"key": "WEIGHT", "description": "Current mass versus leg capacity. Exceeding capacity makes the build invalid."}
+	{"key": "ARMOR", "description": "장착된 모든 파츠의 내구도의 합입니다."},
+	{"key": "FIREPOWER", "description": "설치된 무장에 대한 공격력 평가치 입니다."},
+	{"key": "MOBILITY", "description": "프레임과 다리파츠로 제공되는 기동력으로, 기동속도, 회피속도에 영향을 줍니다."},
+	{"key": "COOLING", "description": "열을 처리할수 있는 능력입니다. 높은 수치일수록 열을 빨리 식힙니다."},
+	{"key": "POWER", "description": "소모된 전력을 발전해서 복구하는 양입니다. 음수가 되면 출격할 수 없습니다."},
+	{"key": "WEIGHT", "description": "다리 파츠가 버티고 있는 무게입니다. 초과하게 되면 출격할 수 없고. 회피거리에 영향을 줍니다."}
   ]
 }
