@@ -1,6 +1,7 @@
 extends Control
 
 const HANGAR_SCENE_PATH := "res://scenes/hangar_screen.tscn"
+const STORY_TEST_SCENE_PATH := "res://scenes/story_map_test.tscn"
 const TITLE_ART := preload("res://Sprites/Title/Subject-12-Hangar-Gemini-0001.png")
 const BG := Color("071014")
 const PANEL := Color("0d1b20")
@@ -150,7 +151,10 @@ func _style_menu_button(button: Button) -> void:
 
 
 func _on_story_pressed() -> void:
-	status_label.text = "STORY MODE // IN DEVELOPMENT"
+	GameSession.selected_game_mode = GameSession.GameMode.STORY
+	var error := SceneTransition.transition_to(STORY_TEST_SCENE_PATH)
+	if error != OK:
+		status_label.text = "TRANSFER FAILED // %s" % error_string(error)
 
 
 func _on_skirmish_pressed() -> void:
@@ -193,8 +197,6 @@ func _close_delete() -> void:
 
 
 func _run_main_menu_smoke() -> void:
-	_on_story_pressed()
-	assert(status_label.text == "STORY MODE // IN DEVELOPMENT")
 	_on_delete_pressed()
 	assert(delete_panel.visible)
 	_close_delete()

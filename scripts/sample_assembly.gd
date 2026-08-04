@@ -31,6 +31,7 @@ const CAMERA_ZOOM_STEP := 1.15
 @export var randomize_loadouts := false
 @export var solo_player := false
 @export var automatic_battle_completion := true
+@export var automatic_agent_spawn := true
 
 @onready var camera: Camera2D = $DynamicCamera
 @onready var projectile_layer: Node2D = $Projectiles
@@ -75,7 +76,8 @@ func _ready() -> void:
 		loadout_rng.randomize()
 		if not _load_random_weapon_pools():
 			randomize_loadouts = false
-	_spawn_agents()
+	if automatic_agent_spawn:
+		_spawn_agents()
 	camera.enabled = true
 	_update_camera(0.0, true)
 	queue_redraw()
@@ -437,6 +439,37 @@ func spawn_endless_mech(spawn_position: Vector2, sequence: int) -> AiMechAgent:
 		90000 + sequence * 7919,
 		Color("ff776d"),
 		loadout,
+		configured_loadout
+	)
+	agent.position = spawn_position
+	_register_combatant(agent)
+	return agent
+
+
+func spawn_story_mech(
+	unit_name: String,
+	spawn_position: Vector2,
+	team_id: int,
+	player_controlled: bool,
+	configured_loadout: MechLoadout,
+	random_seed: int,
+	team_color: Color,
+	movement_type: AiMechAgent.MovementType = AiMechAgent.MovementType.AGGRESSIVE
+) -> AiMechAgent:
+	if configured_loadout == null or not configured_loadout.is_valid():
+		push_error("Story unit '%s' has an invalid loadout" % unit_name)
+		return null
+	var agent := AI_MECH.new() as AiMechAgent
+	agent.team_id = team_id
+	agent.player_controlled = player_controlled
+	agent.movement_type = movement_type
+	agent.setup(
+		unit_name,
+		projectile_layer,
+		arena,
+		random_seed,
+		team_color,
+		_weapons_from_mech_loadout(configured_loadout),
 		configured_loadout
 	)
 	agent.position = spawn_position

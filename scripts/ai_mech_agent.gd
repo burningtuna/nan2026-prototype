@@ -165,6 +165,7 @@ var decision_movement_direction := Vector2.ZERO
 var sensor_missile_evasion_active := false
 var sensor_missile_evasion_direction := Vector2.ZERO
 var ai_fire_decision_pending := false
+var movement_constraint: Node
 
 
 func setup(
@@ -206,6 +207,10 @@ func set_opponents(targets: Array) -> void:
 			opponents.append(mech)
 	opponent = opponents[0] if not opponents.is_empty() else null
 	_choose_direction()
+
+
+func set_movement_constraint(constraint: Node) -> void:
+	movement_constraint = constraint
 
 
 func is_ally_of(other: Node) -> bool:
@@ -925,8 +930,7 @@ func _update_random_movement(delta: float) -> void:
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
 	else:
 		dash_decision_time_remaining -= delta
-	position += movement_step
-	position = position.clamp(arena.position, arena.end)
+	_apply_movement_step(movement_step)
 
 
 func _update_player_movement(delta: float) -> void:
@@ -948,8 +952,7 @@ func _update_player_movement(delta: float) -> void:
 		var dash_step := minf(delta, dash_time_remaining)
 		movement_step += dash_direction * dash_speed * dash_step
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
-	position += movement_step
-	position = position.clamp(arena.position, arena.end)
+	_apply_movement_step(movement_step)
 	if input_direction.length_squared() > 0.0:
 		lower_body.rotation = rotate_toward(
 			lower_body.rotation,
@@ -962,6 +965,18 @@ func _update_player_movement(delta: float) -> void:
 			upper_body.rotation,
 			aim_vector.angle() + PI * 0.5,
 			deg_to_rad(upper_turn_speed_degrees) * delta
+		)
+
+
+func _apply_movement_step(movement_step: Vector2) -> void:
+	var previous_position := global_position
+	var proposed_position := (position + movement_step).clamp(arena.position, arena.end)
+	global_position = proposed_position
+	if is_instance_valid(movement_constraint) and movement_constraint.has_method("resolve_agent_motion"):
+		global_position = movement_constraint.resolve_agent_motion(
+			previous_position,
+			global_position,
+			mech_collision_radius
 		)
 
 

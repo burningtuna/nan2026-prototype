@@ -1,0 +1,164 @@
+@tool
+class_name StoryStage
+extends Node2D
+
+signal message_requested(message: String)
+signal trigger_activated(trigger_id: StringName)
+
+const PARTS_DATA_PATH := "res://data/mech_parts.json"
+
+@export var stage_id := "story_map_test"
+@export var battle_path: NodePath
+@export var editor_guides_visible_in_game := true
+
+var battle
+var part_catalog: MechPartCatalog
+var spawn_points: Array[StorySpawnPoint] = []
+var triggers: Array[StoryTriggerArea] = []
+var walkable_areas: Array[StoryWalkableArea] = []
+var blockers: Array[StoryBlocker] = []
+var spawned_points := {}
+var last_valid_positions := {}
+var initialized := false
+
+
+func _ready() -> void:
+	if Engine.is_editor_hint():
+		return
+	process_physics_priority = 200
+	call_deferred("_initialize_stage")
+
+
+func _initialize_stage() -> void:
+	battle = get_node_or_null(battle_path)
+	if battle == null or not battle.has_method("spawn_story_mech"):
+		push_error("StoryStage requires a battle node with spawn_story_mech()")
+		return
+	part_catalog = MechPartCatalog.new()
+	if not part_catalog.load_file(PARTS_DATA_PATH, battle.weapon_catalog):
+		push_error("Unable to load story stage part catalog")
+		return
+	_collect_authoring_nodes(self)
+	for area in walkable_areas:
+		area.visible = editor_guides_visible_in_game
+	for trigger in triggers:
+		trigger.visible = editor_guides_visible_in_game
+		trigger.activated.connect(_on_trigger_activated)
+	for point in spawn_points:
+		point.visible = editor_guides_visible_in_game
+		if point.spawn_mode == StorySpawnPoint.SpawnMode.PREPLACED:
+			_spawn_point(point)
+	initialized = true
+	message_requested.emit("STORY MAP READY // %s" % stage_id.to_upper())
+
+
+func _physics_process(_delta: float) -> void:
+	if not initialized:
+		return
+	for agent in battle.agents:
+		if not is_instance_valid(agent) or agent.is_defeated():
+			continue
+		var instance_id: int = agent.get_instance_id()
+		var current: Vector2 = agent.global_position
+		var previous: Vector2 = last_valid_positions.get(instance_id, current)
+		var resolved := resolve_agent_motion(previous, current, agent.mech_collision_radius)
+		agent.global_position = resolved
+		last_valid_positions[instance_id] = resolved
+	var player: AiMechAgent = battle.player_agent() as AiMechAgent
+	if player == null or player.is_defeated():
+		return
+	for trigger in triggers:
+		trigger.try_activate(player.global_position)
+
+
+func resolve_agent_motion(previous: Vector2, proposed: Vector2, radius: float) -> Vector2:
+	if not _is_walkable(proposed):
+		return previous
+	for blocker in blockers:
+		if is_instance_valid(blocker) and blocker.blocks_agent_at(proposed, radius):
+			return previous
+	return proposed
+
+
+func _is_walkable(point: Vector2) -> bool:
+	if walkable_areas.is_empty():
+		return true
+	for area in walkable_areas:
+		if area.contains_global_point(point):
+			return true
+	return false
+
+
+func _collect_authoring_nodes(root: Node) -> void:
+	for child in root.get_children():
+		if child is StorySpawnPoint:
+			spawn_points.append(child)
+		elif child is StoryTriggerArea:
+			triggers.append(child)
+		elif child is StoryWalkableArea:
+			walkable_areas.append(child)
+		elif child is StoryBlocker:
+			blockers.append(child)
+		_collect_authoring_nodes(child)
+
+
+func _spawn_point(point: StorySpawnPoint) -> AiMechAgent:
+	var point_id: int = point.get_instance_id()
+	if spawned_points.has(point_id):
+		return spawned_points[point_id]
+	var loadout := _loadout_for(point)
+	if loadout == null:
+		return null
+	var agent: AiMechAgent = battle.spawn_story_mech(
+		point.unit_id,
+		battle.to_local(point.global_position),
+		point.team_id,
+		point.player_controlled,
+		loadout,
+		point.random_seed,
+		point.team_color,
+		point.movement_type
+	)
+	if agent == null:
+		return null
+	agent.set_movement_constraint(self)
+	spawned_points[point_id] = agent
+	last_valid_positions[agent.get_instance_id()] = agent.global_position
+	return agent
+
+
+func _loadout_for(point: StorySpawnPoint) -> MechLoadout:
+	var loadout := MechLoadout.new()
+	var slot_by_key := {
+		"head": MechLoadout.MechSlot.HEAD,
+		"body": MechLoadout.MechSlot.BODY,
+		"left_arm": MechLoadout.MechSlot.LEFT_ARM,
+		"right_arm": MechLoadout.MechSlot.RIGHT_ARM,
+		"backpack": MechLoadout.MechSlot.BACKPACK,
+		"legs": MechLoadout.MechSlot.LEGS,
+	}
+	for key in slot_by_key:
+		var part_id: String = str(point.part_ids()[key])
+		if part_id.is_empty():
+			continue
+		var part := part_catalog.parts_by_id.get(part_id) as MechPartSpec
+		if part == null:
+			push_error("Unknown story part '%s' on %s" % [part_id, point.unit_id])
+			return null
+		loadout.set_part(slot_by_key[key], part)
+	if not loadout.is_valid():
+		push_error("Invalid story loadout on %s: %s" % [point.unit_id, ", ".join(loadout.validation_errors())])
+		return null
+	return loadout
+
+
+func _on_trigger_activated(trigger: StoryTriggerArea) -> void:
+	if not trigger.spawn_group.is_empty():
+		for point in spawn_points:
+			if point.spawn_mode == StorySpawnPoint.SpawnMode.TRIGGERED and point.spawn_group == trigger.spawn_group:
+				_spawn_point(point)
+	if not trigger.campaign_flag.is_empty():
+		GameSession.set_story_flag(trigger.campaign_flag, trigger.campaign_value)
+	if not trigger.message.is_empty():
+		message_requested.emit(trigger.message)
+	trigger_activated.emit(trigger.trigger_id)

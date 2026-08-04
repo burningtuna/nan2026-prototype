@@ -30,6 +30,7 @@ var endless_missile_reload_multiplier := 0.2
 var endless_other_reload_multiplier := 0.0
 var endless_player_damage_multiplier := 0.2
 var endless_intro_shown := false
+var story_progress: Dictionary = {}
 
 
 func confirm_player_loadout(loadout: MechLoadout) -> void:
@@ -111,7 +112,30 @@ func submit_endless_score(score: int) -> int:
 
 
 func delete_story_progress() -> bool:
+	story_progress.clear()
 	return _delete_progress_file(story_progress_path)
+
+
+func load_story_progress() -> Dictionary:
+	story_progress = _load_progress_document(story_progress_path)
+	story_progress.erase("schema_version")
+	return story_progress.duplicate(true)
+
+
+func story_flag(key: StringName, default_value = false):
+	if story_progress.is_empty() and FileAccess.file_exists(story_progress_path):
+		load_story_progress()
+	var flags: Dictionary = story_progress.get("flags", {})
+	return flags.get(String(key), default_value)
+
+
+func set_story_flag(key: StringName, value) -> bool:
+	if story_progress.is_empty() and FileAccess.file_exists(story_progress_path):
+		load_story_progress()
+	var flags: Dictionary = story_progress.get("flags", {}).duplicate(true)
+	flags[String(key)] = value
+	story_progress["flags"] = flags
+	return _save_progress_document(story_progress_path, story_progress)
 
 
 func delete_endless_score() -> bool:

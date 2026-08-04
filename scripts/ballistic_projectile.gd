@@ -178,6 +178,9 @@ func _check_swept_hit(start_position: Vector2, end_position: Vector2) -> bool:
 		if result.is_empty():
 			return false
 		var hitbox = result.get("collider")
+		if hitbox != null and hitbox.has_method("receive_projectile_hit"):
+			_apply_environment_hit(hitbox, result.get("position", end_position))
+			return true
 		if hitbox == null or hitbox.get_script() != PART_HITBOX:
 			return false
 		if hitbox.mech == source_mech or _is_allied_target(hitbox.mech):
@@ -195,6 +198,9 @@ func _exit_tree() -> void:
 
 
 func _on_area_entered(area: Area2D) -> void:
+	if not hit_resolved and area.has_method("receive_projectile_hit"):
+		_apply_environment_hit(area, global_position)
+		return
 	if (
 		hit_resolved
 		or area.get_script() != PART_HITBOX
@@ -243,6 +249,21 @@ func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> void:
 	hitbox.mech.register_hit(hitbox.part_name, direction, spec.damage)
 	if is_instance_valid(source_mech) and source_mech.has_method("register_landed_hit"):
 		source_mech.register_landed_hit(weapon_family)
+	queue_free()
+
+
+func _apply_environment_hit(target: Node, hit_position: Vector2) -> void:
+	if hit_resolved:
+		return
+	hit_resolved = true
+	if visuals_enabled:
+		var effect = IMPACT_EFFECT.new()
+		effect.setup(weapon_family, direction, shot_seed)
+		effect.scale = Vector2.ONE * 3.0
+		effect.z_index = 3
+		get_parent().add_child(effect)
+		effect.global_position = hit_position
+	target.receive_projectile_hit(spec.damage, direction, hit_position)
 	queue_free()
 
 

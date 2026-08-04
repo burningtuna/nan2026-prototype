@@ -1,0 +1,110 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scripts/story_combat_test.gd" id="2_screen"]
+[ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
+[ext_resource type="Script" path="res://scripts/story_walkable_area.gd" id="4_walkable"]
+[ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="5_spawn"]
+[ext_resource type="Script" path="res://scripts/story_trigger_area.gd" id="6_trigger"]
+[ext_resource type="Script" path="res://scripts/story_blocker.gd" id="7_blocker"]
+[ext_resource type="Script" path="res://scripts/story_destructible_cover.gd" id="8_cover"]
+
+[node name="StoryMapTest" instance=ExtResource("1_base")]
+script = ExtResource("2_screen")
+automatic_return_to_hangar = false
+tutorial_enabled = false
+
+[node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
+arena = Rect2(-1200, -900, 2400, 1800)
+centered_camera_zoom = 0.35
+two_vs_two = false
+enable_player_control = true
+randomize_loadouts = false
+automatic_agent_spawn = false
+
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="1"]
+script = ExtResource("3_stage")
+battle_path = NodePath("../SampleAssembly")
+
+[node name="WalkableArea" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage"]
+z_index = 0
+polygon = PackedVector2Array(-1100, -800, 1100, -800, 1100, 800, -150, 800, -150, 300, -1100, 300)
+color = Color(0.0705882, 0.145098, 0.156863, 0.88)
+script = ExtResource("4_walkable")
+
+[node name="Geometry" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="NorthRuin" type="Area2D" parent="CombatContainer/CombatViewport/StoryStage/Geometry"]
+position = Vector2(200, -500)
+z_index = 1
+script = ExtResource("7_blocker")
+blocker_size = Vector2(420, 170)
+
+[node name="DestructibleCover" type="Area2D" parent="CombatContainer/CombatViewport/StoryStage/Geometry"]
+position = Vector2(-390, 0)
+z_index = 1
+script = ExtResource("8_cover")
+blocker_size = Vector2(100, 300)
+maximum_durability = 120.0
+
+[node name="BlockedProbe" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Geometry"]
+position = Vector2(-390, 0)
+
+[node name="Spawns" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="PlayerSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-900, 0)
+script = ExtResource("5_spawn")
+unit_id = "PLAYER"
+team_id = 0
+player_controlled = true
+team_color = Color(0.443137, 0.85098, 0.909804, 1)
+
+[node name="GuardSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(-40, 0)
+rotation = 3.14159
+script = ExtResource("5_spawn")
+unit_id = "GUARD-01"
+random_seed = 9119
+
+[node name="ReinforcementA" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(650, -260)
+rotation = 3.14159
+script = ExtResource("5_spawn")
+unit_id = "REINFORCEMENT-01"
+spawn_mode = 1
+spawn_group = &"COURTYARD_WAVE"
+random_seed = 17038
+
+[node name="ReinforcementB" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+position = Vector2(820, 80)
+rotation = 3.14159
+script = ExtResource("5_spawn")
+unit_id = "REINFORCEMENT-02"
+spawn_mode = 1
+spawn_group = &"COURTYARD_WAVE"
+movement_type = 1
+random_seed = 24957
+
+[node name="Triggers" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="ReinforcementTrigger" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(150, 0)
+z_index = 2
+script = ExtResource("6_trigger")
+trigger_id = &"COURTYARD_ENTERED"
+area_size = Vector2(220, 520)
+spawn_group = &"COURTYARD_WAVE"
+message = "HOSTILE REINFORCEMENTS DETECTED"
+
+[node name="RescueTrigger" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
+position = Vector2(700, 560)
+z_index = 2
+script = ExtResource("6_trigger")
+trigger_id = &"RESCUE_EN_SUPPORT"
+area_size = Vector2(360, 260)
+campaign_flag = &"rescued_en_support"
+message = "PROTECTION OBJECTIVE RECORDED"
+display_color = Color(0.360784, 0.882353, 0.815686, 1)
+
+[editable path="CombatContainer/CombatViewport/SampleAssembly"]
