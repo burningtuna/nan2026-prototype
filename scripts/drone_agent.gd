@@ -8,6 +8,8 @@ enum DroneKind {
 }
 
 const DRONE_HITBOX := preload("res://scripts/part_hitbox.gd")
+const ARM_DAMAGE_MULTIPLIER := 1.0 / 3.0
+const ARM_FIRE_RATE_MULTIPLIER := 1.0 / 5.0
 
 var drone_kind := DroneKind.HEAD
 var drone_part: MechPartSpec
@@ -16,6 +18,7 @@ var contact_damage := 25.0
 var drone_speed := 110.0
 var defeated_once := false
 var weapon_runtime: WeaponRuntime
+var arm_projectile_spec: ProjectileSpec
 
 
 func setup_drone(
@@ -141,7 +144,15 @@ func _build_arm_weapon(sprite: Sprite2D) -> void:
 		add_child(muzzle)
 		muzzles.append(muzzle)
 	weapon_runtime = WeaponRuntime.new()
-	weapon_runtime.setup(drone_part.weapon, sprite, muzzles, drone_part_name, 1.0)
+	weapon_runtime.setup(
+		drone_part.weapon,
+		sprite,
+		muzzles,
+		drone_part_name,
+		ARM_FIRE_RATE_MULTIPLIER
+	)
+	arm_projectile_spec = drone_part.weapon.projectile.duplicate() as ProjectileSpec
+	arm_projectile_spec.damage *= ARM_DAMAGE_MULTIPLIER
 	weapons.append(weapon_runtime)
 
 
@@ -149,7 +160,7 @@ func _fire_arm_weapon(target_direction: Vector2) -> void:
 	var muzzle := weapon_runtime.fire()
 	if muzzle == null:
 		return
-	var projectile_spec := drone_part.weapon.projectile
+	var projectile_spec := arm_projectile_spec
 	for projectile_index in drone_part.weapon.projectiles_per_shot:
 		var arc_ratio := (
 			0.0

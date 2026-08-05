@@ -15,6 +15,7 @@ const SKIRMISH_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
 const ENDLESS_SCENE_PATH := "res://scenes/endless_combat.tscn"
 const STORY_STAGE_SELECT_PATH := "res://scenes/story_stage_select.tscn"
 const ENDLESS_INTRO_PATH := "res://data/scenarios/endless_intro.json"
+const STAGE_03_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_03_hangar.json"
 const STAGE_04_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_04_hangar.json"
 const SCENARIO_DIALOGUE_SCENE := preload("res://scenes/scenario_dialogue.tscn")
 
@@ -84,6 +85,11 @@ func _ready() -> void:
 		GameSession.endless_intro_shown = true
 	elif (
 		GameSession.selected_game_mode == GameSession.GameMode.STORY
+		and GameSession.story_deployment_scene_path == "res://scenes/stage_03.tscn"
+	):
+		_scenario_dialogue.play_file(STAGE_03_HANGAR_DIALOGUE_PATH)
+	elif (
+		GameSession.selected_game_mode == GameSession.GameMode.STORY
 		and GameSession.story_deployment_scene_path == "res://scenes/stage_04.tscn"
 	):
 		_scenario_dialogue.play_file(STAGE_04_HANGAR_DIALOGUE_PATH)
@@ -126,6 +132,9 @@ func _run_story_hangar_smoke() -> void:
 	assert(GameSession.selected_game_mode == GameSession.GameMode.STORY)
 	assert(_deployment_scene_path() == "res://scenes/stage_03.tscn")
 	assert(_confirm_button.text == "DEPLOY STORY")
+	assert(_scenario_dialogue.current_speaker() == "오퍼레이터")
+	assert(_scenario_dialogue.current_text() == "아레나의 보스에 도전할 기회를 얻었네 축하해.")
+	assert(_scenario_dialogue.dialogue.size() == 4)
 	print("STORY_HANGAR_CHECK passed")
 	get_tree().quit(0)
 

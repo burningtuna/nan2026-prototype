@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "id": "stage_03_intro",
+  "dialogue": [
+    {
+      "speaker": "아레나 보스",
+      "text": "내 기체가 얼마짜리인지 알면, 그런 폐품으로 앞을 막을 생각은 못 했을 텐데."
+    }
+  ]
+}

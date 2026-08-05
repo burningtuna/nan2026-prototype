@@ -1,10 +1,12 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
 [ext_resource type="Script" path="res://scripts/stage_03.gd" id="2_screen"]
 [ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
 [ext_resource type="Script" path="res://scripts/story_walkable_area.gd" id="4_walkable"]
 [ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="5_spawn"]
+[ext_resource type="Texture2D" path="res://Sprites/Scene/Stage3End.png" id="6_stage_end"]
+[ext_resource type="PackedScene" path="res://scenes/scenario_dialogue.tscn" id="7_dialogue"]
 
 [node name="Stage03" instance=ExtResource("1_base")]
 script = ExtResource("2_screen")
@@ -62,10 +64,48 @@ rotation = 3.14159
 script = ExtResource("5_spawn")
 unit_id = "BOSS-01"
 unit_class = 2
-movement_speed_scale = 1.35
-fire_rate_scale = 1.4
-incoming_damage_scale = 0.5
 random_seed = 17038
 team_color = Color(1, 0.3, 0.22, 1)
+head_id = "falcon_sensor"
+body_id = "swift_core"
+left_arm_id = "cyclone_flechette_arm"
+right_arm_id = ""
+backpack_id = "grid_generator"
+legs_id = "courier_legs"
+
+[node name="StageEndPresentation" type="Control" parent="." index="3"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Image" type="TextureRect" parent="StageEndPresentation"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("6_stage_end")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Fade" type="ColorRect" parent="StageEndPresentation"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0)
+
+[node name="Dialogue" parent="StageEndPresentation" instance=ExtResource("7_dialogue")]
 
 [editable path="CombatContainer/CombatViewport/SampleAssembly"]

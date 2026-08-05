@@ -180,6 +180,11 @@ func _run_stage_05_smoke() -> void:
 	spawn_remaining = 999.0
 	var forced_drone := spawn_drone(DroneAgent.DroneKind.ARM)
 	assert(forced_drone != null and forced_drone.drone_kind == DroneAgent.DroneKind.ARM)
+	assert(is_equal_approx(forced_drone.weapon_runtime.fire_rate_multiplier, 1.0 / 5.0))
+	assert(is_equal_approx(
+		forced_drone.arm_projectile_spec.damage,
+		forced_drone.drone_part.weapon.projectile.damage / 3.0
+	))
 	assert(drones_spawned == 1 and _living_drone_count() == 1)
 	for kind in [DroneAgent.DroneKind.HEAD, DroneAgent.DroneKind.LEGS, DroneAgent.DroneKind.ARM]:
 		assert(spawn_drone(kind) != null)
