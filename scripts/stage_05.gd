@@ -169,6 +169,9 @@ func _on_beam_firing_started(_target_x: float) -> void:
 func _run_stage_05_smoke() -> void:
 	assert(DRONE_TARGET == 20)
 	assert(MAX_LIVING_DRONES == 4)
+	assert(not battle.floor_tile_enabled)
+	var black_floor := $CombatContainer/CombatViewport/BlackFloor as Polygon2D
+	assert(black_floor.color == Color.BLACK and black_floor.z_index < 0)
 	assert(is_equal_approx(beam_hazard.beam_width, 200.0))
 	assert(is_equal_approx(beam_hazard.warning_duration, 2.0))
 	assert(survivor_count == int(GameSession.story_flag(&"stage_04_survivors", 0)))

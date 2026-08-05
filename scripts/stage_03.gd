@@ -3,8 +3,22 @@ extends StoryMission
 
 func _on_combat_bound() -> void:
 	super._on_combat_bound()
+	if OS.get_cmdline_user_args().has("--story-deploy-smoke"):
+		call_deferred("_run_story_deploy_smoke")
 	if OS.get_cmdline_user_args().has("--stage-03-smoke"):
 		call_deferred("_run_stage_smoke")
+
+
+func _run_story_deploy_smoke() -> void:
+	assert(GameSession.selected_game_mode == GameSession.GameMode.STORY)
+	assert(GameSession.story_deployment_scene_path == "res://scenes/stage_03.tscn")
+	assert(GameSession.player_mech_loadout != null)
+	for slot in MechLoadout.MechSlot.values():
+		var deployed_part := combat_player.mech_loadout.part_for_slot(slot)
+		var confirmed_part := GameSession.player_mech_loadout.part_for_slot(slot)
+		assert(deployed_part == confirmed_part)
+	print("STORY_DEPLOY_CHECK passed")
+	get_tree().quit(0)
 
 
 func _run_stage_smoke() -> void:

@@ -116,9 +116,14 @@ func _physics_process(delta: float) -> void:
 	var frame_distance := minf(spec.speed * delta, remaining_distance)
 	var start_position := global_position
 	var end_position := start_position + direction * frame_distance
-	if _check_swept_hit(start_position, end_position):
+	var mask_hit = _projectile_mask_hit(start_position, end_position)
+	var collision_end: Vector2 = mask_hit if mask_hit is Vector2 else end_position
+	if _check_swept_hit(start_position, collision_end):
 		return
-	if _check_proximity_fuse(start_position, end_position):
+	if _check_proximity_fuse(start_position, collision_end):
+		return
+	if mask_hit is Vector2:
+		_apply_projectile_mask_hit(mask_hit)
 		return
 	global_position = end_position
 	traveled_distance += frame_distance
@@ -192,6 +197,36 @@ func _check_swept_hit(start_position: Vector2, end_position: Vector2) -> bool:
 		_apply_hit(hitbox, result.get("position", end_position))
 		return true
 	return false
+
+
+func _projectile_mask_hit(start_position: Vector2, end_position: Vector2):
+	var tree := get_tree()
+	if tree == null:
+		return null
+	var nearest_hit = null
+	var nearest_distance_squared := INF
+	for blocker in tree.get_nodes_in_group(&"projectile_mask_blockers"):
+		if not is_instance_valid(blocker) or not blocker.has_method("projectile_block_position"):
+			continue
+		var hit = blocker.projectile_block_position(start_position, end_position)
+		if not hit is Vector2:
+			continue
+		var distance_squared := start_position.distance_squared_to(hit)
+		if distance_squared < nearest_distance_squared:
+			nearest_hit = hit
+			nearest_distance_squared = distance_squared
+	return nearest_hit
+
+
+func _apply_projectile_mask_hit(hit_position: Vector2) -> void:
+	if hit_resolved:
+		return
+	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and spec.splash_radius > 0.0:
+		_detonate(hit_position)
+		return
+	hit_resolved = true
+	_spawn_impact_effect(hit_position)
+	queue_free()
 
 
 func _check_proximity_fuse(start_position: Vector2, end_position: Vector2) -> bool:

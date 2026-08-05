@@ -22,8 +22,14 @@ randomize_loadouts = false
 solo_player = true
 automatic_battle_completion = false
 automatic_agent_spawn = false
+floor_tile_enabled = false
 
-[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="1"]
+[node name="BlackFloor" type="Polygon2D" parent="CombatContainer/CombatViewport" index="1"]
+z_index = -100
+polygon = PackedVector2Array(-1700, -1400, 1700, -1400, 1700, 1400, -1700, 1400)
+color = Color(0, 0, 0, 1)
+
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="2"]
 script = ExtResource("3_stage")
 stage_id = "stage_05"
 battle_path = NodePath("../SampleAssembly")
@@ -34,6 +40,7 @@ script = ExtResource("4_spawn")
 unit_id = "PLAYER"
 team_id = 0
 player_controlled = true
+use_session_loadout = true
 team_color = Color(0.443137, 0.85098, 0.909804, 1)
 
 [node name="VerticalBeamHazard" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]

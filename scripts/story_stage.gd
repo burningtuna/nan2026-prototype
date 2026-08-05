@@ -61,7 +61,7 @@ func _physics_process(_delta: float) -> void:
 		var instance_id: int = agent.get_instance_id()
 		var current: Vector2 = agent.global_position
 		var previous: Vector2 = last_valid_positions.get(instance_id, current)
-		var resolved := resolve_agent_motion(previous, current, agent.mech_collision_radius)
+		var resolved := _resolve_agent_footprint(previous, current, agent.environment_collision_radius())
 		agent.global_position = resolved
 		last_valid_positions[instance_id] = resolved
 	var player: AiMechAgent = battle.player_agent() as AiMechAgent
@@ -71,20 +71,58 @@ func _physics_process(_delta: float) -> void:
 		trigger.try_activate(player.global_position)
 
 
-func resolve_agent_motion(previous: Vector2, proposed: Vector2, radius: float) -> Vector2:
-	if not _is_walkable(proposed):
+func resolve_agent_motion(previous: Vector2, proposed: Vector2, radius: float, allow_wall_slide := false) -> Vector2:
+	var resolved := proposed
+	if not _is_walkable_motion(previous, proposed, radius):
+		resolved = _resolve_wall_slide(previous, proposed, radius) if allow_wall_slide else previous
+	for blocker in blockers:
+		if is_instance_valid(blocker) and blocker.blocks_agent_at(resolved, radius):
+			return previous
+	return resolved
+
+
+func _resolve_agent_footprint(previous: Vector2, current: Vector2, radius: float) -> Vector2:
+	if not _is_walkable(current, radius):
 		return previous
 	for blocker in blockers:
-		if is_instance_valid(blocker) and blocker.blocks_agent_at(proposed, radius):
+		if is_instance_valid(blocker) and blocker.blocks_agent_at(current, radius):
 			return previous
-	return proposed
+	return current
 
 
-func _is_walkable(point: Vector2) -> bool:
+func _resolve_wall_slide(previous: Vector2, proposed: Vector2, radius: float) -> Vector2:
+	var best_position := previous
+	var best_distance_squared := 0.0
+	for area in walkable_areas:
+		if not area.has_method("resolve_sliding_motion"):
+			continue
+		var candidate: Vector2 = area.resolve_sliding_motion(previous, proposed, radius)
+		var distance_squared := previous.distance_squared_to(candidate)
+		if distance_squared > best_distance_squared:
+			best_position = candidate
+			best_distance_squared = distance_squared
+	return best_position
+
+
+func _is_walkable_motion(previous: Vector2, proposed: Vector2, radius: float) -> bool:
+	var has_motion_constraint := false
+	for area in walkable_areas:
+		if not area.has_method("contains_agent_motion"):
+			continue
+		has_motion_constraint = true
+		if area.contains_agent_motion(previous, proposed, radius):
+			return true
+	return false if has_motion_constraint else _is_walkable(proposed, radius)
+
+
+func _is_walkable(point: Vector2, radius := 0.0) -> bool:
 	if walkable_areas.is_empty():
 		return true
 	for area in walkable_areas:
-		if area.contains_global_point(point):
+		if radius > 0.0 and area.has_method("contains_agent_at"):
+			if area.contains_agent_at(point, radius):
+				return true
+		elif area.contains_global_point(point):
 			return true
 	return false
 
@@ -138,6 +176,8 @@ func _spawn_point(point: StorySpawnPoint) -> AiMechAgent:
 
 
 func _loadout_for(point: StorySpawnPoint) -> MechLoadout:
+	if point.use_session_loadout and GameSession.player_mech_loadout != null:
+		return GameSession.player_mech_loadout.copy()
 	var loadout := MechLoadout.new()
 	var slot_by_key := {
 		"head": MechLoadout.MechSlot.HEAD,

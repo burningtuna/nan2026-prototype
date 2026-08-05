@@ -88,6 +88,8 @@ const BOOST_FRAMES := [
 @export var combat_visuals_enabled := true
 @export var combat_actions_enabled := true
 @export var incoming_damage_multiplier := 1.0
+@export var ai_wall_backoff_duration := 0.3
+@export var ai_wall_turn_duration := 0.65
 
 var opponent: AiMechAgent
 var opponents: Array[AiMechAgent] = []
@@ -174,6 +176,10 @@ var sensor_missile_evasion_active := false
 var sensor_missile_evasion_direction := Vector2.ZERO
 var ai_fire_decision_pending := false
 var movement_constraint: Node
+var ai_wall_backoff_remaining := 0.0
+var ai_wall_turn_remaining := 0.0
+var ai_wall_blocked_direction := Vector2.ZERO
+var ai_wall_turn_side := 1.0
 
 
 func setup(
@@ -603,6 +609,29 @@ func repair_surviving_parts(maximum_ratio: float) -> float:
 	return repaired_total
 
 
+func restore_all_parts() -> float:
+	var restored_total := 0.0
+	for part_name: StringName in part_max_durability:
+		var maximum := float(part_max_durability[part_name])
+		var current := float(part_durability.get(part_name, 0.0))
+		part_durability[part_name] = maximum
+		restored_total += maxf(maximum - current, 0.0)
+		var hitbox := part_hitboxes.get(part_name) as PartHitbox
+		if is_instance_valid(hitbox):
+			hitbox.monitorable = true
+			hitbox.collision_layer = 2
+			var sprite := hitbox.get_parent() as Sprite2D
+			if sprite != null:
+				sprite.visible = true
+	for weapon in weapons:
+		if float(part_durability.get(weapon.part_name, 0.0)) > 0.0:
+			weapon.disabled = false
+	if not is_part_destroyed(&"Head"):
+		sensor_time_remaining = 0.0
+	parts_repaired.emit()
+	return restored_total
+
+
 func _part_weapon_is_disabled(part_name: StringName) -> bool:
 	for weapon in weapons:
 		if weapon.part_name == part_name and weapon.disabled:
@@ -792,6 +821,37 @@ func selected_weapons() -> Array[WeaponRuntime]:
 	return selected
 
 
+func environment_collision_radius() -> float:
+	var maximum_radius := mech_collision_radius
+	for hitbox_value in part_hitboxes.values():
+		var hitbox := hitbox_value as PartHitbox
+		if not is_instance_valid(hitbox) or not hitbox.monitorable:
+			continue
+		var collision_shape := hitbox.get_node_or_null("CollisionShape2D") as CollisionShape2D
+		if collision_shape == null or collision_shape.disabled:
+			continue
+		var rectangle := collision_shape.shape as RectangleShape2D
+		if rectangle == null:
+			continue
+		var half_size := rectangle.size * 0.5
+		var conservative_radius := half_size.length()
+		var transform_node := collision_shape as Node2D
+		while transform_node != null and transform_node != self:
+			var maximum_scale := maxf(absf(transform_node.scale.x), absf(transform_node.scale.y))
+			conservative_radius = conservative_radius * maximum_scale + transform_node.position.length()
+			transform_node = transform_node.get_parent() as Node2D
+		maximum_radius = maxf(maximum_radius, conservative_radius)
+		for corner in [
+			Vector2(-half_size.x, -half_size.y),
+			Vector2(half_size.x, -half_size.y),
+			Vector2(half_size.x, half_size.y),
+			Vector2(-half_size.x, half_size.y),
+		]:
+			var local_corner := to_local(collision_shape.to_global(corner))
+			maximum_radius = maxf(maximum_radius, local_corner.length())
+	return ceilf(maximum_radius)
+
+
 func ai_decision_period() -> float:
 	match movement_type:
 		MovementType.AGGRESSIVE:
@@ -883,9 +943,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		if sensor_updated:
 			_update_sensor_missile_evasion()
-		ai_decision_time_remaining -= delta
-		if ai_decision_time_remaining <= 0.0:
-			_run_ai_decision()
+		if not is_ai_wall_recovering():
+			ai_decision_time_remaining -= delta
+			if ai_decision_time_remaining <= 0.0:
+				_run_ai_decision()
 		_update_random_movement(delta)
 	_aim_at_opponent(delta)
 	_update_weapons(delta)
@@ -950,6 +1011,7 @@ func _draw() -> void:
 
 
 func _update_random_movement(delta: float) -> void:
+	_update_ai_wall_recovery(delta)
 	var margin := 45.0
 	var safe_arena := arena.grow(-margin)
 	if not safe_arena.has_point(position):
@@ -975,14 +1037,60 @@ func _update_random_movement(delta: float) -> void:
 	var target_velocity := forward * movement_speed() * move_multiplier * alignment
 	velocity = velocity.move_toward(target_velocity, acceleration * delta)
 	var movement_step := velocity * delta
+	var dashed_this_step := false
+	var expected_dash_distance := 0.0
 	dash_cooldown_remaining = maxf(dash_cooldown_remaining - delta, 0.0)
 	if dash_time_remaining > 0.0:
 		var dash_step := minf(delta, dash_time_remaining)
-		movement_step += dash_direction * effective_dash_speed() * dash_step
+		expected_dash_distance = effective_dash_speed() * dash_step
+		movement_step += dash_direction * expected_dash_distance
+		dashed_this_step = dash_step > 0.0
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
 	else:
 		dash_decision_time_remaining -= delta
-	_apply_movement_step(movement_step)
+	var applied_movement := _apply_movement_step(movement_step, dashed_this_step)
+	if dashed_this_step and _dash_movement_was_blocked(applied_movement, expected_dash_distance):
+		_begin_ai_wall_recovery(dash_direction)
+
+
+func _dash_movement_was_blocked(applied_movement: Vector2, expected_dash_distance: float) -> bool:
+	return expected_dash_distance > 0.0 and applied_movement.length() < maxf(expected_dash_distance * 0.2, 4.0)
+
+
+func is_ai_wall_recovering() -> bool:
+	return ai_wall_backoff_remaining > 0.0 or ai_wall_turn_remaining > 0.0
+
+
+func _begin_ai_wall_recovery(blocked_direction: Vector2) -> void:
+	if player_controlled or blocked_direction.is_zero_approx():
+		return
+	ai_wall_blocked_direction = blocked_direction.normalized()
+	ai_wall_turn_side = maneuver_side
+	maneuver_side *= -1.0
+	ai_wall_backoff_remaining = maxf(ai_wall_backoff_duration, 0.0)
+	ai_wall_turn_remaining = maxf(ai_wall_turn_duration, 0.0)
+	dash_time_remaining = 0.0
+	dash_cooldown_remaining = maxf(dash_cooldown_remaining, ai_wall_backoff_duration + ai_wall_turn_duration)
+	dash_decision_time_remaining = maxf(dash_decision_time_remaining, ai_wall_backoff_duration + ai_wall_turn_duration)
+	velocity = Vector2.ZERO
+	preparing_weapon_index = -1
+	preparation_time_remaining = 0.0
+	ai_fire_decision_pending = false
+
+
+func _update_ai_wall_recovery(delta: float) -> void:
+	if ai_wall_backoff_remaining > 0.0:
+		movement_direction = -ai_wall_blocked_direction
+		decision_movement_direction = movement_direction
+		ai_wall_backoff_remaining = maxf(ai_wall_backoff_remaining - delta, 0.0)
+		return
+	if ai_wall_turn_remaining > 0.0:
+		movement_direction = ai_wall_blocked_direction.rotated(ai_wall_turn_side * PI * 0.5)
+		decision_movement_direction = movement_direction
+		ai_wall_turn_remaining = maxf(ai_wall_turn_remaining - delta, 0.0)
+		if ai_wall_turn_remaining <= 0.0:
+			direction_time_remaining = maxf(direction_time_remaining, 0.8)
+			ai_decision_time_remaining = maxf(ai_decision_time_remaining, 0.4)
 
 
 func _update_player_movement(delta: float) -> void:
@@ -1000,11 +1108,13 @@ func _update_player_movement(delta: float) -> void:
 	var target_velocity := input_direction * movement_speed()
 	velocity = velocity.move_toward(target_velocity, acceleration * delta)
 	var movement_step := velocity * delta
+	var dashed_this_step := false
 	if dash_time_remaining > 0.0:
 		var dash_step := minf(delta, dash_time_remaining)
 		movement_step += dash_direction * effective_dash_speed() * dash_step
+		dashed_this_step = dash_step > 0.0
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
-	_apply_movement_step(movement_step)
+	_apply_movement_step(movement_step, dashed_this_step)
 	if input_direction.length_squared() > 0.0:
 		lower_body.rotation = rotate_toward(
 			lower_body.rotation,
@@ -1020,7 +1130,7 @@ func _update_player_movement(delta: float) -> void:
 		)
 
 
-func _apply_movement_step(movement_step: Vector2) -> void:
+func _apply_movement_step(movement_step: Vector2, allow_wall_slide := false) -> Vector2:
 	var previous_position := global_position
 	var proposed_position := (position + movement_step).clamp(arena.position, arena.end)
 	global_position = proposed_position
@@ -1028,8 +1138,10 @@ func _apply_movement_step(movement_step: Vector2) -> void:
 		global_position = movement_constraint.resolve_agent_motion(
 			previous_position,
 			global_position,
-			mech_collision_radius
+			environment_collision_radius(),
+			allow_wall_slide
 		)
+	return global_position - previous_position
 
 
 func _try_start_player_dash(input_direction: Vector2) -> void:

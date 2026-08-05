@@ -44,6 +44,7 @@ script = ExtResource("5_spawn")
 unit_id = "PLAYER"
 team_id = 0
 player_controlled = true
+use_session_loadout = true
 team_color = Color(0.443137, 0.85098, 0.909804, 1)
 
 [node name="AllySpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]

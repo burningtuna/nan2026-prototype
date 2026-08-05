@@ -1,12 +1,13 @@
 extends Control
 
 const MAIN_MENU_PATH := "res://scenes/main_menu.tscn"
+const HANGAR_PATH := "res://scenes/hangar_screen.tscn"
 const STAGES := [
-	["STAGE 01", "STATIC TARGETS // 1 VS 4", "res://scenes/stage_01.tscn"],
-	["STAGE 02", "TEAM ENGAGEMENT // 2 VS 2", "res://scenes/stage_02.tscn"],
-	["STAGE 03", "BOSS ENGAGEMENT // 2 VS 1", "res://scenes/stage_03.tscn"],
-	["STAGE 04", "FIELD ADVANCE // RESCUE 4 ALLIES", "res://scenes/stage_04.tscn"],
-	["STAGE 05", "SURVIVAL // 20 DRONES + VERTICAL BEAM", "res://scenes/stage_05.tscn"],
+	["STAGE 01", "STATIC TARGETS // 1 VS 4", "res://scenes/stage_01.tscn", false],
+	["STAGE 02", "TEAM ENGAGEMENT // 2 VS 2", "res://scenes/stage_02.tscn", false],
+	["STAGE 03", "BOSS ENGAGEMENT // 2 VS 1", "res://scenes/stage_03.tscn", true],
+	["STAGE 04", "FIELD ADVANCE // RESCUE 4 ALLIES", "res://scenes/stage_04.tscn", true],
+	["STAGE 05", "SURVIVAL // 20 DRONES + VERTICAL BEAM", "res://scenes/stage_05.tscn", true],
 ]
 
 const BG := Color("071014")
@@ -20,10 +21,13 @@ var status_label: Label
 
 
 func _ready() -> void:
+	GameSession.story_deployment_scene_path = ""
 	_build_interface()
 	queue_redraw()
 	if OS.get_cmdline_user_args().has("--story-select-smoke"):
 		assert(get_tree().get_nodes_in_group("story_stage_button").size() == STAGES.size())
+		assert(not bool(STAGES[0][3]) and not bool(STAGES[1][3]))
+		assert(bool(STAGES[2][3]) and bool(STAGES[3][3]) and bool(STAGES[4][3]))
 		print("STORY_STAGE_SELECT_CHECK passed")
 		get_tree().quit(0)
 
@@ -93,7 +97,7 @@ func _build_interface() -> void:
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.add_to_group("story_stage_button")
 		_style_button(button)
-		button.pressed.connect(_transition.bind(stage[2]))
+		button.pressed.connect(_launch_stage.bind(stage))
 		stage_list.add_child(button)
 	status_label = Label.new()
 	status_label.add_theme_font_size_override("font_size", 9)
@@ -132,3 +136,10 @@ func _transition(scene_path: String) -> void:
 	var error := SceneTransition.transition_to(scene_path)
 	if error != OK:
 		status_label.text = "TRANSFER FAILED // %s" % error_string(error)
+
+
+func _launch_stage(stage: Array) -> void:
+	var stage_path := str(stage[2])
+	GameSession.selected_game_mode = GameSession.GameMode.STORY
+	GameSession.story_deployment_scene_path = stage_path if bool(stage[3]) else ""
+	_transition(HANGAR_PATH if bool(stage[3]) else stage_path)

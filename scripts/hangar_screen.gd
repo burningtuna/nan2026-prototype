@@ -13,6 +13,7 @@ const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
 const SKIRMISH_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
 const ENDLESS_SCENE_PATH := "res://scenes/endless_combat.tscn"
+const STORY_STAGE_SELECT_PATH := "res://scenes/story_stage_select.tscn"
 const ENDLESS_INTRO_PATH := "res://data/scenarios/endless_intro.json"
 const SCENARIO_DIALOGUE_SCENE := preload("res://scenes/scenario_dialogue.tscn")
 
@@ -61,6 +62,9 @@ var _scenario_dialogue: ScenarioDialogue
 
 
 func _ready() -> void:
+	if OS.get_cmdline_user_args().has("--story-hangar-smoke") or OS.get_cmdline_user_args().has("--story-deploy-smoke"):
+		GameSession.selected_game_mode = GameSession.GameMode.STORY
+		GameSession.story_deployment_scene_path = "res://scenes/stage_03.tscn"
 	if not _build_catalog():
 		return
 	_working_loadout = _initial_loadout()
@@ -90,6 +94,10 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--hangar-return-smoke"):
 		print("HANGAR_RETURN_CHECK passed")
 		get_tree().quit(0)
+	if OS.get_cmdline_user_args().has("--story-hangar-smoke"):
+		call_deferred("_run_story_hangar_smoke")
+	if OS.get_cmdline_user_args().has("--story-deploy-smoke"):
+		call_deferred("_confirm_loadout")
 
 
 func _run_endless_hangar_entry_smoke() -> void:
@@ -101,6 +109,14 @@ func _run_endless_hangar_entry_smoke() -> void:
 	_scenario_dialogue.advance()
 	assert(not _scenario_dialogue.active)
 	_confirm_loadout()
+
+
+func _run_story_hangar_smoke() -> void:
+	assert(GameSession.selected_game_mode == GameSession.GameMode.STORY)
+	assert(_deployment_scene_path() == "res://scenes/stage_03.tscn")
+	assert(_confirm_button.text == "DEPLOY STORY")
+	print("STORY_HANGAR_CHECK passed")
+	get_tree().quit(0)
 
 
 func _draw() -> void:
@@ -183,6 +199,8 @@ func _build_interface() -> void:
 	_confirm_button.text = "CONFIRM LOADOUT"
 	if GameSession.selected_game_mode == GameSession.GameMode.ENDLESS:
 		_confirm_button.text = "DEPLOY ENDLESS"
+	elif GameSession.selected_game_mode == GameSession.GameMode.STORY:
+		_confirm_button.text = "DEPLOY STORY"
 	_confirm_button.add_theme_font_size_override("font_size", 8)
 	_confirm_button.add_theme_color_override("font_color", BG)
 	_confirm_button.add_theme_color_override("font_disabled_color", MUTED)
@@ -419,11 +437,7 @@ func _confirm_loadout() -> void:
 	_confirm_button.disabled = true
 	if not SceneTransition.transition_failed.is_connected(_on_scene_transition_failed):
 		SceneTransition.transition_failed.connect(_on_scene_transition_failed)
-	var scene_path := (
-		ENDLESS_SCENE_PATH
-		if GameSession.selected_game_mode == GameSession.GameMode.ENDLESS
-		else SKIRMISH_SCENE_PATH
-	)
+	var scene_path := _deployment_scene_path()
 	var error := SceneTransition.transition_to(scene_path)
 	if error != OK:
 		_confirm_button.disabled = false
@@ -443,11 +457,24 @@ func _return_to_main_menu() -> void:
 
 
 func _on_scene_transition_failed(scene_path: String, error: Error) -> void:
-	if scene_path not in [MAIN_MENU_SCENE_PATH, SKIRMISH_SCENE_PATH, ENDLESS_SCENE_PATH]:
+	if scene_path not in [MAIN_MENU_SCENE_PATH, SKIRMISH_SCENE_PATH, ENDLESS_SCENE_PATH, STORY_STAGE_SELECT_PATH, GameSession.story_deployment_scene_path]:
 		return
 	_confirm_button.disabled = false
 	_main_menu_button.disabled = false
 	push_error("Unable to change scene: %s" % error_string(error))
+
+
+func _deployment_scene_path() -> String:
+	match GameSession.selected_game_mode:
+		GameSession.GameMode.ENDLESS:
+			return ENDLESS_SCENE_PATH
+		GameSession.GameMode.STORY:
+			return (
+				GameSession.story_deployment_scene_path
+				if not GameSession.story_deployment_scene_path.is_empty()
+				else STORY_STAGE_SELECT_PATH
+			)
+	return SKIRMISH_SCENE_PATH
 
 
 func _refresh() -> void:

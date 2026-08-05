@@ -10,6 +10,7 @@ enum SpawnMode {
 @export var unit_id := "UNIT-01"
 @export var team_id := 1
 @export var player_controlled := false
+@export var use_session_loadout := false
 @export var spawn_mode := SpawnMode.PREPLACED
 @export var spawn_group: StringName = &""
 @export_enum("Aggressive", "Balanced", "Defensive") var movement_type := 0

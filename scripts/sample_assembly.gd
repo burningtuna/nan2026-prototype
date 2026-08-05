@@ -32,6 +32,7 @@ const CAMERA_ZOOM_STEP := 1.15
 @export var solo_player := false
 @export var automatic_battle_completion := true
 @export var automatic_agent_spawn := true
+@export var floor_tile_enabled := true
 
 @onready var camera: Camera2D = $DynamicCamera
 @onready var projectile_layer: Node2D = $Projectiles
@@ -290,7 +291,8 @@ func _destroy_agent_body(agent: AiMechAgent) -> void:
 
 
 func _draw() -> void:
-	draw_texture_rect(STEEL_FLOOR_TILE, arena.grow(500.0), true)
+	if floor_tile_enabled:
+		draw_texture_rect(STEEL_FLOOR_TILE, arena.grow(500.0), true)
 	draw_rect(arena, Color("485960"), false, 2.0)
 
 	if agents.size() >= 2:
