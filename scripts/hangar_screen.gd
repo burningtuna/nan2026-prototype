@@ -15,6 +15,7 @@ const SKIRMISH_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
 const ENDLESS_SCENE_PATH := "res://scenes/endless_combat.tscn"
 const STORY_STAGE_SELECT_PATH := "res://scenes/story_stage_select.tscn"
 const ENDLESS_INTRO_PATH := "res://data/scenarios/endless_intro.json"
+const STAGE_04_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_04_hangar.json"
 const SCENARIO_DIALOGUE_SCENE := preload("res://scenes/scenario_dialogue.tscn")
 
 const SLOT_NAMES := {
@@ -62,7 +63,10 @@ var _scenario_dialogue: ScenarioDialogue
 
 
 func _ready() -> void:
-	if OS.get_cmdline_user_args().has("--story-hangar-smoke") or OS.get_cmdline_user_args().has("--story-deploy-smoke"):
+	if OS.get_cmdline_user_args().has("--story-hangar-stage-04-smoke"):
+		GameSession.selected_game_mode = GameSession.GameMode.STORY
+		GameSession.story_deployment_scene_path = "res://scenes/stage_04.tscn"
+	elif OS.get_cmdline_user_args().has("--story-hangar-smoke") or OS.get_cmdline_user_args().has("--story-deploy-smoke"):
 		GameSession.selected_game_mode = GameSession.GameMode.STORY
 		GameSession.story_deployment_scene_path = "res://scenes/stage_03.tscn"
 	if not _build_catalog():
@@ -78,6 +82,11 @@ func _ready() -> void:
 		and _scenario_dialogue.play_file(ENDLESS_INTRO_PATH)
 	):
 		GameSession.endless_intro_shown = true
+	elif (
+		GameSession.selected_game_mode == GameSession.GameMode.STORY
+		and GameSession.story_deployment_scene_path == "res://scenes/stage_04.tscn"
+	):
+		_scenario_dialogue.play_file(STAGE_04_HANGAR_DIALOGUE_PATH)
 	queue_redraw()
 	if OS.get_cmdline_user_args().has("--scene-transition-smoke"):
 		call_deferred("_confirm_loadout")
@@ -96,6 +105,8 @@ func _ready() -> void:
 		get_tree().quit(0)
 	if OS.get_cmdline_user_args().has("--story-hangar-smoke"):
 		call_deferred("_run_story_hangar_smoke")
+	if OS.get_cmdline_user_args().has("--story-hangar-stage-04-smoke"):
+		call_deferred("_run_story_hangar_stage_04_smoke")
 	if OS.get_cmdline_user_args().has("--story-deploy-smoke"):
 		call_deferred("_confirm_loadout")
 
@@ -116,6 +127,25 @@ func _run_story_hangar_smoke() -> void:
 	assert(_deployment_scene_path() == "res://scenes/stage_03.tscn")
 	assert(_confirm_button.text == "DEPLOY STORY")
 	print("STORY_HANGAR_CHECK passed")
+	get_tree().quit(0)
+
+
+func _run_story_hangar_stage_04_smoke() -> void:
+	assert(GameSession.selected_game_mode == GameSession.GameMode.STORY)
+	assert(_deployment_scene_path() == "res://scenes/stage_04.tscn")
+	assert(_scenario_dialogue.current_speaker() == "오퍼레이터")
+	assert(_scenario_dialogue.dialogue.size() == 4)
+	var expected_texts := [
+		"갑자기 징집되어서 싸우게 되다니..",
+		"투기장이 아니라 진짜 전장으로 가게 되었군.",
+		"이번에는 공격당한 도시로 배치가 되어서, 적의 지휘관 유닛을 파괴하는게 목표야.",
+		"좁은 시가지기 때문에, 그걸 고려해서 무장을 선택해서 출격하는 것이 좋을거야.",
+	]
+	for expected_text in expected_texts:
+		assert(_scenario_dialogue.current_text() == expected_text)
+		_scenario_dialogue.advance()
+	assert(not _scenario_dialogue.active)
+	print("STORY_HANGAR_STAGE_04_CHECK passed")
 	get_tree().quit(0)
 
 

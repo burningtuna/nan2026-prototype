@@ -155,11 +155,11 @@ func _spawn_point(point: StorySpawnPoint) -> AiMechAgent:
 		loadout,
 		point.random_seed,
 		point.team_color,
-		point.movement_type
+		point.movement_type,
+		point.unit_class
 	)
 	if agent == null:
 		return null
-	agent.unit_class = point.unit_class
 	agent.movement_speed_multiplier *= point.movement_speed_scale
 	agent.fire_rate_multiplier *= point.fire_rate_scale
 	agent.incoming_damage_multiplier *= point.incoming_damage_scale

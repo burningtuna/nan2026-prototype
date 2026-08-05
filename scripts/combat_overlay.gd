@@ -310,7 +310,7 @@ func _target_panel_rect() -> Rect2:
 func _enemy_roster() -> Array[AiMechAgent]:
 	var roster: Array[AiMechAgent] = []
 	for enemy in enemies:
-		if is_instance_valid(enemy) and enemy.appears_in_enemy_roster():
+		if is_instance_valid(enemy) and not enemy.is_defeated() and enemy.appears_in_enemy_roster():
 			roster.append(enemy)
 	return roster
 
@@ -318,7 +318,7 @@ func _enemy_roster() -> Array[AiMechAgent]:
 func _enemy_roster_rect() -> Rect2:
 	var panel_rect := _target_panel_rect()
 	var roster_size := _enemy_roster().size()
-	if roster_size <= 1:
+	if roster_size <= 0:
 		return Rect2(panel_rect.end.x - TARGET_PANEL_SIZE.x, panel_rect.end.y, 0.0, 0.0)
 	var available_height := maxf(size.y - panel_rect.end.y - TARGET_PANEL_MARGIN * 2.0, 0.0)
 	var row_count := mini(
@@ -379,12 +379,10 @@ func _draw_enemy_roster() -> void:
 		var detected := player.can_detect_unit(enemy)
 		var selected := enemy == displayed_target
 		var class_marker := "B" if enemy.unit_class == AiMechAgent.UnitClass.BOSS else "M"
-		var state_marker := ">" if selected else ("X" if enemy.is_defeated() else ("-" if detected else "?"))
+		var state_marker := ">" if selected else ("-" if detected else "?")
 		var color := LABEL_COLOR if detected else Color("856f73")
 		if selected:
 			color = ALLY_MARKER_COLOR
-		elif enemy.is_defeated():
-			color = TARGET_COLOR.darkened(0.45)
 		draw_string(
 			ThemeDB.fallback_font,
 			roster_rect.position + Vector2(4.0, ROSTER_HEADER_HEIGHT + 7.0 + index * ROSTER_ROW_HEIGHT),

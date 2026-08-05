@@ -90,6 +90,10 @@ const BOOST_FRAMES := [
 @export var incoming_damage_multiplier := 1.0
 @export var ai_wall_backoff_duration := 0.3
 @export var ai_wall_turn_duration := 0.65
+@export var hit_and_run_enabled := false
+@export var hit_and_run_retreat_distance := 1200.0
+@export var hit_and_run_retreat_duration := 2.5
+@export var prefer_non_player_targets := false
 
 var opponent: AiMechAgent
 var opponents: Array[AiMechAgent] = []
@@ -143,6 +147,7 @@ var next_weapon_index := 0
 var selected_weapon_mask := WEAPON_SELECT_ALL
 var dash_input_was_pressed := false
 var target_select_input_was_pressed := false
+var reload_input_was_pressed := false
 var selected_sensor_target: AiMechAgent
 var rng := RandomNumberGenerator.new()
 var weapon_specs: Array[WeaponSpec] = []
@@ -163,6 +168,7 @@ var energy_spent_this_frame := false
 var part_durability: Dictionary = {}
 var part_max_durability: Dictionary = {}
 var part_hitboxes: Dictionary = {}
+var incoming_damage_multipliers_by_part: Dictionary = {}
 var sensor_snapshot := SensorSnapshot.new()
 var sensor_time_remaining := 0.0
 var sensor_scan_count := 0
@@ -175,6 +181,9 @@ var decision_movement_direction := Vector2.ZERO
 var sensor_missile_evasion_active := false
 var sensor_missile_evasion_direction := Vector2.ZERO
 var ai_fire_decision_pending := false
+var hit_and_run_retreating := false
+var hit_and_run_retreat_time_remaining := 0.0
+var hit_and_run_attack_count := 0
 var movement_constraint: Node
 var ai_wall_backoff_remaining := 0.0
 var ai_wall_turn_remaining := 0.0
@@ -394,6 +403,11 @@ func _update_sensor(delta: float) -> bool:
 
 
 func _scan_sensor() -> void:
+	var previously_detected := {}
+	for contact in sensor_snapshot.units:
+		var previous_target = contact.get("target")
+		if is_instance_valid(previous_target):
+			previously_detected[previous_target.get_instance_id()] = true
 	sensor_scan_count += 1
 	sensor_snapshot.clear(sensor_scan_count)
 	var maximum_distance := sensor_range()
@@ -423,6 +437,15 @@ func _scan_sensor() -> void:
 	)
 	unit_contacts.resize(mini(unit_contacts.size(), enemy_track_limit()))
 	sensor_snapshot.units.assign(unit_contacts)
+	if player_controlled:
+		for contact in unit_contacts:
+			var newly_detected := contact.get("target") as AiMechAgent
+			if (
+				is_instance_valid(newly_detected)
+				and not previously_detected.has(newly_detected.get_instance_id())
+			):
+				selected_sensor_target = newly_detected
+				break
 
 	if not is_instance_valid(projectile_layer):
 		return
@@ -549,8 +572,12 @@ func register_hit(part_name: StringName, incoming_direction: Vector2, damage := 
 	var was_destroyed := is_part_destroyed(part_name)
 	var was_defeated := is_defeated()
 	if part_durability.has(part_name) and float(part_durability[part_name]) > 0.0:
+		var part_damage_multiplier := float(incoming_damage_multipliers_by_part.get(part_name, 1.0))
 		part_durability[part_name] = maxf(
-			float(part_durability[part_name]) - damage * maxf(incoming_damage_multiplier, 0.0),
+			float(part_durability[part_name])
+			- damage
+			* maxf(incoming_damage_multiplier, 0.0)
+			* maxf(part_damage_multiplier, 0.0),
 			0.0
 		)
 	hit_received.emit(last_hit_part, last_hit_aspect)
@@ -941,6 +968,10 @@ func _physics_process(delta: float) -> void:
 		else:
 			_select_opponent(manual_aim_position)
 	else:
+		hit_and_run_retreat_time_remaining = maxf(
+			hit_and_run_retreat_time_remaining - delta,
+			0.0
+		)
 		if sensor_updated:
 			_update_sensor_missile_evasion()
 		if not is_ai_wall_recovering():
@@ -1201,6 +1232,24 @@ func _update_player_weapon_selection() -> void:
 		selected_weapon_mask = WEAPON_SELECT_BACKPACK
 	elif Input.is_physical_key_pressed(KEY_4):
 		selected_weapon_mask = WEAPON_SELECT_ALL
+	var reload_pressed := Input.is_physical_key_pressed(KEY_R)
+	if reload_pressed and not reload_input_was_pressed:
+		force_reload_selected_weapons()
+	reload_input_was_pressed = reload_pressed
+
+
+func force_reload_selected_weapons() -> int:
+	var reloads_started := 0
+	for weapon_index in weapons.size():
+		var weapon := weapons[weapon_index]
+		if (_weapon_selection_bit(weapon) & selected_weapon_mask) == 0 or not weapon.force_reload():
+			continue
+		reloads_started += 1
+		if preparing_weapon_index == weapon_index:
+			preparing_weapon_index = -1
+			preparation_time_remaining = 0.0
+			preparation_cancelled_count += 1
+	return reloads_started
 
 
 func _update_player_target_selection() -> void:
@@ -1249,6 +1298,7 @@ func _select_opponent(reference_position: Vector2) -> void:
 func _nearest_opponent(reference_position: Vector2) -> AiMechAgent:
 	var nearest: AiMechAgent
 	var nearest_distance := INF
+	var preferred_target_found := false
 	for contact in sensor_snapshot.units:
 		var target_value = contact.get("target")
 		if not is_instance_valid(target_value):
@@ -1256,8 +1306,15 @@ func _nearest_opponent(reference_position: Vector2) -> AiMechAgent:
 		var target := target_value as AiMechAgent
 		if target == null:
 			continue
+		var preferred_target := prefer_non_player_targets and not target.player_controlled
+		if prefer_non_player_targets and preferred_target_found and not preferred_target:
+			continue
 		var distance := reference_position.distance_squared_to(contact["position"])
-		if distance < nearest_distance:
+		if preferred_target and not preferred_target_found:
+			preferred_target_found = true
+			nearest = target
+			nearest_distance = distance
+		elif distance < nearest_distance:
 			nearest = target
 			nearest_distance = distance
 	return nearest
@@ -1283,6 +1340,13 @@ func _update_strategy_direction() -> void:
 		return
 	var toward_target := target_vector / distance
 	var orbit_direction := toward_target.rotated(PI * 0.5 * maneuver_side)
+	if hit_and_run_enabled and hit_and_run_retreating:
+		if distance < hit_and_run_retreat_distance and hit_and_run_retreat_time_remaining > 0.0:
+			evading = true
+			movement_direction = (-toward_target + orbit_direction * 0.2).normalized()
+			return
+		hit_and_run_retreating = false
+		evading = false
 
 	if movement_type == MovementType.AGGRESSIVE:
 		var should_evade := observed_target_preparing
@@ -1432,6 +1496,7 @@ func _try_fire_linked_group() -> void:
 	if (
 		linked_fire_cooldown > 0.0
 		or weapons.is_empty()
+		or (hit_and_run_enabled and hit_and_run_retreating)
 		or (not player_controlled and not is_instance_valid(opponent))
 		or dash_time_remaining > 0.0
 		or (
@@ -1591,6 +1656,12 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 	_spawn_vapor(weapon, flash_direction, volley_rng.randi())
 	shot_count += 1
 	fired_shots[weapon.spec.weapon_family] = fired_shots.get(weapon.spec.weapon_family, 0) + 1
+	if hit_and_run_enabled and not player_controlled:
+		hit_and_run_retreating = true
+		hit_and_run_retreat_time_remaining = hit_and_run_retreat_duration
+		hit_and_run_attack_count += 1
+		dash_decision_time_remaining = 0.0
+		ai_decision_time_remaining = 0.0
 	weapon_fired.emit(weapon)
 
 

@@ -97,6 +97,19 @@ func is_reloading() -> bool:
 	return reload_remaining > 0.0
 
 
+func force_reload() -> bool:
+	if disabled or is_reloading() or spec.magazine_capacity <= 0 or ammo >= spec.magazine_capacity:
+		return false
+	var duration := reload_duration()
+	if duration > 0.0:
+		reload_remaining = duration
+		reload_count += 1
+	else:
+		ammo = spec.magazine_capacity
+		reload_completed_count += 1
+	return true
+
+
 func reload_duration() -> float:
 	return maxf(spec.reload_duration * reload_duration_multiplier, 0.0)
 

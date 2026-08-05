@@ -23,6 +23,7 @@ func _initialize() -> void:
 	observer_loadout.head = raven
 	var target_loadout := part_catalog.create_default_loadout()
 	var observer := _make_agent("Observer", projectile_layer, observer_loadout)
+	observer.player_controlled = true
 	var target := _make_agent("Target", projectile_layer, target_loadout)
 	observer.position = Vector2.ZERO
 	target.position = Vector2(2300.0, 0.0)
@@ -31,6 +32,7 @@ func _initialize() -> void:
 	observer.sensor_time_remaining = 0.0
 	assert(observer._update_sensor(0.0))
 	assert(observer.sensor_scan_count == 1)
+	assert(observer.selected_sensor_target == target)
 	assert(not observer._update_sensor(0.24))
 	assert(observer._update_sensor(0.02))
 	assert(observer.sensor_scan_count == 2)
@@ -45,9 +47,12 @@ func _initialize() -> void:
 	observer.mech_loadout.head = falcon
 	observer._scan_sensor()
 	assert(not observer.can_detect_unit(target))
+	observer._update_player_target_selection()
+	assert(observer.selected_sensor_target == null)
 	observer.mech_loadout.head = bastion
 	observer._scan_sensor()
 	assert(observer.can_detect_unit(target))
+	assert(observer.selected_sensor_target == target)
 
 	var cannon_runtime := _weapon_runtime(weapon_catalog.weapon("test_cannon"), &"LeftArm")
 	var missile_runtime := _weapon_runtime(weapon_catalog.weapon("weapon_missile_heavy"), &"Backpack")

@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
 [ext_resource type="Script" path="res://scripts/stage_04.gd" id="2_screen"]
@@ -8,12 +8,6 @@
 [ext_resource type="Texture2D" path="res://Sprites/Background/Stage4.png" id="7_background"]
 [ext_resource type="Texture2D" path="res://Sprites/Background/Stage4_Structure.png" id="8_structure"]
 [ext_resource type="Script" path="res://scripts/story_walkability_mask.gd" id="9_mask"]
-
-[sub_resource type="Shader" id="Shader_structure_overlay"]
-code = "shader_type canvas_item;\n\nuniform vec4 overlay_color : source_color = vec4(1.0, 1.0, 1.0, 0.34);\n\nvoid fragment() {\n\tvec4 source = texture(TEXTURE, UV);\n\tfloat blocked = step(source.r, source.b);\n\tCOLOR = vec4(overlay_color.rgb, overlay_color.a * blocked);\n}\n"
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_structure_overlay"]
-shader = SubResource("Shader_structure_overlay")
 
 [node name="Stage04" instance=ExtResource("1_base")]
 script = ExtResource("2_screen")
@@ -55,14 +49,6 @@ script = ExtResource("9_mask")
 mask_texture = ExtResource("8_structure")
 map_rect = Rect2(-2800, -1630, 6000, 3260)
 
-[node name="BlockedOverlay" type="Sprite2D" parent="CombatContainer/CombatViewport/StoryStage"]
-z_index = -90
-material = SubResource("ShaderMaterial_structure_overlay")
-position = Vector2(200, 0)
-scale = Vector2(2.16763, 2.16763)
-texture = ExtResource("8_structure")
-texture_filter = 1
-
 [node name="Spawns" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
 
 [node name="Player" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
@@ -75,12 +61,11 @@ use_session_loadout = true
 team_color = Color(0.4431, 0.851, 0.9098, 1)
 
 [node name="RoadWave1A" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
-position = Vector2(-2150, -120)
+position = Vector2(-1940, -230)
 script = ExtResource("5_spawn")
 unit_id = "PATROL-01A"
 spawn_mode = 1
 spawn_group = &"ROAD_WAVE_1"
-unit_class = 0
 random_seed = 4101
 
 [node name="RoadWave1B" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
@@ -97,7 +82,6 @@ script = ExtResource("5_spawn")
 unit_id = "PATROL-02A"
 spawn_mode = 1
 spawn_group = &"ROAD_WAVE_2"
-unit_class = 0
 random_seed = 4201
 
 [node name="RoadWave2B" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
@@ -122,7 +106,6 @@ script = ExtResource("5_spawn")
 unit_id = "PATROL-03B"
 spawn_mode = 1
 spawn_group = &"ROAD_WAVE_3"
-unit_class = 0
 random_seed = 4302
 
 [node name="RoadWave4A" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
@@ -166,7 +149,6 @@ script = ExtResource("5_spawn")
 unit_id = "JAILER-01B"
 spawn_mode = 1
 spawn_group = &"RESCUE_1_ENEMIES"
-unit_class = 0
 random_seed = 4512
 
 [node name="Rescue2Ally" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
@@ -194,7 +176,6 @@ script = ExtResource("5_spawn")
 unit_id = "JAILER-02B"
 spawn_mode = 1
 spawn_group = &"RESCUE_2_ENEMIES"
-unit_class = 0
 random_seed = 4522
 
 [node name="Rescue3Ally" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
@@ -222,7 +203,6 @@ script = ExtResource("5_spawn")
 unit_id = "JAILER-03B"
 spawn_mode = 1
 spawn_group = &"RESCUE_3_ENEMIES"
-unit_class = 0
 random_seed = 4532
 
 [node name="Rescue4Ally" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
@@ -250,7 +230,6 @@ script = ExtResource("5_spawn")
 unit_id = "JAILER-04B"
 spawn_mode = 1
 spawn_group = &"RESCUE_4_ENEMIES"
-unit_class = 0
 random_seed = 4542
 
 [node name="Boss" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
@@ -294,7 +273,7 @@ spawn_group = &"ROAD_WAVE_2"
 message = "SECOND PATROL INBOUND"
 
 [node name="Rescue2" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage/Triggers"]
-position = Vector2(160, -560)
+position = Vector2(400, -600)
 script = ExtResource("6_trigger")
 trigger_id = &"RESCUE_2"
 area_size = Vector2(1050, 760)

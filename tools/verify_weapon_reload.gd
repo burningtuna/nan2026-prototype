@@ -10,6 +10,8 @@ func _initialize() -> void:
 	_verify_reload(catalog.weapon("weapon_missile_rapid"))
 	_verify_reload_multiplier(catalog.weapon("test_missile"), 0.2)
 	_verify_reload_multiplier(catalog.weapon("test_cannon"), 0.0)
+	_verify_forced_reload(catalog.weapon("test_cannon"))
+	_verify_selected_forced_reload(catalog.weapon("test_cannon"))
 	print("WEAPON_RELOAD_CHECK passed")
 	quit(0)
 
@@ -49,3 +51,44 @@ func _verify_reload_multiplier(spec: WeaponSpec, multiplier: float) -> void:
 		assert(runtime.ammo == spec.magazine_capacity)
 	runtime.visual.free()
 	muzzle.free()
+
+
+func _verify_forced_reload(spec: WeaponSpec) -> void:
+	var muzzle := Marker2D.new()
+	var runtime := WeaponRuntime.new()
+	runtime.setup(spec, Sprite2D.new(), [muzzle], &"LeftArm", 1.0)
+	runtime.ammo -= 1
+	assert(runtime.force_reload())
+	assert(runtime.reload_remaining > 0.0)
+	assert(runtime.reload_count == 1)
+	assert(not runtime.force_reload())
+	runtime.tick(runtime.reload_duration() + 0.01)
+	assert(runtime.ammo == spec.magazine_capacity)
+	runtime.visual.free()
+	muzzle.free()
+
+
+func _verify_selected_forced_reload(spec: WeaponSpec) -> void:
+	var left := _runtime_for_selection(spec, &"LeftArm")
+	var right := _runtime_for_selection(spec, &"RightArm")
+	left.ammo -= 1
+	right.ammo -= 1
+	var agent := AiMechAgent.new()
+	agent.weapons.assign([left, right])
+	agent.selected_weapon_mask = AiMechAgent.WEAPON_SELECT_LEFT
+	assert(agent.force_reload_selected_weapons() == 1)
+	assert(left.is_reloading() and not right.is_reloading())
+	agent.selected_weapon_mask = AiMechAgent.WEAPON_SELECT_ALL
+	assert(agent.force_reload_selected_weapons() == 1)
+	assert(right.is_reloading())
+	agent.free()
+	left.visual.free()
+	right.visual.free()
+	for muzzle in left.muzzles + right.muzzles:
+		muzzle.free()
+
+
+func _runtime_for_selection(spec: WeaponSpec, part_name: StringName) -> WeaponRuntime:
+	var runtime := WeaponRuntime.new()
+	runtime.setup(spec, Sprite2D.new(), [Marker2D.new()], part_name, 1.0)
+	return runtime

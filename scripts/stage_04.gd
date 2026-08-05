@@ -192,14 +192,23 @@ func _run_stage_04_smoke() -> void:
 	assert(battle.arena == Rect2(-2800.0, -1630.0, 6000.0, 3260.0))
 	assert(story_stage.walkable_areas.size() == 1)
 	var map_background := story_stage.get_node("MapBackground") as Sprite2D
-	var blocked_overlay := story_stage.get_node("BlockedOverlay") as Sprite2D
 	var walkability_mask := story_stage.get_node("WalkabilityMask") as StoryWalkabilityMask
 	var part_collision_radius := combat_player.environment_collision_radius()
 	assert(part_collision_radius >= combat_player.mech_collision_radius)
 	assert(map_background.z_index == -100)
-	assert(blocked_overlay.z_index == -90)
-	assert(map_background.z_index < blocked_overlay.z_index and blocked_overlay.z_index < 0)
+	assert(not story_stage.has_node("BlockedOverlay"))
 	assert(walkability_mask.is_in_group(&"projectile_mask_blockers"))
+	assert(walkability_mask.is_in_group(&"radar_terrain_masks"))
+	assert(hud.tactical_map._terrain_provider() == walkability_mask)
+	var active_camera := combat_player.get_viewport().get_camera_2d()
+	assert(active_camera != null)
+	var initial_camera_zoom := active_camera.zoom
+	var initial_radar_range := hud.tactical_map._radar_range()
+	active_camera.zoom = initial_camera_zoom * 2.0
+	assert(is_equal_approx(hud.tactical_map._radar_range(), initial_radar_range * 0.5))
+	active_camera.zoom = initial_camera_zoom
+	assert(walkability_mask.radar_point_is_accessible(combat_player.global_position))
+	assert(not walkability_mask.radar_point_is_accessible(Vector2(-2580.0, -330.0)))
 	assert(walkability_mask.contains_agent_at(combat_player.global_position, part_collision_radius))
 	var footprint_probe = null
 	for index in range(1, 201):
@@ -317,12 +326,21 @@ func _run_stage_04_smoke() -> void:
 	)
 	await get_tree().process_frame
 	assert(combat_player.is_part_destroyed(damaged_part))
-	var recovery_tested := false
+	var spawned_rescue_enemies: Array[AiMechAgent] = []
 	for point in story_stage.spawn_points:
 		if point.spawn_group != &"RESCUE_1_ENEMIES":
 			continue
 		var enemy := _spawned_agent(point)
-		assert(enemy != null)
+		assert(enemy != null and enemy.unit_class == AiMechAgent.UnitClass.MECH)
+		var body_sprite := enemy.get_node("UpperBody/BodySprite") as Sprite2D
+		assert(body_sprite.visible and body_sprite.texture != null)
+		assert(overlay.enemies.has(enemy) and hud.tactical_map.enemies.has(enemy))
+		spawned_rescue_enemies.append(enemy)
+	assert(spawned_rescue_enemies.size() == 2)
+	assert(overlay._enemy_roster().size() == 2)
+	assert(overlay._enemy_roster_rect().size.y > 0.0)
+	var recovery_tested := false
+	for enemy in spawned_rescue_enemies:
 		if not recovery_tested:
 			recovery_tested = true
 			assert(enemy._dash_movement_was_blocked(Vector2.ZERO, 100.0))

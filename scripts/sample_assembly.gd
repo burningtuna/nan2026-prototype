@@ -456,7 +456,8 @@ func spawn_story_mech(
 	configured_loadout: MechLoadout,
 	random_seed: int,
 	team_color: Color,
-	movement_type: AiMechAgent.MovementType = AiMechAgent.MovementType.AGGRESSIVE
+	movement_type: AiMechAgent.MovementType = AiMechAgent.MovementType.AGGRESSIVE,
+	unit_class: int = AiMechAgent.UnitClass.MECH
 ) -> AiMechAgent:
 	if configured_loadout == null or not configured_loadout.is_valid():
 		push_error("Story unit '%s' has an invalid loadout" % unit_name)
@@ -465,6 +466,7 @@ func spawn_story_mech(
 	agent.team_id = team_id
 	agent.player_controlled = player_controlled
 	agent.movement_type = movement_type
+	agent.unit_class = unit_class
 	agent.setup(
 		unit_name,
 		projectile_layer,

@@ -4,6 +4,7 @@
     {"key": "WASD", "description": "기체 이동"},
     {"key": "MOUSE", "description": "조준 / 선택한 무기 발사"},
     {"key": "SPACE", "description": "대시"},
+    {"key": "R", "description": "선택한 무기 강제 재장전"},
     {"key": "SHIFT", "description": "플레이어 / 표적 카메라 전환"},
     {"key": "TAB", "description": "센서 표적 순환 선택"},
     {"key": "1 / 2 / 3", "description": "무기 장착부 선택"},

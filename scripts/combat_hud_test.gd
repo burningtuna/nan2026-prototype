@@ -218,7 +218,7 @@ func _run_targeting_solution_smoke() -> void:
 	assert(overlay._enemy_roster().size() == 2)
 	target.unit_class = AiMechAgent.UnitClass.DRONE
 	assert(overlay._enemy_roster().size() == 1)
-	assert(overlay._enemy_roster_rect().size == Vector2.ZERO)
+	assert(overlay._enemy_roster_rect().size.y > 0.0)
 	target.unit_class = AiMechAgent.UnitClass.BOSS
 	assert(overlay._enemy_roster().size() == 2)
 	assert(overlay._enemy_roster_rect().size.y > 0.0)
@@ -250,6 +250,9 @@ func _run_targeting_solution_smoke() -> void:
 	assert(not lead.is_equal_approx(target.global_position))
 	overlay._update_target_preview()
 	assert(overlay.displayed_target == target)
+	target.register_hit(&"Body", Vector2.RIGHT, float(target.part_durability[&"Body"]))
+	assert(target.is_defeated())
+	assert(overlay._enemy_roster().size() == 1)
 	print("TARGETING_SOLUTION_CHECK passed")
 	get_tree().quit(0)
 
