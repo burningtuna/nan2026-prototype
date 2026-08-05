@@ -64,10 +64,11 @@ var _scenario_dialogue: ScenarioDialogue
 
 
 func _ready() -> void:
-	if OS.get_cmdline_user_args().has("--story-hangar-stage-04-smoke"):
+	var user_args := OS.get_cmdline_user_args()
+	if user_args.has("--story-hangar-stage-04-smoke"):
 		GameSession.selected_game_mode = GameSession.GameMode.STORY
 		GameSession.story_deployment_scene_path = "res://scenes/stage_04.tscn"
-	elif OS.get_cmdline_user_args().has("--story-hangar-smoke") or OS.get_cmdline_user_args().has("--story-deploy-smoke"):
+	elif user_args.has("--story-hangar-smoke") or user_args.has("--story-deploy-smoke"):
 		GameSession.selected_game_mode = GameSession.GameMode.STORY
 		GameSession.story_deployment_scene_path = "res://scenes/stage_03.tscn"
 	if not _build_catalog():
@@ -111,7 +112,7 @@ func _ready() -> void:
 		get_tree().quit(0)
 	if OS.get_cmdline_user_args().has("--story-hangar-smoke"):
 		call_deferred("_run_story_hangar_smoke")
-	if OS.get_cmdline_user_args().has("--story-hangar-stage-04-smoke"):
+	if user_args.has("--story-hangar-stage-04-smoke"):
 		call_deferred("_run_story_hangar_stage_04_smoke")
 	if OS.get_cmdline_user_args().has("--story-deploy-smoke"):
 		call_deferred("_confirm_loadout")
