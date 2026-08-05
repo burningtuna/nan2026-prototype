@@ -110,6 +110,12 @@ func _add_weapon(data: Dictionary) -> bool:
 	spec.display_name = str(data.get("display_name", weapon_id))
 	spec.weapon_family = FAMILY_BY_NAME[family_name]
 	spec.fire_effect_id = StringName(str(data.get("fire_effect_id", spec.fire_effect_id)))
+	var fire_sound_path := str(data.get("fire_sound", ""))
+	if not fire_sound_path.is_empty():
+		spec.fire_sound = load(fire_sound_path) as AudioStream
+		if spec.fire_sound == null:
+			push_error("Unable to load fire sound for '%s': %s" % [weapon_id, fire_sound_path])
+			return false
 	spec.fire_rate = float(data.get("fire_rate", spec.fire_rate))
 	spec.resource_type = RESOURCE_TYPE_BY_NAME[resource_name]
 	spec.resource_cost = float(data.get("resource_cost", spec.resource_cost))

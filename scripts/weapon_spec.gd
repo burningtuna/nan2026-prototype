@@ -16,6 +16,7 @@ enum ResourceType {
 @export var display_name := "Unnamed Weapon"
 @export var weapon_family := WeaponFamily.BALLISTIC
 @export var fire_effect_id: StringName = &"ballistic_small"
+@export var fire_sound: AudioStream
 @export var fire_rate := 2.0
 @export var resource_type := ResourceType.AMMO
 @export var resource_cost := 1.0

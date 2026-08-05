@@ -5,6 +5,7 @@ var spec: WeaponSpec
 var visual: Sprite2D
 var muzzles: Array[Marker2D] = []
 var casing_eject: Marker2D
+var fire_audio: AudioStreamPlayer2D
 var effect_z_index := 4
 var part_name: StringName
 var ammo := 0
@@ -32,6 +33,12 @@ func setup(
 	spec = weapon_spec
 	visual = weapon_visual
 	muzzles = weapon_muzzles
+	if spec.fire_sound != null:
+		fire_audio = AudioStreamPlayer2D.new()
+		fire_audio.name = "FireAudio"
+		fire_audio.stream = spec.fire_sound
+		fire_audio.max_polyphony = 16
+		visual.add_child(fire_audio)
 	part_name = source_part
 	fire_rate_multiplier = fire_rate_scale
 	casing_eject = casing_eject_marker
@@ -81,6 +88,8 @@ func fire() -> Marker2D:
 
 	var muzzle := muzzles[next_muzzle]
 	next_muzzle = (next_muzzle + 1) % muzzles.size()
+	if fire_audio != null and fire_audio.is_inside_tree():
+		fire_audio.play()
 	return muzzle
 
 
