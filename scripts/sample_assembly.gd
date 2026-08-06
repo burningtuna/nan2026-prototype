@@ -298,7 +298,12 @@ func _draw() -> void:
 	if agents.size() >= 2:
 		var direction_line_width := 2.0 / maxf(camera.zoom.x, 0.001)
 		for agent in agents:
-			if agent.player_controlled or agent.unit_class == AiMechAgent.UnitClass.DRONE:
+			if (
+				not is_instance_valid(agent)
+				or agent.is_defeated()
+				or agent.player_controlled
+				or agent.unit_class == AiMechAgent.UnitClass.DRONE
+			):
 				continue
 			var forward: Vector2 = agent.torso_forward()
 			var direction_color := Color("ffd34d") if agent.is_preparing_attack() else Color(0.25, 1.0, 0.35, 0.9)

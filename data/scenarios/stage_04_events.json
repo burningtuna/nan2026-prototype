@@ -1,41 +1,45 @@
 {
   "schema_version": 1,
   "events": {
-    "RESCUE_1_DISTRESS": {
-      "speaker": "고립된 아군 1",
-      "text": "여기 사람 있어요! 도와줘요!"
-    },
-    "RESCUE_2_DISTRESS": {
-      "speaker": "고립된 아군 2",
-      "text": "적들이 너무 많아! 이대로는..!"
-    },
-    "RESCUE_3_DISTRESS": {
-      "speaker": "고립된 아군 3",
-      "text": "이 놈들은 지치지도 않나, 이젠 더 이상은 무리야..!"
-    },
-    "RESCUE_4_DISTRESS": {
-      "speaker": "고립된 아군 4",
-      "text": "갑자기 적들이 나타나 방어선이 무너지고 있습니다! 빨리...!"
-    },
-    "RESCUE_1_RESCUED": {
-      "speaker": "구조된 아군 1",
-      "text": "덕분에 살았습니다. 감사합니다!"
-    },
-    "RESCUE_2_RESCUED": {
-      "speaker": "구조된 아군 2",
-      "text": "고맙습니다! 저는 조금 있다가 별도 구출팀을 기다릴 테니, 보급은 가져가세요."
-    },
-    "RESCUE_3_RESCUED": {
-      "speaker": "구조된 아군 3",
-      "text": "이 은혜는 절대 잊지 않겠습니다!"
-    },
-    "RESCUE_4_RESCUED": {
-      "speaker": "구조된 아군 4",
-      "text": "다음에 도움이 필요할 때 언제든 달려가겠습니다."
-    },
-    "ARENA_BOSS_REACTION": {
-      "speaker": "아레나 보스",
-      "text": "..."
-    }
+	"ALIEN_INFESTATION_EXPLAINED": {
+	  "speaker": "오퍼레이터",
+	  "text": "저건 아군 기체가 아니야. 보라색 물질이 파괴된 기계의 회로를 이어서 움직이고 있어. 적으로 간주해!"
+	},
+	"RESCUE_1_DISTRESS": {
+	  "speaker": "고립된 아군 1",
+	  "text": "여기 사람 있어요! 도와줘요!"
+	},
+	"RESCUE_2_DISTRESS": {
+	  "speaker": "고립된 아군 2",
+	  "text": "적들이 너무 많아! 이대로는..!"
+	},
+	"RESCUE_3_DISTRESS": {
+	  "speaker": "고립된 아군 3",
+	  "text": "이 놈들은 지치지도 않나, 이젠 더 이상은 무리야..!"
+	},
+	"RESCUE_4_DISTRESS": {
+	  "speaker": "고립된 아군 4",
+	  "text": "갑자기 적들이 나타나 방어선이 무너지고 있습니다! 빨리...!"
+	},
+	"RESCUE_1_RESCUED": {
+	  "speaker": "구조된 아군 1",
+	  "text": "덕분에 살았습니다. 감사합니다!"
+	},
+	"RESCUE_2_RESCUED": {
+	  "speaker": "구조된 아군 2",
+	  "text": "고맙습니다! 저는 조금 있다가 별도 구출팀을 기다릴 테니, 보급은 가져가세요."
+	},
+	"RESCUE_3_RESCUED": {
+	  "speaker": "구조된 아군 3",
+	  "text": "이 은혜는 절대 잊지 않겠습니다!"
+	},
+	"RESCUE_4_RESCUED": {
+	  "speaker": "구조된 아군 4",
+	  "text": "다음에 도움이 필요할 때 언제든 달려가겠습니다."
+	},
+	"ARENA_BOSS_REACTION": {
+	  "speaker": "아레나 보스",
+	  "text": "..."
+	}
   }
 }

@@ -1,6 +1,7 @@
 extends StoryMission
 
 const DRONE_AGENT := preload("res://scripts/drone_agent.gd")
+const ALIEN_INFESTATION_OVERLAY := preload("res://scripts/alien_infestation_overlay.gd")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const DRONE_TARGET := 20
 const MAX_LIVING_DRONES := 4
@@ -98,6 +99,7 @@ func spawn_drone(forced_kind := -1) -> DroneAgent:
 	)
 	drone.position = _drone_spawn_position()
 	battle.add_combatant(drone)
+	ALIEN_INFESTATION_OVERLAY.attach_to(drone)
 	drones_spawned += 1
 	return drone
 
@@ -180,6 +182,9 @@ func _run_stage_05_smoke() -> void:
 	spawn_remaining = 999.0
 	var forced_drone := spawn_drone(DroneAgent.DroneKind.ARM)
 	assert(forced_drone != null and forced_drone.drone_kind == DroneAgent.DroneKind.ARM)
+	assert(forced_drone.has_meta(ALIEN_INFESTATION_OVERLAY.META_KEY))
+	var infestation := forced_drone.get_meta(ALIEN_INFESTATION_OVERLAY.META_KEY) as AlienInfestationOverlay
+	assert(infestation.infestation_points.size() == AlienInfestationOverlay.POINT_COUNT)
 	assert(is_equal_approx(forced_drone.weapon_runtime.fire_rate_multiplier, 1.0 / 5.0))
 	assert(is_equal_approx(
 		forced_drone.arm_projectile_spec.damage,

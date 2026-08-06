@@ -7,6 +7,7 @@ signal mech_wave_started(count: int)
 signal run_finished(score: int, high_score: int)
 
 const DRONE_AGENT := preload("res://scripts/drone_agent.gd")
+const ALIEN_INFESTATION_OVERLAY := preload("res://scripts/alien_infestation_overlay.gd")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const DRONE_SCORES := {
 	DroneAgent.DroneKind.HEAD: 10,
@@ -95,12 +96,15 @@ func spawn_drone(forced_kind := -1) -> DroneAgent:
 	drone.setup_drone(part, kind, battle.projectile_layer, battle.arena, player, drone_sequence)
 	drone.position = _spawn_position()
 	battle.add_combatant(drone)
+	ALIEN_INFESTATION_OVERLAY.attach_to(drone)
 	return drone
 
 
 func spawn_mech() -> AiMechAgent:
 	mech_sequence += 1
-	return battle.spawn_endless_mech(_spawn_position(), mech_sequence)
+	var mech: AiMechAgent = battle.spawn_endless_mech(_spawn_position(), mech_sequence)
+	ALIEN_INFESTATION_OVERLAY.attach_to(mech)
+	return mech
 
 
 func _spawn_position() -> Vector2:

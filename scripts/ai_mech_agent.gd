@@ -19,6 +19,7 @@ const MAX_DASH_DISTANCE_MULTIPLIER := 1.5
 const ENERGY_FULL_RECHARGE_SECONDS := 10.0
 const MOBILITY_SPEED_MULTIPLIER := 2.0
 const WALL_BLOCKED_TURN_MULTIPLIER := 2.0
+const PLAYER_ARM_DURABILITY_MULTIPLIER := 3.0
 const WEAPON_SELECT_LEFT := 1
 const WEAPON_SELECT_RIGHT := 2
 const WEAPON_SELECT_BACKPACK := 4
@@ -688,8 +689,11 @@ func _initialize_part_durability() -> void:
 		var part := parts[part_name] as MechPartSpec
 		if part == null:
 			continue
-		part_max_durability[part_name] = maxf(part.armor, 0.0)
-		part_durability[part_name] = maxf(part.armor, 0.0)
+		var maximum := maxf(part.armor, 0.0)
+		if player_controlled and part_name in [&"LeftArm", &"RightArm"]:
+			maximum *= PLAYER_ARM_DURABILITY_MULTIPLIER
+		part_max_durability[part_name] = maximum
+		part_durability[part_name] = maximum
 
 
 func _destroy_part(part_name: StringName, incoming_direction: Vector2, was_defeated: bool) -> void:

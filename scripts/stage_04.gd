@@ -1,5 +1,6 @@
 extends StoryMission
 
+const ALIEN_INFESTATION_OVERLAY := preload("res://scripts/alien_infestation_overlay.gd")
 const STAGE_04_SMOKE_SAVE_PATH := "/tmp/opencode/nan2026_stage_04_smoke.json"
 const STAGE_04_DIALOGUE_PATH := "res://data/scenarios/stage_04_events.json"
 const RESCUE_IDS: Array[StringName] = [
@@ -17,6 +18,7 @@ var dialogue_events := {}
 var dialogue_queue: Array[StringName] = []
 var active_stage_dialogue: StringName = &""
 var arena_boss_reaction_played := false
+var infestation_explained := false
 
 @onready var blocked_overlay: Sprite2D = \
 	$CombatContainer/CombatViewport/StoryStage/BlockedOverlay
@@ -68,6 +70,22 @@ func _on_stage_trigger_activated(trigger_id: StringName) -> void:
 		_check_rescue_completion(trigger_id)
 	elif trigger_id == &"DESTINATION":
 		_reach_destination()
+	var infested_count := _mark_spawned_enemies()
+	if infested_count > 0 and not infestation_explained:
+		infestation_explained = true
+		_queue_stage_dialogue(&"ALIEN_INFESTATION_EXPLAINED")
+
+
+func _mark_spawned_enemies() -> int:
+	var marked := 0
+	for value in story_stage.spawned_points.values():
+		var agent := value as AiMechAgent
+		if not is_instance_valid(agent) or agent.team_id == combat_player.team_id:
+			continue
+		if not agent.has_meta(ALIEN_INFESTATION_OVERLAY.META_KEY):
+			marked += 1
+		ALIEN_INFESTATION_OVERLAY.attach_to(agent)
+	return marked
 
 
 func _on_stage_agent_defeated(agent: AiMechAgent) -> void:
@@ -198,7 +216,7 @@ func _spawned_agent(point: StorySpawnPoint) -> AiMechAgent:
 
 func _run_stage_04_smoke() -> void:
 	assert(story_stage.initialized)
-	assert(dialogue_events.size() == 9)
+	assert(dialogue_events.size() == 10)
 	var distress_texts := {}
 	var rescued_texts := {}
 	for rescue_id in RESCUE_IDS:
@@ -348,6 +366,7 @@ func _run_stage_04_smoke() -> void:
 		]:
 			rescue_allies += 1
 			assert(point.team_id == 0 and point.stationary and point.weapons_disabled)
+			assert(point.team_color == Color(0.35, 0.85, 0.42, 1.0))
 			assert(point.spawn_mode == StorySpawnPoint.SpawnMode.TRIGGERED)
 	assert(rescue_triggers == 4 and rescue_allies == 4)
 
@@ -359,6 +378,11 @@ func _run_stage_04_smoke() -> void:
 	assert(active_rescues.has(&"RESCUE_1"))
 	assert(active_stage_dialogue == &"RESCUE_1_DISTRESS")
 	assert(scenario_dialogue.current_text() == "여기 사람 있어요! 도와줘요!")
+	scenario_dialogue.advance()
+	await get_tree().process_frame
+	assert(infestation_explained)
+	assert(active_stage_dialogue == &"ALIEN_INFESTATION_EXPLAINED")
+	assert(scenario_dialogue.current_speaker() == "오퍼레이터")
 	scenario_dialogue.advance()
 	await get_tree().process_frame
 	var damaged_part := &"Head"
@@ -377,6 +401,7 @@ func _run_stage_04_smoke() -> void:
 		assert(enemy != null and enemy.unit_class == AiMechAgent.UnitClass.MECH)
 		var body_sprite := enemy.get_node("UpperBody/BodySprite") as Sprite2D
 		assert(body_sprite.visible and body_sprite.texture != null)
+		assert(enemy.has_meta(ALIEN_INFESTATION_OVERLAY.META_KEY))
 		assert(overlay.enemies.has(enemy) and hud.tactical_map.enemies.has(enemy))
 		spawned_rescue_enemies.append(enemy)
 	assert(spawned_rescue_enemies.size() == 2)

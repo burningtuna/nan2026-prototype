@@ -123,7 +123,7 @@ func _draw() -> void:
 		if not safe_rect.has_point(ally_position):
 			_draw_offscreen_unit_marker(ally_position, safe_rect, ALLY_MARKER_COLOR)
 	for enemy in enemies:
-		if not is_instance_valid(enemy) or not player.can_detect_unit(enemy):
+		if not is_instance_valid(enemy) or enemy.is_defeated() or not player.can_detect_unit(enemy):
 			continue
 		var enemy_position: Vector2 = canvas_transform * player.observed_unit_position(enemy)
 		if safe_rect.has_point(enemy_position):
@@ -284,6 +284,7 @@ func _update_target_preview() -> void:
 	)
 	if (
 		not is_instance_valid(target)
+		or target.is_defeated()
 		or not player.can_detect_unit(target)
 		or target.unit_class == AiMechAgent.UnitClass.DRONE
 	):
@@ -424,6 +425,7 @@ func _draw_targeting_solution(canvas_transform: Transform2D) -> void:
 		not target_focus_active
 		or not is_instance_valid(player)
 		or not is_instance_valid(focused_target)
+		or focused_target.is_defeated()
 		or not player.can_detect_unit(focused_target)
 	):
 		return

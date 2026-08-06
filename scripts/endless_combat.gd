@@ -101,6 +101,7 @@ func _run_endless_smoke() -> void:
 	director.spawn_remaining = 999.0
 	var head_drone := director.spawn_drone(DroneAgent.DroneKind.HEAD)
 	assert(head_drone != null and head_drone.unit_class == AiMechAgent.UnitClass.DRONE)
+	assert(head_drone.has_meta(AlienInfestationOverlay.META_KEY))
 	assert(is_equal_approx(
 		float(head_drone.part_max_durability[&"Head"]),
 		head_drone.drone_part.armor * 0.1
@@ -146,6 +147,7 @@ func _run_endless_smoke() -> void:
 			mech = agent
 			break
 	assert(mech != null and mech.appears_in_enemy_roster())
+	assert(mech.has_meta(AlienInfestationOverlay.META_KEY))
 	assert(is_equal_approx(mech.incoming_damage_multiplier, 1.0))
 	for weapon in mech.weapons:
 		assert(is_equal_approx(weapon.reload_duration_multiplier, 1.0))
