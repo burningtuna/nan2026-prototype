@@ -66,12 +66,6 @@ unit_id = "PLAYER"
 team_id = 0
 player_controlled = true
 team_color = Color(0.443137, 0.85098, 0.909804, 1)
-stationary = null
-weapons_disabled = null
-unit_class = null
-movement_speed_scale = null
-fire_rate_scale = null
-incoming_damage_scale = null
 
 [node name="GuardSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns" index="1" unique_id=407874836]
 position = Vector2(-40, 0)
@@ -79,12 +73,6 @@ rotation = 3.14159
 script = ExtResource("5_spawn")
 unit_id = "GUARD-01"
 random_seed = 9119
-stationary = null
-weapons_disabled = null
-unit_class = null
-movement_speed_scale = null
-fire_rate_scale = null
-incoming_damage_scale = null
 
 [node name="ReinforcementA" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns" index="2" unique_id=466908121]
 position = Vector2(650, -260)
@@ -94,12 +82,6 @@ unit_id = "REINFORCEMENT-01"
 spawn_mode = 1
 spawn_group = &"COURTYARD_WAVE"
 random_seed = 17038
-stationary = null
-weapons_disabled = null
-unit_class = null
-movement_speed_scale = null
-fire_rate_scale = null
-incoming_damage_scale = null
 
 [node name="ReinforcementB" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns" index="3" unique_id=910574049]
 position = Vector2(820, 80)
@@ -110,12 +92,6 @@ spawn_mode = 1
 spawn_group = &"COURTYARD_WAVE"
 movement_type = 1
 random_seed = 24957
-stationary = null
-weapons_disabled = null
-unit_class = null
-movement_speed_scale = null
-fire_rate_scale = null
-incoming_damage_scale = null
 
 [node name="Triggers" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage" index="3" unique_id=25520986]
 
