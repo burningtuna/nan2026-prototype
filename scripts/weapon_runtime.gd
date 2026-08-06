@@ -132,7 +132,8 @@ func _begin_reload(duration: float) -> void:
 	reload_remaining = duration
 	reload_count += 1
 	reload_end_pending = duration >= LONG_RELOAD_SECONDS
-	_play_reload_sound(RELOAD_START_STREAM)
+	if spec.weapon_family != WeaponSpec.WeaponFamily.MISSILE:
+		_play_reload_sound(RELOAD_START_STREAM)
 
 
 func _play_reload_sound(stream: AudioStream) -> void:

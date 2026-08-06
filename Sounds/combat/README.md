@@ -5,7 +5,7 @@ These mono, 48 kHz OGG files were prepared from the CC0 collection in
 
 | Asset | Use | Source |
 | --- | --- | --- |
-| `reload_start.ogg` | All reloads | `equipment_clicks3.wav`, first click |
+| `reload_start.ogg` | Ballistic and energy reloads | `equipment_clicks3.wav`, first click |
 | `reload_end.ogg` | Reloads lasting at least 5 seconds | `equipment_clicks3.wav`, second click |
 | `missile_impact.ogg` | Missile detonation | `yd-Sounds/explode.ogg` |
 | `metal_impact_01..05.ogg` | Ballistic and energy impacts | `metal_sheet_01,02,03,04,06.ogg` |
