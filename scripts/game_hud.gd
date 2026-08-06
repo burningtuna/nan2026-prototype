@@ -15,6 +15,9 @@ const AMMO_BAR_POSITION := Vector2(46.0, 101.0)
 const AMMO_BAR_SIZE := Vector2(88.0, 2.0)
 const WEAPON_SLOT_RECT := Rect2(32.0, 86.0, 103.0, 19.0)
 const WIREFRAME_PREVIEW := preload("res://scripts/mech_wireframe_preview.gd")
+const HEAT_WARNING_STREAM := preload("res://Sounds/ui/heat_warning.ogg")
+const HEAT_CRITICAL_STREAM := preload("res://Sounds/ui/heat_critical.ogg")
+const PART_DESTROYED_ERROR_STREAM := preload("res://Sounds/ui/part_destroyed_error.ogg")
 const PART_NAMES: Array[StringName] = [
 	&"Body", &"Head", &"Legs", &"LeftArm", &"RightArm", &"Backpack",
 ]
@@ -28,10 +31,16 @@ var sensor_status: Label
 var wireframe: MechWireframePreview
 var energy_ratio := 1.0
 var heat_ratio := 0.0
+var heat_alarm: AudioStreamPlayer
+var heat_warning_stream: AudioStreamOggVorbis
+var heat_critical_stream: AudioStreamOggVorbis
+var part_destroyed_audio: AudioStreamPlayer
+var heat_audio_state := 0
 
 
 func _ready() -> void:
 	_build_interface()
+	_build_audio()
 	set_process(false)
 
 
@@ -64,6 +73,7 @@ func _process(_delta: float) -> void:
 	_update_weapon_status()
 	if is_instance_valid(player):
 		set_resource_ratios(player.energy_ratio(), player.heat_ratio())
+		_update_heat_audio()
 	queue_redraw()
 
 
@@ -100,6 +110,41 @@ func _build_interface() -> void:
 	message_status.position = Vector2(35.0, 248.0)
 	message_status.size = Vector2(98.0, 10.0)
 	add_child(message_status)
+
+
+func _build_audio() -> void:
+	heat_warning_stream = HEAT_WARNING_STREAM.duplicate() as AudioStreamOggVorbis
+	heat_warning_stream.loop = true
+	heat_critical_stream = HEAT_CRITICAL_STREAM.duplicate() as AudioStreamOggVorbis
+	heat_critical_stream.loop = true
+	heat_alarm = AudioStreamPlayer.new()
+	heat_alarm.name = "HeatAlarm"
+	add_child(heat_alarm)
+	part_destroyed_audio = AudioStreamPlayer.new()
+	part_destroyed_audio.name = "PartDestroyedErrorAudio"
+	part_destroyed_audio.stream = PART_DESTROYED_ERROR_STREAM
+	add_child(part_destroyed_audio)
+
+
+func _update_heat_audio() -> void:
+	var next_state := 0
+	if not player.is_defeated() and not player.heat_generation_locked:
+		if heat_ratio >= 0.8:
+			next_state = 2
+		elif heat_ratio >= 0.6:
+			next_state = 1
+	if next_state == heat_audio_state:
+		return
+	heat_audio_state = next_state
+	heat_alarm.stop()
+	if next_state == 1:
+		heat_alarm.stream = heat_warning_stream
+		if heat_alarm.is_inside_tree():
+			heat_alarm.play()
+	elif next_state == 2:
+		heat_alarm.stream = heat_critical_stream
+		if heat_alarm.is_inside_tree():
+			heat_alarm.play()
 
 
 func _make_label(text_value: String, font_size: int, color: Color) -> Label:
@@ -265,6 +310,7 @@ func _on_player_hit_received(part_name: StringName, aspect: StringName) -> void:
 
 
 func _on_player_part_destroyed(part_name: StringName) -> void:
+	part_destroyed_audio.play()
 	wireframe.set_part_state(part_name, MechWireframePreview.PartState.DESTROYED)
 	var display_part := String(part_name).replace("Arm", " ARM").to_upper()
 	_add_message("PART DESTROYED: %s" % display_part)

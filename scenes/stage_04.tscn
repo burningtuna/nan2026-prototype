@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
 [ext_resource type="Script" path="res://scripts/stage_04.gd" id="2_screen"]
@@ -8,6 +8,21 @@
 [ext_resource type="Texture2D" path="res://Sprites/Background/Stage4.png" id="7_background"]
 [ext_resource type="Texture2D" path="res://Sprites/Background/Stage4_Structure.png" id="8_structure"]
 [ext_resource type="Script" path="res://scripts/story_walkability_mask.gd" id="9_mask"]
+
+[sub_resource type="Shader" id="Shader_structure_overlay"]
+code = "shader_type canvas_item;
+
+uniform vec4 overlay_color : source_color = vec4(1.0, 1.0, 1.0, 0.34);
+
+void fragment() {
+	vec4 source = texture(TEXTURE, UV);
+	float blocked = step(source.r, source.b);
+	COLOR = vec4(overlay_color.rgb, overlay_color.a * blocked);
+}
+"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_structure_overlay"]
+shader = SubResource("Shader_structure_overlay")
 
 [node name="Stage04" instance=ExtResource("1_base")]
 script = ExtResource("2_screen")
@@ -48,6 +63,16 @@ visible = false
 script = ExtResource("9_mask")
 mask_texture = ExtResource("8_structure")
 map_rect = Rect2(-2800, -1630, 6000, 3260)
+collision_polygons_path = "res://data/stage4_collision_polygons.json"
+
+[node name="BlockedOverlay" type="Sprite2D" parent="CombatContainer/CombatViewport/StoryStage"]
+visible = false
+z_index = -90
+material = SubResource("ShaderMaterial_structure_overlay")
+position = Vector2(200, 0)
+scale = Vector2(2.16763, 2.16763)
+texture = ExtResource("8_structure")
+texture_filter = 1
 
 [node name="Spawns" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
 

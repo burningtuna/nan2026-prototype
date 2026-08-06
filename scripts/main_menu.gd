@@ -2,6 +2,7 @@ extends Control
 
 const HANGAR_SCENE_PATH := "res://scenes/hangar_screen.tscn"
 const STORY_TEST_SCENE_PATH := "res://scenes/story_stage_select.tscn"
+const LICENSE_PATH := "res://LICENSE.json"
 const TITLE_ART := preload("res://Sprites/Title/Subject-12-Hangar-Gemini-0001.png")
 const BG := Color("071014")
 const PANEL := Color("0d1b20")
@@ -13,6 +14,7 @@ const RED := Color("e05a55")
 
 var status_label: Label
 var delete_panel: PanelContainer
+var license_panel: PanelContainer
 
 
 func _ready() -> void:
@@ -45,7 +47,7 @@ func _build_interface() -> void:
 
 	var menu_panel := Panel.new()
 	menu_panel.position = Vector2(313.0, 23.0)
-	menu_panel.size = Vector2(158.0, 224.0)
+	menu_panel.size = Vector2(158.0, 247.0)
 	menu_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(PANEL, 0.96)
@@ -81,16 +83,25 @@ func _build_interface() -> void:
 		_style_menu_button(button)
 		button.pressed.connect(entries[index][1])
 		add_child(button)
-	status_label = _label("ALL MODES AVAILABLE", Vector2(320.0, 221.0), Vector2(144.0, 9.0), 6, MUTED)
+	var license_button := Button.new()
+	license_button.position = Vector2(325.0, 218.0)
+	license_button.size = Vector2(134.0, 22.0)
+	license_button.text = "LICENSE"
+	license_button.add_theme_font_size_override("font_size", 8)
+	_style_menu_button(license_button)
+	license_button.pressed.connect(_on_license_pressed)
+	add_child(license_button)
+	status_label = _label("ALL MODES AVAILABLE", Vector2(320.0, 245.0), Vector2(144.0, 9.0), 6, MUTED)
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var diamond := Polygon2D.new()
 	diamond.polygon = PackedVector2Array([
 		Vector2(0.0, 5.0), Vector2(5.0, 0.0), Vector2(10.0, 5.0), Vector2(5.0, 10.0),
 	])
-	diamond.position = Vector2(387.0, 233.0)
+	diamond.position = Vector2(387.0, 258.0)
 	diamond.color = MUTED
 	add_child(diamond)
 	_build_delete_panel()
+	_build_license_panel()
 
 
 func _build_delete_panel() -> void:
@@ -117,6 +128,67 @@ func _build_delete_panel() -> void:
 		button.add_theme_font_size_override("font_size", 7)
 		button.pressed.connect(entry[1])
 		stack.add_child(button)
+
+
+func _build_license_panel() -> void:
+	license_panel = PanelContainer.new()
+	license_panel.position = Vector2(75.0, 35.0)
+	license_panel.size = Vector2(330.0, 200.0)
+	license_panel.visible = false
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(PANEL, 0.98)
+	panel_style.border_color = LINE
+	panel_style.set_border_width_all(1)
+	panel_style.set_content_margin_all(10.0)
+	license_panel.add_theme_stylebox_override("panel", panel_style)
+	add_child(license_panel)
+
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 7)
+	license_panel.add_child(stack)
+	var title := Label.new()
+	title.text = "THIRD-PARTY LICENSES"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 11)
+	title.add_theme_color_override("font_color", CYAN)
+	stack.add_child(title)
+	var notice := RichTextLabel.new()
+	notice.custom_minimum_size = Vector2(0.0, 130.0)
+	notice.bbcode_enabled = false
+	notice.fit_content = false
+	notice.add_theme_font_size_override("normal_font_size", 8)
+	notice.add_theme_color_override("default_color", TEXT)
+	notice.text = _load_license_notice()
+	stack.add_child(notice)
+	var close := Button.new()
+	close.text = "CLOSE"
+	close.add_theme_font_size_override("font_size", 8)
+	_style_menu_button(close)
+	close.pressed.connect(_close_license)
+	stack.add_child(close)
+
+
+func _load_license_notice() -> String:
+	if not FileAccess.file_exists(LICENSE_PATH):
+		return "LICENSE NOTICE NOT FOUND"
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(LICENSE_PATH))
+	if not data is Dictionary:
+		return "LICENSE NOTICE COULD NOT BE READ"
+	var notices: Variant = data.get("notices", [])
+	if not notices is Array:
+		return "LICENSE NOTICE COULD NOT BE READ"
+	var sections: PackedStringArray = []
+	for notice: Variant in notices:
+		if not notice is Dictionary:
+			continue
+		sections.append("%s\n%s\nLicense: %s\nFull text: %s\nSource: %s" % [
+			notice.get("name", "Unknown asset"),
+			notice.get("notice", "Notice unavailable"),
+			notice.get("license", "Unknown"),
+			notice.get("license_file", "Unavailable"),
+			notice.get("source", "Unavailable"),
+		])
+	return "\n\n".join(sections) if not sections.is_empty() else "NO LICENSE NOTICES FOUND"
 
 
 func _label(text_value: String, position_value: Vector2, size_value: Vector2, font_size: int, color: Color) -> Label:
@@ -177,7 +249,13 @@ func _on_transition_failed(_scene_path: String, error: Error) -> void:
 
 
 func _on_delete_pressed() -> void:
+	license_panel.visible = false
 	delete_panel.visible = true
+
+
+func _on_license_pressed() -> void:
+	delete_panel.visible = false
+	license_panel.visible = true
 
 
 func _delete_story() -> void:
@@ -196,11 +274,21 @@ func _close_delete() -> void:
 	delete_panel.visible = false
 
 
+func _close_license() -> void:
+	license_panel.visible = false
+
+
 func _run_main_menu_smoke() -> void:
 	_on_delete_pressed()
 	assert(delete_panel.visible)
 	_close_delete()
 	assert(not delete_panel.visible)
+	_on_license_pressed()
+	assert(license_panel.visible)
+	assert(_load_license_notice().contains("IBM Plex Sans"))
+	assert(_load_license_notice().contains("https://opengameart.org/"))
+	_close_license()
+	assert(not license_panel.visible)
 	var original_path: String = GameSession.endless_progress_path
 	GameSession.endless_progress_path = "user://main_menu_smoke_endless.json"
 	GameSession.delete_endless_score()

@@ -63,6 +63,10 @@ func _physics_process(_delta: float) -> void:
 		var previous: Vector2 = last_valid_positions.get(instance_id, current)
 		var resolved := _resolve_agent_footprint(previous, current, agent.environment_collision_radius())
 		agent.global_position = resolved
+		if not resolved.is_equal_approx(current):
+			agent.mark_wall_blocked()
+			if agent.is_dashing():
+				agent.cancel_dash_after_collision()
 		last_valid_positions[instance_id] = resolved
 	var player: AiMechAgent = battle.player_agent() as AiMechAgent
 	if player == null or player.is_defeated():

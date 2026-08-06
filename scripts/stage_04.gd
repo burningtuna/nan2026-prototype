@@ -18,6 +18,27 @@ var dialogue_queue: Array[StringName] = []
 var active_stage_dialogue: StringName = &""
 var arena_boss_reaction_played := false
 
+@onready var blocked_overlay: Sprite2D = \
+	$CombatContainer/CombatViewport/StoryStage/BlockedOverlay
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var key_event := event as InputEventKey
+	if (
+		key_event == null
+		or key_event.physical_keycode != KEY_B
+		or not key_event.pressed
+		or key_event.echo
+	):
+		return
+	_toggle_blocked_overlay()
+	get_viewport().set_input_as_handled()
+
+
+func _toggle_blocked_overlay() -> void:
+	if is_instance_valid(blocked_overlay):
+		blocked_overlay.visible = not blocked_overlay.visible
+
 
 func pause_menu_context() -> Dictionary:
 	var context := super.pause_menu_context()
@@ -196,7 +217,13 @@ func _run_stage_04_smoke() -> void:
 	var part_collision_radius := combat_player.environment_collision_radius()
 	assert(part_collision_radius >= combat_player.mech_collision_radius)
 	assert(map_background.z_index == -100)
-	assert(not story_stage.has_node("BlockedOverlay"))
+	assert(blocked_overlay != null and blocked_overlay.z_index == -90)
+	assert(not blocked_overlay.visible)
+	assert(map_background.z_index < blocked_overlay.z_index and blocked_overlay.z_index < 0)
+	_toggle_blocked_overlay()
+	assert(blocked_overlay.visible)
+	_toggle_blocked_overlay()
+	assert(not blocked_overlay.visible)
 	assert(walkability_mask.is_in_group(&"projectile_mask_blockers"))
 	assert(walkability_mask.is_in_group(&"radar_terrain_masks"))
 	assert(hud.tactical_map._terrain_provider() == walkability_mask)
@@ -225,6 +252,16 @@ func _run_stage_04_smoke() -> void:
 		footprint_probe,
 		part_collision_radius
 	) == combat_player.global_position)
+	var dash_collision_origin := combat_player.global_position
+	combat_player.dash_direction = (footprint_probe - dash_collision_origin).normalized()
+	combat_player.dash_time_remaining = 0.5
+	combat_player.velocity = combat_player.dash_direction * 100.0
+	story_stage.last_valid_positions[combat_player.get_instance_id()] = dash_collision_origin
+	combat_player.global_position = footprint_probe
+	story_stage._physics_process(0.0)
+	assert(combat_player.global_position.is_equal_approx(dash_collision_origin))
+	assert(not combat_player.is_dashing())
+	assert(combat_player.velocity.is_zero_approx())
 	var slide_result = null
 	for slide_target in [
 		Vector2(-2580.0, -330.0),
@@ -274,12 +311,18 @@ func _run_stage_04_smoke() -> void:
 	)
 	battle.projectile_layer.add_child(test_projectile)
 	test_projectile.global_position = combat_player.global_position
+	var impact_audio_count: int = battle.projectile_layer.find_children(
+		"CombatAudioOneShot", "AudioStreamPlayer2D", false, false
+	).size()
 	assert(test_projectile._projectile_mask_hit(
 		combat_player.global_position,
 		projectile_target
 	) is Vector2)
 	test_projectile._physics_process(1.0)
 	assert(test_projectile.hit_resolved)
+	assert(battle.projectile_layer.find_children(
+		"CombatAudioOneShot", "AudioStreamPlayer2D", false, false
+	).size() == impact_audio_count)
 	var invalid_spawns: Array[String] = []
 	for point in story_stage.spawn_points:
 		if not story_stage._is_walkable(point.global_position, part_collision_radius):
@@ -343,6 +386,7 @@ func _run_stage_04_smoke() -> void:
 	for enemy in spawned_rescue_enemies:
 		if not recovery_tested:
 			recovery_tested = true
+			enemy.dash_direction = Vector2.RIGHT
 			assert(enemy._dash_movement_was_blocked(Vector2.ZERO, 100.0))
 			assert(not enemy._dash_movement_was_blocked(Vector2(30.0, 0.0), 100.0))
 			enemy._begin_ai_wall_recovery(Vector2.RIGHT)

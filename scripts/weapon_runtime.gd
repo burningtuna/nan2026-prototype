@@ -1,11 +1,16 @@
 class_name WeaponRuntime
 extends RefCounted
 
+const RELOAD_START_STREAM := preload("res://Sounds/combat/reload_start.ogg")
+const RELOAD_END_STREAM := preload("res://Sounds/combat/reload_end.ogg")
+const LONG_RELOAD_SECONDS := 5.0
+
 var spec: WeaponSpec
 var visual: Sprite2D
 var muzzles: Array[Marker2D] = []
 var casing_eject: Marker2D
 var fire_audio: AudioStreamPlayer2D
+var reload_audio: AudioStreamPlayer2D
 var effect_z_index := 4
 var part_name: StringName
 var ammo := 0
@@ -18,6 +23,7 @@ var reload_duration_multiplier := 1.0
 var reload_remaining := 0.0
 var reload_count := 0
 var reload_completed_count := 0
+var reload_end_pending := false
 var disabled := false
 
 
@@ -39,6 +45,10 @@ func setup(
 		fire_audio.stream = spec.fire_sound
 		fire_audio.max_polyphony = 16
 		visual.add_child(fire_audio)
+	reload_audio = AudioStreamPlayer2D.new()
+	reload_audio.name = "ReloadAudio"
+	reload_audio.max_polyphony = 2
+	visual.add_child(reload_audio)
 	part_name = source_part
 	fire_rate_multiplier = fire_rate_scale
 	casing_eject = casing_eject_marker
@@ -49,11 +59,17 @@ func setup(
 
 func tick(delta: float) -> void:
 	cooldown_remaining = maxf(cooldown_remaining - delta, 0.0)
+	if disabled and reload_remaining > 0.0:
+		reload_remaining = 0.0
+		reload_end_pending = false
 	if reload_remaining > 0.0:
 		reload_remaining = maxf(reload_remaining - delta, 0.0)
 		if reload_remaining <= 0.0:
 			ammo = spec.magazine_capacity
 			reload_completed_count += 1
+			if reload_end_pending:
+				_play_reload_sound(RELOAD_END_STREAM)
+			reload_end_pending = false
 	recoil_offset = move_toward(recoil_offset, 0.0, spec.visual_recoil_recovery * delta)
 	# Cannon art points along local +X, so visual recoil moves toward local -X.
 	visual.position = rest_position + Vector2(-recoil_offset, 0.0)
@@ -76,8 +92,7 @@ func fire() -> Marker2D:
 		if ammo < magazine_cost:
 			var duration := reload_duration()
 			if duration > 0.0:
-				reload_remaining = duration
-				reload_count += 1
+				_begin_reload(duration)
 			else:
 				ammo = spec.magazine_capacity
 	cooldown_remaining = spec.fire_interval() / maxf(fire_rate_multiplier, 0.001)
@@ -102,8 +117,7 @@ func force_reload() -> bool:
 		return false
 	var duration := reload_duration()
 	if duration > 0.0:
-		reload_remaining = duration
-		reload_count += 1
+		_begin_reload(duration)
 	else:
 		ammo = spec.magazine_capacity
 		reload_completed_count += 1
@@ -112,6 +126,21 @@ func force_reload() -> bool:
 
 func reload_duration() -> float:
 	return maxf(spec.reload_duration * reload_duration_multiplier, 0.0)
+
+
+func _begin_reload(duration: float) -> void:
+	reload_remaining = duration
+	reload_count += 1
+	reload_end_pending = duration >= LONG_RELOAD_SECONDS
+	_play_reload_sound(RELOAD_START_STREAM)
+
+
+func _play_reload_sound(stream: AudioStream) -> void:
+	if reload_audio == null:
+		return
+	reload_audio.stream = stream
+	if reload_audio.is_inside_tree():
+		reload_audio.play()
 
 
 func _magazine_cost() -> int:

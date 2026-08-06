@@ -16,7 +16,8 @@ func _run() -> void:
 	var catalog := WeaponCatalog.new()
 	assert(catalog.load_file("res://data/weapons.json"))
 	var spec := catalog.weapon("weapon_ballistic_standard")
-	assert(spec != null and spec.fire_sound == null)
+	assert(spec != null and spec.fire_sound != null)
+	assert(spec.fire_sound.resource_path == "res://Sounds/weapons/ballistic_standard.ogg")
 	var test_stream := AudioStreamWAV.new()
 	test_stream.format = AudioStreamWAV.FORMAT_8_BITS
 	test_stream.mix_rate = 8000
@@ -35,6 +36,8 @@ func _run() -> void:
 	var runtime := WeaponRuntime.new()
 	runtime.setup(spec, visual, [muzzle], &"LeftArm", 1.0)
 	assert(runtime.fire_audio != null and runtime.fire_audio.stream == test_stream)
+	assert(runtime.reload_audio != null)
+	assert(runtime.reload_audio.get_parent() == visual)
 	viewport.free()
 	runtime = null
 	spec = null

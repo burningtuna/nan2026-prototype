@@ -33,6 +33,27 @@ func _initialize() -> void:
 	assert(agent.current_heat == AiMechAgent.MAX_HEAT)
 	assert(agent.heat_generation_locked)
 
+	var hud := GameHud.new()
+	hud._build_audio()
+	root.add_child(hud)
+	hud.player = agent
+	agent.heat_generation_locked = false
+	agent.current_heat = AiMechAgent.MAX_HEAT * 0.6
+	hud.set_resource_ratios(1.0, agent.heat_ratio())
+	hud._update_heat_audio()
+	assert(hud.heat_audio_state == 1)
+	assert(hud.heat_alarm.stream == hud.heat_warning_stream)
+	agent.current_heat = AiMechAgent.MAX_HEAT * 0.8
+	hud.set_resource_ratios(1.0, agent.heat_ratio())
+	hud._update_heat_audio()
+	assert(hud.heat_audio_state == 2)
+	assert(hud.heat_alarm.stream == hud.heat_critical_stream)
+	agent.heat_generation_locked = true
+	hud._update_heat_audio()
+	assert(hud.heat_audio_state == 0)
+	assert(not hud.heat_alarm.playing)
+
+	hud.free()
 	agent.free()
 	print("HEAT_LOCK_CHECK passed")
 	quit(0)

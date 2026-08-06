@@ -28,9 +28,13 @@ func _verify_reload(spec: WeaponSpec) -> void:
 			runtime.tick(spec.fire_interval() + 0.01)
 	assert(runtime.ammo == 0)
 	assert(runtime.reload_remaining > 0.0)
+	assert(runtime.reload_audio.stream == WeaponRuntime.RELOAD_START_STREAM)
+	assert(runtime.reload_end_pending == (runtime.reload_duration() >= WeaponRuntime.LONG_RELOAD_SECONDS))
 	runtime.tick(spec.reload_duration + 0.01)
 	assert(runtime.ammo == spec.magazine_capacity)
 	assert(runtime.reload_completed_count == 1)
+	if spec.reload_duration >= WeaponRuntime.LONG_RELOAD_SECONDS:
+		assert(runtime.reload_audio.stream == WeaponRuntime.RELOAD_END_STREAM)
 	runtime.visual.free()
 	muzzle.free()
 
@@ -61,9 +65,13 @@ func _verify_forced_reload(spec: WeaponSpec) -> void:
 	assert(runtime.force_reload())
 	assert(runtime.reload_remaining > 0.0)
 	assert(runtime.reload_count == 1)
+	assert(runtime.reload_audio.stream == WeaponRuntime.RELOAD_START_STREAM)
 	assert(not runtime.force_reload())
-	runtime.tick(runtime.reload_duration() + 0.01)
-	assert(runtime.ammo == spec.magazine_capacity)
+	runtime.disabled = true
+	runtime.tick(0.0)
+	assert(is_zero_approx(runtime.reload_remaining))
+	assert(not runtime.reload_end_pending)
+	assert(runtime.ammo < spec.magazine_capacity)
 	runtime.visual.free()
 	muzzle.free()
 

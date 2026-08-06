@@ -4,6 +4,16 @@ extends Area2D
 const PROJECTILE_TRAIL := preload("res://scripts/projectile_trail.gd")
 const PART_HITBOX := preload("res://scripts/part_hitbox.gd")
 const IMPACT_EFFECT := preload("res://scripts/impact_effect.gd")
+const COMBAT_AUDIO := preload("res://scripts/combat_audio.gd")
+const MISSILE_IMPACT_STREAM := preload("res://Sounds/combat/missile_impact.ogg")
+const NON_PLAYER_IMPACT_VOLUME_DB := -6.0206
+const METAL_IMPACT_STREAMS: Array[AudioStream] = [
+	preload("res://Sounds/combat/metal_impact_01.ogg"),
+	preload("res://Sounds/combat/metal_impact_02.ogg"),
+	preload("res://Sounds/combat/metal_impact_03.ogg"),
+	preload("res://Sounds/combat/metal_impact_04.ogg"),
+	preload("res://Sounds/combat/metal_impact_05.ogg"),
+]
 
 var spec: ProjectileSpec
 var weapon_family := WeaponSpec.WeaponFamily.BALLISTIC
@@ -222,7 +232,7 @@ func _apply_projectile_mask_hit(hit_position: Vector2) -> void:
 	if hit_resolved:
 		return
 	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and spec.splash_radius > 0.0:
-		_detonate(hit_position)
+		_detonate(hit_position, null, false)
 		return
 	hit_resolved = true
 	_spawn_impact_effect(hit_position)
@@ -248,7 +258,7 @@ func _check_proximity_fuse(start_position: Vector2, end_position: Vector2) -> bo
 		> spec.proximity_fuse_radius ** 2
 	):
 		return false
-	_detonate(fuse_position)
+	_detonate(fuse_position, homing_target)
 	return true
 
 
@@ -299,10 +309,11 @@ func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> void:
 	if hit_resolved:
 		return
 	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and spec.splash_radius > 0.0:
-		_detonate(hit_position)
+		_detonate(hit_position, hitbox.mech)
 		return
 	hit_resolved = true
 	_spawn_impact_effect(hit_position)
+	_spawn_impact_sound(hit_position, hitbox.mech)
 	hitbox.mech.register_hit(hitbox.part_name, direction, spec.damage)
 	if is_instance_valid(source_mech) and source_mech.has_method("register_landed_hit"):
 		source_mech.register_landed_hit(weapon_family)
@@ -318,15 +329,22 @@ func _apply_environment_hit(target: Node, hit_position: Vector2) -> void:
 		return
 	hit_resolved = true
 	_spawn_impact_effect(hit_position)
+	_spawn_impact_sound(hit_position)
 	target.receive_projectile_hit(spec.damage, direction, hit_position)
 	queue_free()
 
 
-func _detonate(hit_position: Vector2) -> void:
+func _detonate(
+	hit_position: Vector2,
+	primary_target: Node = null,
+	play_impact_sound := true
+) -> void:
 	if hit_resolved:
 		return
 	hit_resolved = true
 	_spawn_impact_effect(hit_position)
+	if play_impact_sound:
+		_spawn_impact_sound(hit_position, primary_target)
 	var damaged_hitboxes := 0
 	var radius_squared := spec.splash_radius ** 2
 	var scene_tree := source_mech.get_tree() if is_instance_valid(source_mech) else get_tree()
@@ -372,6 +390,18 @@ func _spawn_impact_effect(hit_position: Vector2) -> void:
 	effect.z_index = 3
 	get_parent().add_child(effect)
 	effect.global_position = hit_position
+
+
+func _spawn_impact_sound(hit_position: Vector2, target: Node = null) -> void:
+	if not visuals_enabled or not is_instance_valid(get_parent()):
+		return
+	var stream := MISSILE_IMPACT_STREAM
+	if weapon_family != WeaponSpec.WeaponFamily.MISSILE:
+		stream = METAL_IMPACT_STREAMS[posmod(shot_seed, METAL_IMPACT_STREAMS.size())]
+	var volume_db := 0.0
+	if is_instance_valid(target) and not bool(target.get("player_controlled")):
+		volume_db = NON_PLAYER_IMPACT_VOLUME_DB
+	COMBAT_AUDIO.play_2d(get_parent(), stream, hit_position, volume_db)
 
 
 func _is_allied_target(target: Node) -> bool:

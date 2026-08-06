@@ -18,6 +18,7 @@ const MIN_DASH_DISTANCE_MULTIPLIER := 0.5
 const MAX_DASH_DISTANCE_MULTIPLIER := 1.5
 const ENERGY_FULL_RECHARGE_SECONDS := 10.0
 const MOBILITY_SPEED_MULTIPLIER := 2.0
+const WALL_BLOCKED_TURN_MULTIPLIER := 2.0
 const WEAPON_SELECT_LEFT := 1
 const WEAPON_SELECT_RIGHT := 2
 const WEAPON_SELECT_BACKPACK := 4
@@ -49,6 +50,8 @@ const VAPOR_EFFECT := preload("res://scripts/vapor_effect.gd")
 const PART_HITBOX := preload("res://scripts/part_hitbox.gd")
 const PART_DESTRUCTION_EFFECT := preload("res://scripts/part_destruction_effect.gd")
 const WRECK_FIRE_EFFECT := preload("res://scripts/wreck_fire_effect.gd")
+const COMBAT_AUDIO := preload("res://scripts/combat_audio.gd")
+const PART_DESTROYED_STREAM := preload("res://Sounds/combat/part_destroyed.ogg")
 
 const BODY_ART := "res://Sprites/Body-0001.png"
 const BODY_ANCHORS := "res://Sprites/Body-0001.anchors.png"
@@ -189,6 +192,8 @@ var ai_wall_backoff_remaining := 0.0
 var ai_wall_turn_remaining := 0.0
 var ai_wall_blocked_direction := Vector2.ZERO
 var ai_wall_turn_side := 1.0
+var wall_blocked_last_step := false
+var player_actions_release_gate := false
 
 
 func setup(
@@ -714,6 +719,8 @@ func _destroy_part(part_name: StringName, incoming_direction: Vector2, was_defea
 	var became_defeated := not was_defeated and is_defeated()
 	if became_defeated:
 		_spawn_wreck_fire_effect(destruction_position, part_name)
+	if combat_visuals_enabled and is_instance_valid(projectile_layer):
+		COMBAT_AUDIO.play_2d(projectile_layer, PART_DESTROYED_STREAM, destruction_position)
 	part_destroyed.emit(part_name)
 	if became_defeated:
 		defeated.emit()
@@ -960,6 +967,7 @@ func _physics_process(delta: float) -> void:
 		return
 	var sensor_updated := _update_sensor(delta)
 	if player_controlled:
+		_update_player_actions_release_gate()
 		_update_player_weapon_selection()
 		_update_player_target_selection()
 		_update_player_movement(delta)
@@ -1055,6 +1063,7 @@ func _update_random_movement(delta: float) -> void:
 		var preparation_spec := weapons[preparing_weapon_index].spec
 		turn_multiplier = preparation_spec.preparation_turn_speed_multiplier
 		move_multiplier = preparation_spec.preparation_move_speed_multiplier
+	turn_multiplier *= wall_turn_speed_multiplier()
 
 	var desired_rotation := movement_direction.angle() + PI * 0.5
 	upper_body.rotation = rotate_toward(
@@ -1079,13 +1088,26 @@ func _update_random_movement(delta: float) -> void:
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
 	else:
 		dash_decision_time_remaining -= delta
-	var applied_movement := _apply_movement_step(movement_step, dashed_this_step)
+	var applied_movement := _apply_movement_step(movement_step, true)
 	if dashed_this_step and _dash_movement_was_blocked(applied_movement, expected_dash_distance):
-		_begin_ai_wall_recovery(dash_direction)
+		cancel_dash_after_collision(true)
 
 
 func _dash_movement_was_blocked(applied_movement: Vector2, expected_dash_distance: float) -> bool:
-	return expected_dash_distance > 0.0 and applied_movement.length() < maxf(expected_dash_distance * 0.2, 4.0)
+	if expected_dash_distance <= 0.0 or dash_direction.is_zero_approx():
+		return false
+	var dash_progress := maxf(applied_movement.dot(dash_direction.normalized()), 0.0)
+	return dash_progress < expected_dash_distance * 0.2
+
+
+func cancel_dash_after_collision(force := false) -> void:
+	if dash_time_remaining <= 0.0 and not force:
+		return
+	if player_controlled:
+		dash_time_remaining = 0.0
+		velocity = Vector2.ZERO
+	else:
+		_begin_ai_wall_recovery(dash_direction)
 
 
 func is_ai_wall_recovering() -> bool:
@@ -1126,13 +1148,18 @@ func _update_ai_wall_recovery(delta: float) -> void:
 
 func _update_player_movement(delta: float) -> void:
 	manual_aim_position = get_global_mouse_position()
+	var turn_multiplier := wall_turn_speed_multiplier()
 	var input_direction := Vector2(
 		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
 		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
 	).normalized()
 	dash_cooldown_remaining = maxf(dash_cooldown_remaining - delta, 0.0)
 	var dash_input_pressed := Input.is_physical_key_pressed(KEY_SPACE)
-	if dash_input_pressed and not dash_input_was_pressed:
+	if (
+		not player_actions_release_gate
+		and dash_input_pressed
+		and not dash_input_was_pressed
+	):
 		_try_start_player_dash(input_direction)
 	dash_input_was_pressed = dash_input_pressed
 
@@ -1140,39 +1167,85 @@ func _update_player_movement(delta: float) -> void:
 	velocity = velocity.move_toward(target_velocity, acceleration * delta)
 	var movement_step := velocity * delta
 	var dashed_this_step := false
+	var expected_dash_distance := 0.0
 	if dash_time_remaining > 0.0:
 		var dash_step := minf(delta, dash_time_remaining)
-		movement_step += dash_direction * effective_dash_speed() * dash_step
+		expected_dash_distance = effective_dash_speed() * dash_step
+		movement_step += dash_direction * expected_dash_distance
 		dashed_this_step = dash_step > 0.0
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
-	_apply_movement_step(movement_step, dashed_this_step)
+	var applied_movement := _apply_movement_step(movement_step, true)
+	if (
+		dashed_this_step
+		and _dash_movement_was_blocked(applied_movement, expected_dash_distance)
+	):
+		cancel_dash_after_collision(true)
+	turn_multiplier = maxf(turn_multiplier, wall_turn_speed_multiplier())
 	if input_direction.length_squared() > 0.0:
 		lower_body.rotation = rotate_toward(
 			lower_body.rotation,
 			input_direction.angle() + PI * 0.5,
-			deg_to_rad(upper_turn_speed_degrees) * delta
+			deg_to_rad(upper_turn_speed_degrees) * turn_multiplier * delta
 		)
 	var aim_vector := manual_aim_position - global_position
 	if aim_vector.length_squared() > 1.0:
 		upper_body.rotation = rotate_toward(
 			upper_body.rotation,
 			aim_vector.angle() + PI * 0.5,
-			deg_to_rad(upper_turn_speed_degrees) * delta
+			deg_to_rad(upper_turn_speed_degrees) * turn_multiplier * delta
 		)
 
 
 func _apply_movement_step(movement_step: Vector2, allow_wall_slide := false) -> Vector2:
 	var previous_position := global_position
-	var proposed_position := (position + movement_step).clamp(arena.position, arena.end)
+	var unconstrained_position := position + movement_step
+	var proposed_position := unconstrained_position.clamp(arena.position, arena.end)
+	var wall_constrained := not proposed_position.is_equal_approx(unconstrained_position)
 	global_position = proposed_position
 	if is_instance_valid(movement_constraint) and movement_constraint.has_method("resolve_agent_motion"):
-		global_position = movement_constraint.resolve_agent_motion(
+		var resolved_position: Vector2 = movement_constraint.resolve_agent_motion(
 			previous_position,
 			global_position,
 			environment_collision_radius(),
 			allow_wall_slide
 		)
-	return global_position - previous_position
+		wall_constrained = wall_constrained or not resolved_position.is_equal_approx(global_position)
+		global_position = resolved_position
+	var applied_movement := global_position - previous_position
+	wall_blocked_last_step = (
+		wall_constrained
+		and movement_step.length_squared() > 0.0001
+		and applied_movement.length_squared() <= 0.0001
+	)
+	return applied_movement
+
+
+func mark_wall_blocked() -> void:
+	wall_blocked_last_step = true
+
+
+func wall_turn_speed_multiplier() -> float:
+	return WALL_BLOCKED_TURN_MULTIPLIER if wall_blocked_last_step else 1.0
+
+
+func block_player_actions_until_dialogue_inputs_released() -> void:
+	player_actions_release_gate = true
+	dash_input_was_pressed = Input.is_physical_key_pressed(KEY_SPACE)
+
+
+func _update_player_actions_release_gate() -> void:
+	if not player_actions_release_gate:
+		return
+	_update_player_actions_release_gate_state(
+		Input.is_physical_key_pressed(KEY_SPACE),
+		Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	)
+
+
+func _update_player_actions_release_gate_state(space_pressed: bool, fire_pressed: bool) -> void:
+	dash_input_was_pressed = space_pressed
+	if not space_pressed and not fire_pressed:
+		player_actions_release_gate = false
 
 
 func _try_start_player_dash(input_direction: Vector2) -> void:
@@ -1473,7 +1546,11 @@ func _update_weapons(delta: float) -> void:
 			ai_fire_decision_pending = false
 		return
 
-	if player_controlled and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if (
+		player_controlled
+		and not player_actions_release_gate
+		and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	):
 		_try_fire_linked_group()
 	elif not player_controlled and ai_fire_decision_pending:
 		ai_fire_decision_pending = false

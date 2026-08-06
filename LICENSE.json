@@ -1,0 +1,19 @@
+{
+  "title": "THIRD-PARTY LICENSES",
+  "notices": [
+    {
+      "name": "IBM Plex Sans Condensed Medium / IBM Plex Sans KR Medium",
+      "notice": "Copyright \u00a9 2017 IBM Corp. with Reserved Font Name \"Plex\"",
+      "license": "SIL Open Font License 1.1",
+      "license_file": "res://Fonts/LICENSE.txt",
+      "source": "https://github.com/IBM/plex"
+    },
+    {
+      "name": "Sound Effects",
+      "notice": "All sound effects used in this project are CC0 audio assets.",
+      "license": "CC0 1.0 Universal",
+      "license_file": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "https://opengameart.org/"
+    }
+  ]
+}

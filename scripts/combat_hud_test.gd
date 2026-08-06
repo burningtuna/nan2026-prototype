@@ -276,6 +276,7 @@ func _run_combat_presentation_smoke() -> void:
 		scenario_dialogue.advance()
 	assert(not scenario_dialogue.active)
 	assert(battle.process_mode == Node.PROCESS_MODE_INHERIT)
+	assert(combat_player.player_actions_release_gate)
 	print("COMBAT_PRESENTATION_CHECK passed")
 	get_tree().quit(0)
 
@@ -291,6 +292,8 @@ func _on_dialogue_started(_scenario_id: String) -> void:
 func _on_dialogue_finished(_scenario_id: String) -> void:
 	if not dialogue_paused_battle:
 		return
+	if is_instance_valid(combat_player):
+		combat_player.block_player_actions_until_dialogue_inputs_released()
 	battle.process_mode = battle_process_mode_before_dialogue
 	dialogue_paused_battle = false
 
