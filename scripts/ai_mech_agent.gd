@@ -348,8 +348,35 @@ func heat_ratio() -> float:
 	return current_heat / MAX_HEAT
 
 
+func restore_energy_full() -> float:
+	var previous := current_energy
+	current_energy = energy_capacity()
+	return maxf(current_energy - previous, 0.0)
+
+
+func clear_overheat() -> float:
+	var previous := current_heat
+	current_heat = 0.0
+	heat_generation_locked = false
+	return previous
+
+
 func is_dashing() -> bool:
 	return dash_time_remaining > 0.0
+
+
+func _has_dash_mobility() -> bool:
+	return not is_part_destroyed(&"Legs") and effective_dash_speed() > 0.001
+
+
+func _stop_dash_immediately() -> void:
+	dash_time_remaining = 0.0
+	velocity = Vector2.ZERO
+
+
+func _sanitize_dash_state() -> void:
+	if not is_finite(dash_time_remaining) or (is_dashing() and not _has_dash_mobility()):
+		_stop_dash_immediately()
 
 
 func visuals_enabled() -> bool:
@@ -708,6 +735,7 @@ func _destroy_part(part_name: StringName, incoming_direction: Vector2, was_defea
 			_spawn_part_destruction_effect(destruction_position, part_name, incoming_direction)
 			sprite.visible = false
 	if part_name == &"Legs":
+		_stop_dash_immediately()
 		for boost in boost_sprites:
 			boost.visible = false
 			boost.stop()
@@ -949,6 +977,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	energy_spent_this_frame = false
+	_sanitize_dash_state()
 	if is_defeated():
 		velocity = Vector2.ZERO
 		dash_time_remaining = 0.0
@@ -1273,7 +1302,14 @@ func _try_start_player_dash(input_direction: Vector2) -> void:
 
 
 func _consume_dash_resources() -> bool:
-	if heat_generation_locked or current_energy < DASH_ENERGY_COST:
+	var duration := effective_dash_duration()
+	if (
+		not _has_dash_mobility()
+		or not is_finite(duration)
+		or duration <= 0.0
+		or heat_generation_locked
+		or current_energy < DASH_ENERGY_COST
+	):
 		return false
 	current_energy -= DASH_ENERGY_COST
 	_add_heat(DASH_HEAT_COST)

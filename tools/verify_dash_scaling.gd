@@ -148,6 +148,22 @@ func _initialize() -> void:
 	agent._update_player_actions_release_gate_state(false, false)
 	assert(not agent.player_actions_release_gate)
 
+	agent.part_max_durability[&"Legs"] = 100.0
+	agent.part_durability[&"Legs"] = 100.0
+	agent.dash_time_remaining = 10.0
+	agent.velocity = Vector2(100.0, 0.0)
+	agent.register_hit(&"Legs", Vector2.LEFT, 100.0)
+	assert(not agent.is_dashing() and agent.velocity.is_zero_approx())
+	var energy_before_failed_dash := agent.current_energy
+	assert(not agent._consume_dash_resources())
+	assert(agent.current_energy == energy_before_failed_dash)
+	agent.part_durability[&"Legs"] = 100.0
+	agent.dash_time_remaining = INF
+	agent._sanitize_dash_state()
+	assert(not agent.is_dashing() and agent.velocity.is_zero_approx())
+	agent.dash_speed = 0.0
+	assert(not agent._consume_dash_resources())
+
 	assert(is_equal_approx(weapon_catalog.projectiles_by_id["projectile_missile_rapid"].damage, 0.45))
 	assert(is_equal_approx(weapon_catalog.projectiles_by_id["projectile_missile_standard"].damage, 1.875))
 	assert(is_equal_approx(weapon_catalog.projectiles_by_id["projectile_missile_heavy"].damage, 3.75))

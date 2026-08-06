@@ -22,6 +22,7 @@ var status_label: Label
 
 func _ready() -> void:
 	GameSession.story_deployment_scene_path = ""
+	GameSession.story_stage_selected_directly = false
 	_build_interface()
 	queue_redraw()
 	if OS.get_cmdline_user_args().has("--story-select-smoke"):
@@ -142,4 +143,5 @@ func _launch_stage(stage: Array) -> void:
 	var stage_path := str(stage[2])
 	GameSession.selected_game_mode = GameSession.GameMode.STORY
 	GameSession.story_deployment_scene_path = stage_path if bool(stage[3]) else ""
+	GameSession.story_stage_selected_directly = true
 	_transition(HANGAR_PATH if bool(stage[3]) else stage_path)

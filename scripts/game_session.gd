@@ -26,6 +26,7 @@ var story_progress_path := STORY_PROGRESS_PATH
 var endless_progress_path := ENDLESS_PROGRESS_PATH
 var selected_game_mode := GameMode.SKIRMISH
 var story_deployment_scene_path := ""
+var story_stage_selected_directly := false
 var endless_player_balance_enabled := true
 var endless_missile_reload_multiplier := 0.2
 var endless_other_reload_multiplier := 0.0

@@ -25,6 +25,7 @@ var attack_flash_remaining := {}
 var pending_attack_flashes := {}
 var observed_sensor_sequence := -1
 var winning_team_number := -1
+var result_message := ""
 var combat_hud_visible := true
 var target_focus_active := false
 var focused_target: AiMechAgent
@@ -91,6 +92,13 @@ func _on_enemy_weapon_fired(_weapon: WeaponRuntime, enemy: AiMechAgent) -> void:
 
 func show_team_victory(team_number: int) -> void:
 	winning_team_number = team_number
+	result_message = ""
+	queue_redraw()
+
+
+func show_result_message(message: String) -> void:
+	winning_team_number = -1
+	result_message = message.strip_edges()
 	queue_redraw()
 
 
@@ -146,7 +154,7 @@ func _draw() -> void:
 
 
 func _draw_team_victory() -> void:
-	if winning_team_number < 0:
+	if winning_team_number < 0 and result_message.is_empty():
 		return
 	var banner_size := Vector2(minf(size.x - 32.0, 220.0), 46.0)
 	var banner_rect := Rect2((size - banner_size) * 0.5, banner_size)
@@ -155,7 +163,9 @@ func _draw_team_victory() -> void:
 	draw_string(
 		ThemeDB.fallback_font,
 		banner_rect.position + Vector2(0.0, 29.0),
-		"DRAW" if winning_team_number == 0 else "TEAM %d WIN" % winning_team_number,
+		result_message if not result_message.is_empty() else (
+			"DRAW" if winning_team_number == 0 else "TEAM %d WIN" % winning_team_number
+		),
 		HORIZONTAL_ALIGNMENT_CENTER,
 		banner_rect.size.x,
 		18,

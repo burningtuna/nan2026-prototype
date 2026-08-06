@@ -6,6 +6,23 @@ const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const DRONE_TARGET := 20
 const MAX_LIVING_DRONES := 4
 const DRONE_SPAWN_INTERVAL := 1.5
+const ALLY_COUNT := 4
+const RELOAD_SUPPORT_MULTIPLIER := 5.0
+const SUPPORT_APPROACH_SECONDS := 0.35
+const SUPPORT_OFFSETS := [
+	Vector2(-90.0, 70.0),
+	Vector2(90.0, 70.0),
+	Vector2(-90.0, -70.0),
+	Vector2(0.0, -90.0),
+]
+const ALLY_4_DIALOGUE := {
+	"schema_version": 1,
+	"id": "stage_05_ally_4_sacrifice",
+	"dialogue": [{
+		"speaker": "아군4",
+		"text": "한눈 팔았군, 두번은 도와줄 수 없으니 다음엔 실수하지 마!",
+	}],
+}
 
 @onready var beam_hazard: VerticalBeamHazard = \
 	$CombatContainer/CombatViewport/StoryStage/VerticalBeamHazard
@@ -18,6 +35,11 @@ var drones_spawned := 0
 var drones_defeated := 0
 var spawn_remaining := 0.0
 var running := false
+var allies: Array[AiMechAgent] = []
+var observed_reload_count := 0
+var player_was_cooling := false
+var energy_support_armed := true
+var ally_support_tweens := {}
 
 
 func pause_menu_context() -> Dictionary:
@@ -31,7 +53,10 @@ func pause_menu_context() -> Dictionary:
 
 func _process(delta: float) -> void:
 	super(delta)
-	if not running or mission_finished or drones_spawned >= DRONE_TARGET:
+	if not running or mission_finished:
+		return
+	_update_ally_support()
+	if drones_spawned >= DRONE_TARGET:
 		return
 	spawn_remaining -= delta
 	if spawn_remaining <= 0.0 and _living_drone_count() < MAX_LIVING_DRONES:
@@ -41,7 +66,12 @@ func _process(delta: float) -> void:
 
 func _on_combat_bound() -> void:
 	super._on_combat_bound()
-	survivor_count = int(GameSession.story_flag(&"stage_04_survivors", 0))
+	var direct_demo := GameSession.story_stage_selected_directly or OS.get_cmdline_user_args().has("--stage-05-smoke")
+	survivor_count = ALLY_COUNT if direct_demo else clampi(
+		int(GameSession.story_flag(&"stage_04_survivors", 0)),
+		0,
+		ALLY_COUNT
+	)
 	part_catalog = MechPartCatalog.new()
 	if not part_catalog.load_file(PARTS_DATA_PATH, battle.weapon_catalog):
 		push_error("Unable to initialize Stage 5 part catalog")
@@ -51,6 +81,9 @@ func _on_combat_bound() -> void:
 	combat_player.defeated.connect(_on_stage_player_defeated)
 	beam_hazard.warning_started.connect(_on_beam_warning_started)
 	beam_hazard.firing_started.connect(_on_beam_firing_started)
+	beam_hazard.lethal_hit_imminent.connect(_on_beam_lethal_hit_imminent)
+	_spawn_surviving_allies()
+	observed_reload_count = _player_reload_count()
 	running = true
 	beam_hazard.setup(battle.arena, combat_player)
 	spawn_remaining = 0.25
@@ -59,6 +92,83 @@ func _on_combat_bound() -> void:
 	)
 	if OS.get_cmdline_user_args().has("--stage-05-smoke"):
 		call_deferred("_run_stage_05_smoke")
+
+
+func _spawn_surviving_allies() -> void:
+	allies.clear()
+	for ally_index in ALLY_COUNT:
+		var ally: AiMechAgent
+		if ally_index < survivor_count:
+			var group := StringName("STAGE_05_ALLY_%d" % (ally_index + 1))
+			for point in story_stage.spawn_points:
+				if point.spawn_group == group:
+					ally = story_stage._spawn_point(point)
+					break
+		allies.append(ally)
+
+
+func _update_ally_support() -> void:
+	if not is_instance_valid(combat_player) or combat_player.is_defeated():
+		return
+	var reload_count := _player_reload_count()
+	if reload_count > observed_reload_count and _ally_can_support(0):
+		for weapon in combat_player.weapons:
+			weapon.accelerate_reload(RELOAD_SUPPORT_MULTIPLIER)
+		_begin_support_approach(0)
+		system_messages.push_message("아군1 / 재장전을 도와줄게!")
+	observed_reload_count = reload_count
+
+	if combat_player.energy_ratio() <= 0.5 and energy_support_armed and _ally_can_support(1):
+		energy_support_armed = false
+		combat_player.restore_energy_full()
+		_begin_support_approach(1)
+		system_messages.push_message("아군2 / 배터리라면 내가 충전해줄 수 있어!")
+	elif combat_player.energy_ratio() > 0.55:
+		energy_support_armed = true
+
+	var cooling := combat_player.heat_generation_locked
+	if cooling and not player_was_cooling and _ally_can_support(2):
+		combat_player.clear_overheat()
+		_begin_support_approach(2)
+		system_messages.push_message("아군3 / 방열이 필요한가?")
+	player_was_cooling = combat_player.heat_generation_locked
+
+
+func _player_reload_count() -> int:
+	var count := 0
+	for weapon in combat_player.weapons:
+		count += weapon.reload_count
+	return count
+
+
+func _ally_can_support(index: int) -> bool:
+	return (
+		index >= 0
+		and index < allies.size()
+		and is_instance_valid(allies[index])
+		and not allies[index].is_defeated()
+	)
+
+
+func _begin_support_approach(index: int) -> void:
+	if not _ally_can_support(index):
+		return
+	var ally := allies[index]
+	var previous_tween := ally_support_tweens.get(index) as Tween
+	if previous_tween != null and previous_tween.is_valid():
+		previous_tween.kill()
+	ally.combat_actions_enabled = false
+	var destination: Vector2 = combat_player.global_position + SUPPORT_OFFSETS[index]
+	var tween := create_tween()
+	tween.tween_property(ally, "global_position", destination, SUPPORT_APPROACH_SECONDS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(_finish_support_approach.bind(index, ally))
+	ally_support_tweens[index] = tween
+
+
+func _finish_support_approach(index: int, ally: AiMechAgent) -> void:
+	ally_support_tweens.erase(index)
+	if is_instance_valid(ally) and not ally.is_defeated():
+		ally.combat_actions_enabled = true
 
 
 func spawn_drone(forced_kind := -1) -> DroneAgent:
@@ -168,6 +278,20 @@ func _on_beam_firing_started(_target_x: float) -> void:
 		system_messages.push_message("VERTICAL BEAM FIRING")
 
 
+func _on_beam_lethal_hit_imminent(_target_x: float) -> void:
+	if not running or not _ally_can_support(3):
+		return
+	var ally := allies[3]
+	beam_hazard.intercept_current_firing()
+	ally.global_position = combat_player.global_position + combat_player.torso_forward() * 90.0
+	ally.rotation = combat_player.rotation
+	if not scenario_dialogue.play_document(ALLY_4_DIALOGUE, "stage_05.gd"):
+		system_messages.push_message("아군4 / 한눈 팔았군, 두번은 도와줄 수 없으니 다음엔 실수하지 마!")
+	var body_durability := float(ally.part_durability.get(&"Body", 0.0))
+	if body_durability > 0.0:
+		ally.register_hit(&"Body", Vector2.UP, body_durability)
+
+
 func _run_stage_05_smoke() -> void:
 	assert(DRONE_TARGET == 20)
 	assert(MAX_LIVING_DRONES == 4)
@@ -176,9 +300,24 @@ func _run_stage_05_smoke() -> void:
 	assert(black_floor.color == Color.BLACK and black_floor.z_index < 0)
 	assert(is_equal_approx(beam_hazard.beam_width, 200.0))
 	assert(is_equal_approx(beam_hazard.warning_duration, 2.0))
-	assert(survivor_count == int(GameSession.story_flag(&"stage_04_survivors", 0)))
+	assert(survivor_count == ALLY_COUNT and allies.size() == ALLY_COUNT)
+	for ally in allies:
+		assert(is_instance_valid(ally) and not ally.is_defeated())
 	assert(pause_menu_context()["drone_target"] == 20)
 	assert(pause_menu_context()["drones_defeated"] == 0)
+	var reload_weapon := combat_player.weapons[0]
+	reload_weapon.ammo = maxi(reload_weapon.ammo - 1, 0)
+	assert(reload_weapon.force_reload())
+	var reload_before_support := reload_weapon.reload_remaining
+	_update_ally_support()
+	assert(is_equal_approx(reload_weapon.reload_remaining, reload_before_support / RELOAD_SUPPORT_MULTIPLIER))
+	combat_player.current_energy = combat_player.energy_capacity() * 0.5
+	_update_ally_support()
+	assert(is_equal_approx(combat_player.energy_ratio(), 1.0))
+	combat_player.current_heat = AiMechAgent.MAX_HEAT
+	combat_player.heat_generation_locked = true
+	_update_ally_support()
+	assert(is_zero_approx(combat_player.current_heat) and not combat_player.heat_generation_locked)
 	spawn_remaining = 999.0
 	var forced_drone := spawn_drone(DroneAgent.DroneKind.ARM)
 	assert(forced_drone != null and forced_drone.drone_kind == DroneAgent.DroneKind.ARM)
@@ -214,7 +353,12 @@ func _run_stage_05_smoke() -> void:
 	beam_hazard.player = combat_player
 	beam_hazard.target_x = combat_player.global_position.x
 	beam_hazard.damaged_this_firing = false
+	beam_hazard.intercepted_this_firing = false
 	beam_hazard._damage_player_once()
-	assert(combat_player.is_defeated())
+	assert(beam_hazard.intercepted_this_firing)
+	assert(allies[3].is_defeated())
+	assert(not combat_player.is_defeated())
+	assert(scenario_dialogue.active)
+	assert(scenario_dialogue.current_speaker() == "아군4")
 	print("STAGE_05_CHECK passed")
 	get_tree().quit(0)

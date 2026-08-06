@@ -3,6 +3,7 @@ extends Node2D
 
 signal warning_started(target_x: float)
 signal firing_started(target_x: float)
+signal lethal_hit_imminent(target_x: float)
 
 enum State {
 	WARNING,
@@ -21,6 +22,7 @@ var state := State.COOLDOWN
 var state_remaining := 0.0
 var target_x := 0.0
 var damaged_this_firing := false
+var intercepted_this_firing := false
 var active := false
 
 
@@ -72,6 +74,7 @@ func _begin_warning() -> void:
 	state = State.WARNING
 	state_remaining = warning_duration
 	damaged_this_firing = false
+	intercepted_this_firing = false
 	if is_instance_valid(player):
 		target_x = player.global_position.x
 	warning_started.emit(target_x)
@@ -98,6 +101,13 @@ func _damage_player_once() -> void:
 	damaged_this_firing = true
 	if absf(player.global_position.x - target_x) > beam_width * 0.5:
 		return
+	lethal_hit_imminent.emit(target_x)
+	if intercepted_this_firing:
+		return
 	var body_durability := float(player.part_durability.get(&"Body", 0.0))
 	if body_durability > 0.0:
 		player.register_hit(&"Body", Vector2.UP, body_durability)
+
+
+func intercept_current_firing() -> void:
+	intercepted_this_firing = true

@@ -124,6 +124,13 @@ func force_reload() -> bool:
 	return true
 
 
+func accelerate_reload(speed_multiplier: float) -> bool:
+	if reload_remaining <= 0.0 or speed_multiplier <= 1.0:
+		return false
+	reload_remaining /= speed_multiplier
+	return true
+
+
 func reload_duration() -> float:
 	return maxf(spec.reload_duration * reload_duration_multiplier, 0.0)
 

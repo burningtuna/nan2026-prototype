@@ -43,6 +43,56 @@ player_controlled = true
 use_session_loadout = true
 team_color = Color(0.443137, 0.85098, 0.909804, 1)
 
+[node name="Allies" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="Ally1" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+position = Vector2(-220, 120)
+script = ExtResource("4_spawn")
+unit_id = "ALLY-01"
+team_id = 0
+spawn_mode = 1
+spawn_group = &"STAGE_05_ALLY_1"
+movement_type = 1
+random_seed = 5101
+team_color = Color(0.35, 0.85, 0.42, 1)
+left_arm_id = "viper_rotary_arm"
+
+[node name="Ally2" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+position = Vector2(220, 120)
+script = ExtResource("4_spawn")
+unit_id = "ALLY-02"
+team_id = 0
+spawn_mode = 1
+spawn_group = &"STAGE_05_ALLY_2"
+movement_type = 1
+random_seed = 5102
+team_color = Color(0.38, 0.72, 1, 1)
+left_arm_id = "arc_repeater_arm"
+
+[node name="Ally3" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+position = Vector2(-220, -120)
+script = ExtResource("4_spawn")
+unit_id = "ALLY-03"
+team_id = 0
+spawn_mode = 1
+spawn_group = &"STAGE_05_ALLY_3"
+movement_type = 2
+random_seed = 5103
+team_color = Color(1, 0.72, 0.28, 1)
+left_arm_id = "tempest_guided_arm"
+
+[node name="Ally4" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+position = Vector2(220, -120)
+script = ExtResource("4_spawn")
+unit_id = "ALLY-04"
+team_id = 0
+spawn_mode = 1
+spawn_group = &"STAGE_05_ALLY_4"
+movement_type = 0
+random_seed = 5104
+team_color = Color(0.92, 0.45, 0.4, 1)
+left_arm_id = "breach_scattergun_arm"
+
 [node name="VerticalBeamHazard" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
 z_index = 12
 script = ExtResource("5_beam")

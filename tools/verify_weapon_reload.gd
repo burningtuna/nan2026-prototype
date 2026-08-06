@@ -11,6 +11,7 @@ func _initialize() -> void:
 	_verify_reload_multiplier(catalog.weapon("test_missile"), 0.2)
 	_verify_reload_multiplier(catalog.weapon("test_cannon"), 0.0)
 	_verify_forced_reload(catalog.weapon("test_cannon"))
+	_verify_reload_acceleration(catalog.weapon("test_cannon"))
 	_verify_selected_forced_reload(catalog.weapon("test_cannon"))
 	print("WEAPON_RELOAD_CHECK passed")
 	quit(0)
@@ -78,6 +79,20 @@ func _verify_forced_reload(spec: WeaponSpec) -> void:
 	assert(is_zero_approx(runtime.reload_remaining))
 	assert(not runtime.reload_end_pending)
 	assert(runtime.ammo < spec.magazine_capacity)
+	runtime.visual.free()
+	muzzle.free()
+
+
+func _verify_reload_acceleration(spec: WeaponSpec) -> void:
+	var muzzle := Marker2D.new()
+	var runtime := WeaponRuntime.new()
+	runtime.setup(spec, Sprite2D.new(), [muzzle], &"LeftArm", 1.0)
+	runtime.ammo -= 1
+	assert(runtime.force_reload())
+	var original_remaining := runtime.reload_remaining
+	assert(runtime.accelerate_reload(5.0))
+	assert(is_equal_approx(runtime.reload_remaining, original_remaining / 5.0))
+	assert(not runtime.accelerate_reload(1.0))
 	runtime.visual.free()
 	muzzle.free()
 

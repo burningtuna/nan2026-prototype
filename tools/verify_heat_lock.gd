@@ -32,6 +32,10 @@ func _initialize() -> void:
 	agent._add_heat(heated_weapon.spec.heat_cost)
 	assert(agent.current_heat == AiMechAgent.MAX_HEAT)
 	assert(agent.heat_generation_locked)
+	assert(agent.clear_overheat() == AiMechAgent.MAX_HEAT)
+	assert(agent.current_heat == 0.0 and not agent.heat_generation_locked)
+	agent.current_energy = 1.0
+	assert(agent.restore_energy_full() == AiMechAgent.DEFAULT_MAX_ENERGY - 1.0)
 
 	var hud := GameHud.new()
 	hud._build_audio()
