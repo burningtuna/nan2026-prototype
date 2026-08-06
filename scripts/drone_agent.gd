@@ -19,6 +19,7 @@ var drone_speed := 110.0
 var defeated_once := false
 var weapon_runtime: WeaponRuntime
 var arm_projectile_spec: ProjectileSpec
+var destroyed_by_contact := false
 
 
 func setup_drone(
@@ -199,7 +200,10 @@ func _on_contact_area_entered(area: Area2D) -> void:
 	var impact_direction := velocity.normalized()
 	if impact_direction.is_zero_approx():
 		impact_direction = (area.mech.global_position - global_position).normalized()
+	if area.mech.is_dashing():
+		area.mech.cancel_dash_after_collision()
 	area.mech.register_hit(area.part_name, impact_direction, contact_damage)
+	destroyed_by_contact = true
 	_destroy_drone()
 
 

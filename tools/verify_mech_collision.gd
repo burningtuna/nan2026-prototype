@@ -31,5 +31,29 @@ func _initialize() -> void:
 	assert(second.position.is_equal_approx(first.position))
 	first.free()
 	second.free()
+
+	var player := AiMechAgent.new()
+	var boundary_ally := AiMechAgent.new()
+	player.player_controlled = true
+	player.position = Vector2(100.0, 0.0)
+	boundary_ally.position = player.position
+	var fixed_player_position := player.position
+	for _frame in 10:
+		boundary_ally.position.x = minf(boundary_ally.position.x, 100.0)
+		MECH_COLLISION_RESOLVER.resolve([player, boundary_ally])
+		assert(player.position.is_equal_approx(fixed_player_position))
+	assert(is_equal_approx(
+		player.position.distance_to(boundary_ally.position),
+		player.mech_collision_radius + boundary_ally.mech_collision_radius
+	))
+	player.position = Vector2.ZERO
+	boundary_ally.position = Vector2(10.0, 0.0)
+	player.dash_direction = Vector2.RIGHT
+	player.dash_time_remaining = 0.5
+	player.velocity = Vector2(100.0, 0.0)
+	MECH_COLLISION_RESOLVER.resolve([player, boundary_ally])
+	assert(not player.is_dashing() and player.velocity.is_zero_approx())
+	player.free()
+	boundary_ally.free()
 	print("MECH_COLLISION_CHECK passed")
 	quit(0)

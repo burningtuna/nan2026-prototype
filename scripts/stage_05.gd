@@ -6,6 +6,7 @@ const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const DRONE_TARGET := 20
 const MAX_LIVING_DRONES := 4
 const DRONE_SPAWN_INTERVAL := 1.5
+const BEAM_UNLOCK_DRONE_KILLS := 2
 const ALLY_COUNT := 4
 const RELOAD_SUPPORT_MULTIPLIER := 5.0
 const SUPPORT_APPROACH_SECONDS := 0.35
@@ -21,6 +22,14 @@ const ALLY_4_DIALOGUE := {
 	"dialogue": [{
 		"speaker": "아군4",
 		"text": "한눈 팔았군, 두번은 도와줄 수 없으니 다음엔 실수하지 마!",
+	}],
+}
+const BEAM_WARNING_DIALOGUE := {
+	"schema_version": 1,
+	"id": "stage_05_beam_warning",
+	"dialogue": [{
+		"speaker": "오퍼레이터",
+		"text": "적 모선에서 강력한 에너지포가 발사되려 합니다! 예상 착탄 지점을 표시할테니 피하세요",
 	}],
 }
 
@@ -40,6 +49,8 @@ var observed_reload_count := 0
 var player_was_cooling := false
 var energy_support_armed := true
 var ally_support_tweens := {}
+var beam_intro_played := false
+var beam_intro_active := false
 
 
 func pause_menu_context() -> Dictionary:
@@ -55,9 +66,9 @@ func _process(delta: float) -> void:
 	super(delta)
 	if not running or mission_finished:
 		return
-	_update_ally_support()
-	if drones_spawned >= DRONE_TARGET:
+	if beam_intro_active:
 		return
+	_update_ally_support()
 	spawn_remaining -= delta
 	if spawn_remaining <= 0.0 and _living_drone_count() < MAX_LIVING_DRONES:
 		spawn_drone()
@@ -82,10 +93,11 @@ func _on_combat_bound() -> void:
 	beam_hazard.warning_started.connect(_on_beam_warning_started)
 	beam_hazard.firing_started.connect(_on_beam_firing_started)
 	beam_hazard.lethal_hit_imminent.connect(_on_beam_lethal_hit_imminent)
+	scenario_dialogue.dialogue_finished.connect(_on_stage_05_dialogue_finished)
 	_spawn_surviving_allies()
 	observed_reload_count = _player_reload_count()
 	running = true
-	beam_hazard.setup(battle.arena, combat_player)
+	beam_hazard.setup(battle.arena, combat_player, false)
 	spawn_remaining = 0.25
 	system_messages.push_message(
 		"STAGE 05 // STAGE 04 SURVIVORS: %d" % survivor_count
@@ -174,10 +186,7 @@ func _finish_support_approach(index: int, ally: AiMechAgent) -> void:
 func spawn_drone(forced_kind := -1) -> DroneAgent:
 	if not is_instance_valid(combat_player) or part_catalog == null:
 		return null
-	if forced_kind < 0 and (
-		drones_spawned >= DRONE_TARGET
-		or _living_drone_count() >= MAX_LIVING_DRONES
-	):
+	if forced_kind < 0 and _living_drone_count() >= MAX_LIVING_DRONES:
 		return null
 	var kind := forced_kind
 	if kind < 0:
@@ -243,9 +252,13 @@ func _living_drone_count() -> int:
 func _on_stage_agent_defeated(agent: AiMechAgent) -> void:
 	if not running or not is_instance_valid(agent) or agent.unit_class != AiMechAgent.UnitClass.DRONE:
 		return
+	if agent is DroneAgent and agent.destroyed_by_contact:
+		return
 	drones_defeated += 1
 	system_messages.push_message("DRONE DESTROYED // %02d/%02d" % [drones_defeated, DRONE_TARGET])
 	_remove_drone_after_frame(agent)
+	if drones_defeated >= BEAM_UNLOCK_DRONE_KILLS and not beam_hazard.active:
+		beam_hazard.activate()
 	if drones_defeated >= DRONE_TARGET:
 		running = false
 		beam_hazard.active = false
@@ -271,6 +284,23 @@ func _on_stage_player_defeated() -> void:
 func _on_beam_warning_started(_target_x: float) -> void:
 	if running:
 		system_messages.push_message("VERTICAL BEAM WARNING // MOVE CLEAR")
+	if not running or beam_intro_played:
+		return
+	beam_intro_played = true
+	beam_intro_active = true
+	beam_hazard.process_mode = Node.PROCESS_MODE_DISABLED
+	if not scenario_dialogue.play_document(BEAM_WARNING_DIALOGUE, "stage_05.gd"):
+		_resume_after_beam_intro()
+
+
+func _on_stage_05_dialogue_finished(scenario_id: String) -> void:
+	if scenario_id == "stage_05_beam_warning":
+		_resume_after_beam_intro()
+
+
+func _resume_after_beam_intro() -> void:
+	beam_intro_active = false
+	beam_hazard.process_mode = Node.PROCESS_MODE_INHERIT
 
 
 func _on_beam_firing_started(_target_x: float) -> void:
@@ -298,8 +328,14 @@ func _run_stage_05_smoke() -> void:
 	assert(not battle.floor_tile_enabled)
 	var black_floor := $CombatContainer/CombatViewport/BlackFloor as Polygon2D
 	assert(black_floor.color == Color.BLACK and black_floor.z_index < 0)
+	var map_background := $CombatContainer/CombatViewport/MapBackground as Sprite2D
+	assert(map_background.texture.resource_path == "res://Sprites/Background/Stage5.png")
+	assert(map_background.position == Vector2(0.0, -500.0))
+	assert(battle.arena == Rect2(-1600.0, -250.0, 3200.0, 750.0))
+	assert(map_background.material is ShaderMaterial)
 	assert(is_equal_approx(beam_hazard.beam_width, 200.0))
 	assert(is_equal_approx(beam_hazard.warning_duration, 2.0))
+	assert(not beam_hazard.active and BEAM_UNLOCK_DRONE_KILLS == 2)
 	assert(survivor_count == ALLY_COUNT and allies.size() == ALLY_COUNT)
 	for ally in allies:
 		assert(is_instance_valid(ally) and not ally.is_defeated())
@@ -330,14 +366,25 @@ func _run_stage_05_smoke() -> void:
 		forced_drone.drone_part.weapon.projectile.damage / 3.0
 	))
 	assert(drones_spawned == 1 and _living_drone_count() == 1)
+	var spawned_test_drones: Array[DroneAgent] = [forced_drone]
 	for kind in [DroneAgent.DroneKind.HEAD, DroneAgent.DroneKind.LEGS, DroneAgent.DroneKind.ARM]:
-		assert(spawn_drone(kind) != null)
+		var spawned_test_drone := spawn_drone(kind)
+		assert(spawned_test_drone != null)
+		spawned_test_drones.append(spawned_test_drone)
 	assert(_living_drone_count() == MAX_LIVING_DRONES)
 	assert(spawn_drone() == null)
-	var spawned_before_target_check := drones_spawned
+	var removed_test_drone: DroneAgent = spawned_test_drones.pop_back()
+	battle.remove_combatant(removed_test_drone)
 	drones_spawned = DRONE_TARGET
-	assert(spawn_drone() == null)
-	drones_spawned = spawned_before_target_check
+	assert(spawn_drone() != null)
+	drones_defeated = BEAM_UNLOCK_DRONE_KILLS - 1
+	_on_stage_agent_defeated(forced_drone)
+	assert(beam_hazard.active and beam_intro_active)
+	assert(scenario_dialogue.current_speaker() == "오퍼레이터")
+	assert(beam_hazard.process_mode == Node.PROCESS_MODE_DISABLED)
+	scenario_dialogue.advance()
+	assert(not beam_intro_active and beam_hazard.process_mode == Node.PROCESS_MODE_INHERIT)
+	drones_defeated = 0
 	var event_counts := [0, 0]
 	beam_hazard.warning_started.connect(func(_x: float) -> void: event_counts[0] += 1)
 	beam_hazard.firing_started.connect(func(_x: float) -> void: event_counts[1] += 1)
@@ -360,5 +407,12 @@ func _run_stage_05_smoke() -> void:
 	assert(not combat_player.is_defeated())
 	assert(scenario_dialogue.active)
 	assert(scenario_dialogue.current_speaker() == "아군4")
+	combat_player.dash_direction = Vector2.LEFT
+	combat_player.dash_time_remaining = 0.5
+	combat_player.velocity = Vector2.LEFT * 100.0
+	forced_drone._on_contact_area_entered(combat_player.part_hitboxes[&"Body"])
+	assert(forced_drone.is_defeated())
+	assert(drones_defeated == 0)
+	assert(not combat_player.is_dashing() and combat_player.velocity.is_zero_approx())
 	print("STAGE_05_CHECK passed")
 	get_tree().quit(0)

@@ -26,9 +26,17 @@ var intercepted_this_firing := false
 var active := false
 
 
-func setup(movement_arena: Rect2, combat_player: AiMechAgent) -> void:
+func setup(movement_arena: Rect2, combat_player: AiMechAgent, activate_immediately := true) -> void:
 	arena = movement_arena
 	player = combat_player
+	active = false
+	if activate_immediately:
+		activate()
+
+
+func activate() -> void:
+	if active:
+		return
 	active = true
 	_begin_warning()
 

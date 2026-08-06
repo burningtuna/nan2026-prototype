@@ -19,11 +19,20 @@ static func _resolve_pair(first: AiMechAgent, second: AiMechAgent) -> void:
 	var minimum_distance := first.mech_collision_radius + second.mech_collision_radius
 	if separation.length_squared() >= minimum_distance * minimum_distance:
 		return
+	if first.is_dashing():
+		first.cancel_dash_after_collision()
+	if second.is_dashing():
+		second.cancel_dash_after_collision()
 	var distance := separation.length()
 	var normal := separation / distance if distance > 0.001 else Vector2.RIGHT
-	var correction := normal * (minimum_distance - distance) * 0.5
-	first.global_position -= correction
-	second.global_position += correction
+	var correction := normal * (minimum_distance - distance)
+	if first.player_controlled:
+		second.global_position += correction
+	elif second.player_controlled:
+		first.global_position -= correction
+	else:
+		first.global_position -= correction * 0.5
+		second.global_position += correction * 0.5
 
 	var first_inward_speed := first.velocity.dot(normal)
 	if first_inward_speed > 0.0:

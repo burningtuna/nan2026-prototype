@@ -1,9 +1,17 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
 [ext_resource type="Script" path="res://scripts/stage_05_cutscene.gd" id="2_screen"]
 [ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
 [ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="4_spawn"]
+[ext_resource type="Texture2D" path="res://Sprites/Environment/Stage5_UFO.png" id="5_ufo"]
+[ext_resource type="Texture2D" path="res://Sprites/Background/Stage5.png" id="6_background"]
+
+[sub_resource type="Shader" id="Shader_stage5_ocean_fade"]
+code = "shader_type canvas_item;\n\nuniform float fade_end : hint_range(0.01, 0.5) = 0.14;\n\nvoid fragment() {\n\tvec4 color = texture(TEXTURE, UV);\n\tcolor.a *= smoothstep(0.0, fade_end, UV.y);\n\tCOLOR = color;\n}\n"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_stage5_ocean_fade"]
+shader = SubResource("Shader_stage5_ocean_fade")
 
 [node name="Stage05Cutscene" instance=ExtResource("1_base")]
 script = ExtResource("2_screen")
@@ -25,10 +33,23 @@ floor_tile_enabled = false
 
 [node name="BlackFloor" type="Polygon2D" parent="CombatContainer/CombatViewport" index="1"]
 z_index = -100
-polygon = PackedVector2Array(-2600, -2100, 3600, -2100, 3600, 2400, -2600, 2400)
+polygon = PackedVector2Array(-2200, -12500, 2200, -12500, 2200, 2500, -2200, 2500)
 color = Color(0, 0, 0, 1)
 
-[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="2"]
+[node name="OceanExtension" type="Polygon2D" parent="CombatContainer/CombatViewport" index="2"]
+z_index = -95
+polygon = PackedVector2Array(-2200, -12500, 2200, -12500, 2200, -1400, -2200, -1400)
+color = Color(0.055, 0.13, 0.16, 1)
+
+[node name="MapBackground" type="Sprite2D" parent="CombatContainer/CombatViewport" index="3"]
+z_index = -90
+material = SubResource("ShaderMaterial_stage5_ocean_fade")
+position = Vector2(0, -500)
+scale = Vector2(1.82292, 1.82292)
+texture_filter = 1
+texture = ExtResource("6_background")
+
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="4"]
 script = ExtResource("3_stage")
 stage_id = "stage_05_cutscene"
 battle_path = NodePath("../SampleAssembly")
@@ -99,28 +120,12 @@ legs_id = "courier_legs"
 
 [node name="UfoPlaceholder" type="Node2D" parent="CombatContainer/CombatViewport" index="3"]
 visible = false
-position = Vector2(1420, -980)
+position = Vector2(0, -11180)
 z_index = 2
 
-[node name="OuterGlow" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
-polygon = PackedVector2Array(-320, 0, -260, -72, -130, -112, 130, -112, 260, -72, 320, 0, 260, 72, 130, 112, -130, 112, -260, 72)
-color = Color(0.3, 0.12, 0.48, 0.28)
-
-[node name="Hull" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
-polygon = PackedVector2Array(-280, 0, -220, -52, -105, -78, 105, -78, 220, -52, 280, 0, 220, 52, 105, 78, -105, 78, -220, 52)
-color = Color(0.18, 0.12, 0.25, 1)
-
-[node name="Canopy" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
-polygon = PackedVector2Array(-120, -54, -74, -112, 0, -136, 74, -112, 120, -54)
-color = Color(0.31, 0.2, 0.43, 1)
-
-[node name="EngineLeft" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
-polygon = PackedVector2Array(-230, 18, -142, 34, -154, 70, -248, 52)
-color = Color(0.55, 0.2, 0.72, 1)
-
-[node name="EngineRight" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
-polygon = PackedVector2Array(230, 18, 142, 34, 154, 70, 248, 52)
-color = Color(0.55, 0.2, 0.72, 1)
+[node name="Sprite" type="Sprite2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
+texture_filter = 1
+texture = ExtResource("5_ufo")
 
 [node name="ImpactFlash" type="ColorRect" parent="CombatContainer/CombatViewport/OverlayLayer" index="0"]
 visible = false

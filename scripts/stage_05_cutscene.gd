@@ -10,10 +10,10 @@ const DASH_FRAMES := [
 	"res://Sprites/Dash-0003.png",
 ]
 const BOSS_START_OFFSET := Vector2(-480.0, 320.0)
-const BOSS_FLIGHT_OFFSET := Vector2(9500.0, -6500.0)
-const CAMERA_TRAIL_OFFSET := Vector2(-260.0, 180.0)
+const BOSS_FLIGHT_OFFSET := Vector2(480.0, -11500.0)
+const CAMERA_TRAIL_OFFSET := Vector2(0.0, 300.0)
 const BOSS_FLIGHT_SECONDS := 5.0
-const UFO_BASE_RADIUS := 320.0
+const UFO_BASE_RADIUS := 768.0
 const IMPACT_FLASH_SECONDS := 0.45
 const DEFAULT_DRONE_PARTS := {
 	"HEAD": "raven_sensor",
@@ -351,6 +351,10 @@ func _abort_cutscene() -> void:
 func _run_stage_05_cutscene_smoke() -> void:
 	assert(snapshot["rescued_ally_count"] == 4)
 	assert(combat_player.global_position.is_equal_approx(Vector2.ZERO))
+	var map_background := $CombatContainer/CombatViewport/MapBackground as Sprite2D
+	assert(map_background.texture.resource_path == "res://Sprites/Background/Stage5.png")
+	assert(map_background.position == Vector2(0.0, -500.0))
+	assert(map_background.material is ShaderMaterial)
 	assert(spawned_allies.size() == 4 and spawned_enemies.is_empty())
 	for index in spawned_allies.size():
 		assert(spawned_allies[index].global_position.is_equal_approx(
