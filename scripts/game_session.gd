@@ -27,12 +27,27 @@ var endless_progress_path := ENDLESS_PROGRESS_PATH
 var selected_game_mode := GameMode.SKIRMISH
 var story_deployment_scene_path := ""
 var story_stage_selected_directly := false
+var stage_05_cutscene_snapshot: Dictionary = {}
 var endless_player_balance_enabled := true
 var endless_missile_reload_multiplier := 0.2
 var endless_other_reload_multiplier := 0.0
 var endless_player_damage_multiplier := 0.2
 var endless_intro_shown := false
 var story_progress: Dictionary = {}
+
+
+func set_stage_05_cutscene_snapshot(snapshot: Dictionary) -> void:
+	stage_05_cutscene_snapshot = snapshot.duplicate(true)
+
+
+func take_stage_05_cutscene_snapshot() -> Dictionary:
+	var snapshot := stage_05_cutscene_snapshot.duplicate(true)
+	stage_05_cutscene_snapshot.clear()
+	return snapshot
+
+
+func clear_stage_05_cutscene_snapshot() -> void:
+	stage_05_cutscene_snapshot.clear()
 
 
 func confirm_player_loadout(loadout: MechLoadout) -> void:

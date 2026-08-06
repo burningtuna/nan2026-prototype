@@ -2,12 +2,14 @@ extends Control
 
 const MAIN_MENU_PATH := "res://scenes/main_menu.tscn"
 const HANGAR_PATH := "res://scenes/hangar_screen.tscn"
+const STAGE_05_CUTSCENE_PATH := "res://scenes/stage_05_cutscene.tscn"
 const STAGES := [
 	["STAGE 01", "STATIC TARGETS // 1 VS 4", "res://scenes/stage_01.tscn", false],
 	["STAGE 02", "TEAM ENGAGEMENT // 2 VS 2", "res://scenes/stage_02.tscn", false],
 	["STAGE 03", "BOSS ENGAGEMENT // 2 VS 1", "res://scenes/stage_03.tscn", true],
 	["STAGE 04", "FIELD ADVANCE // RESCUE 4 ALLIES", "res://scenes/stage_04.tscn", true],
 	["STAGE 05", "SURVIVAL // 20 DRONES + VERTICAL BEAM", "res://scenes/stage_05.tscn", true],
+	["STAGE 05-CUTSCENE", "ARENA BOSS // ONE-WAY FLIGHT", STAGE_05_CUTSCENE_PATH, false],
 ]
 
 const BG := Color("071014")
@@ -29,6 +31,7 @@ func _ready() -> void:
 		assert(get_tree().get_nodes_in_group("story_stage_button").size() == STAGES.size())
 		assert(not bool(STAGES[0][3]) and not bool(STAGES[1][3]))
 		assert(bool(STAGES[2][3]) and bool(STAGES[3][3]) and bool(STAGES[4][3]))
+		assert(not bool(STAGES[5][3]) and str(STAGES[5][2]) == STAGE_05_CUTSCENE_PATH)
 		print("STORY_STAGE_SELECT_CHECK passed")
 		get_tree().quit(0)
 
@@ -88,9 +91,18 @@ func _build_interface() -> void:
 	list_margin.add_theme_constant_override("margin_top", 12)
 	list_margin.add_theme_constant_override("margin_bottom", 12)
 	list_panel.add_child(list_margin)
+	var list_content := VBoxContainer.new()
+	list_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_margin.add_child(list_content)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	list_content.add_child(scroll)
 	var stage_list := VBoxContainer.new()
+	stage_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage_list.add_theme_constant_override("separation", 6)
-	list_margin.add_child(stage_list)
+	scroll.add_child(stage_list)
 	for stage in STAGES:
 		var button := Button.new()
 		button.text = "%s\n%s" % [stage[0], stage[1]]
@@ -103,7 +115,7 @@ func _build_interface() -> void:
 	status_label = Label.new()
 	status_label.add_theme_font_size_override("font_size", 9)
 	status_label.add_theme_color_override("font_color", MUTED)
-	stage_list.add_child(status_label)
+	list_content.add_child(status_label)
 
 
 func _add_label(parent: Node, text: String, font_size: int, color: Color, wrap := false) -> void:
@@ -141,6 +153,8 @@ func _transition(scene_path: String) -> void:
 
 func _launch_stage(stage: Array) -> void:
 	var stage_path := str(stage[2])
+	if stage_path == STAGE_05_CUTSCENE_PATH:
+		GameSession.clear_stage_05_cutscene_snapshot()
 	GameSession.selected_game_mode = GameSession.GameMode.STORY
 	GameSession.story_deployment_scene_path = stage_path if bool(stage[3]) else ""
 	GameSession.story_stage_selected_directly = true

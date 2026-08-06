@@ -1,0 +1,135 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
+[ext_resource type="Script" path="res://scripts/stage_05_cutscene.gd" id="2_screen"]
+[ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
+[ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="4_spawn"]
+
+[node name="Stage05Cutscene" instance=ExtResource("1_base")]
+script = ExtResource("2_screen")
+automatic_return_to_hangar = false
+tutorial_enabled = false
+finish_from_team_result = false
+
+[node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
+arena = Rect2(-1200, -900, 2400, 1800)
+camera_mode = 1
+centered_camera_zoom = 0.35
+two_vs_two = false
+enable_player_control = false
+randomize_loadouts = false
+solo_player = true
+automatic_battle_completion = false
+automatic_agent_spawn = false
+floor_tile_enabled = false
+
+[node name="BlackFloor" type="Polygon2D" parent="CombatContainer/CombatViewport" index="1"]
+z_index = -100
+polygon = PackedVector2Array(-2600, -2100, 3600, -2100, 3600, 2400, -2600, 2400)
+color = Color(0, 0, 0, 1)
+
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="2"]
+script = ExtResource("3_stage")
+stage_id = "stage_05_cutscene"
+battle_path = NodePath("../SampleAssembly")
+editor_guides_visible_in_game = false
+
+[node name="PlayerSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage"]
+script = ExtResource("4_spawn")
+unit_id = "PLAYER"
+team_id = 0
+player_controlled = true
+use_session_loadout = true
+team_color = Color(0.443137, 0.85098, 0.909804, 1)
+
+[node name="Allies" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+
+[node name="Ally1" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+script = ExtResource("4_spawn")
+unit_id = "ALLY-01"
+team_id = 0
+spawn_mode = 1
+random_seed = 5101
+team_color = Color(0.35, 0.85, 0.42, 1)
+left_arm_id = "viper_rotary_arm"
+
+[node name="Ally2" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+script = ExtResource("4_spawn")
+unit_id = "ALLY-02"
+team_id = 0
+spawn_mode = 1
+random_seed = 5102
+team_color = Color(0.38, 0.72, 1, 1)
+left_arm_id = "arc_repeater_arm"
+
+[node name="Ally3" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+script = ExtResource("4_spawn")
+unit_id = "ALLY-03"
+team_id = 0
+spawn_mode = 1
+random_seed = 5103
+team_color = Color(1, 0.72, 0.28, 1)
+left_arm_id = "tempest_guided_arm"
+
+[node name="Ally4" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+script = ExtResource("4_spawn")
+unit_id = "ALLY-04"
+team_id = 0
+spawn_mode = 1
+random_seed = 5104
+team_color = Color(0.92, 0.45, 0.4, 1)
+left_arm_id = "breach_scattergun_arm"
+
+[node name="ArenaBoss" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage"]
+position = Vector2(-480, 320)
+script = ExtResource("4_spawn")
+unit_id = "ARENA-BOSS"
+team_id = 0
+player_controlled = false
+movement_type = 0
+random_seed = 5300
+team_color = Color(0.92, 0.38, 0.32, 1)
+unit_class = 2
+head_id = "falcon_sensor"
+body_id = "swift_core"
+left_arm_id = "cyclone_flechette_arm"
+right_arm_id = ""
+backpack_id = "grid_generator"
+legs_id = "courier_legs"
+
+[node name="UfoPlaceholder" type="Node2D" parent="CombatContainer/CombatViewport" index="3"]
+visible = false
+position = Vector2(1420, -980)
+z_index = 2
+
+[node name="OuterGlow" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
+polygon = PackedVector2Array(-320, 0, -260, -72, -130, -112, 130, -112, 260, -72, 320, 0, 260, 72, 130, 112, -130, 112, -260, 72)
+color = Color(0.3, 0.12, 0.48, 0.28)
+
+[node name="Hull" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
+polygon = PackedVector2Array(-280, 0, -220, -52, -105, -78, 105, -78, 220, -52, 280, 0, 220, 52, 105, 78, -105, 78, -220, 52)
+color = Color(0.18, 0.12, 0.25, 1)
+
+[node name="Canopy" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
+polygon = PackedVector2Array(-120, -54, -74, -112, 0, -136, 74, -112, 120, -54)
+color = Color(0.31, 0.2, 0.43, 1)
+
+[node name="EngineLeft" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
+polygon = PackedVector2Array(-230, 18, -142, 34, -154, 70, -248, 52)
+color = Color(0.55, 0.2, 0.72, 1)
+
+[node name="EngineRight" type="Polygon2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
+polygon = PackedVector2Array(230, 18, 142, 34, 154, 70, 248, 52)
+color = Color(0.55, 0.2, 0.72, 1)
+
+[node name="ImpactFlash" type="ColorRect" parent="CombatContainer/CombatViewport/OverlayLayer" index="0"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 1, 1, 0)
+
+[editable path="CombatContainer/CombatViewport/SampleAssembly"]
