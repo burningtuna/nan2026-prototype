@@ -63,6 +63,7 @@ visible = false
 script = ExtResource("9_mask")
 mask_texture = ExtResource("8_structure")
 map_rect = Rect2(-2800, -1630, 6000, 3260)
+collision_polygons_path = "res://data/stage4_collision_polygons.json"
 
 [node name="BlockedOverlay" type="Sprite2D" parent="CombatContainer/CombatViewport/StoryStage"]
 visible = false

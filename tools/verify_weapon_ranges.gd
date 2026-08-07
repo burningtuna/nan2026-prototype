@@ -4,6 +4,13 @@ extends SceneTree
 func _initialize() -> void:
 	var catalog := WeaponCatalog.new()
 	assert(catalog.load_file("res://data/weapons.json"))
+	var cyclone := catalog.weapon("weapon_scatter_rapid")
+	assert(cyclone != null and is_equal_approx(cyclone.fire_rate, 2.0))
+	assert(is_equal_approx(cyclone.projectile.damage, 5.0))
+	assert(is_equal_approx(cyclone.heat_cost, 24.0))
+	assert(is_zero_approx(cyclone.preparation_time))
+	assert(is_equal_approx(cyclone.preparation_move_speed_multiplier, 1.0))
+	assert(is_equal_approx(cyclone.preparation_turn_speed_multiplier, 1.0))
 	var agent := AiMechAgent.new()
 	var nova_checked := false
 	for weapon_value in catalog.weapons_by_id.values():

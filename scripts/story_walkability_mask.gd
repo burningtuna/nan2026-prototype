@@ -4,23 +4,27 @@ extends StoryWalkableArea
 const WALL_SLIDE_SPEED_MULTIPLIER := 0.65
 const SLIDE_EPSILON := 0.0001
 const SLIDE_DIRECTION_EPSILON := 0.001
+const COLLISION_CELL_SIZE := 128.0
 
 @export var mask_texture: Texture2D
 @export var map_rect := Rect2(-3000.0, -1630.0, 6000.0, 3260.0)
-@export_range(2, 32, 1) var collision_cell_pixels := 8
-@export_range(0, 3, 1) var blocked_margin_cells := 1
+@export_file("*.json") var collision_polygons_path := ""
 
+var blocked_polygons: Array[PackedVector2Array] = []
+var blocked_edges: Array = []
+var blocked_polygon_bounds: Array[Rect2] = []
+var blocked_edge_cells := {}
+var blocked_edge_query_marks := PackedInt32Array()
+var blocked_edge_query_id := 0
 var mask_image: Image
-var collision_grid := PackedByteArray()
-var collision_grid_size := Vector2i.ZERO
 
 
 func _ready() -> void:
 	add_to_group(&"projectile_mask_blockers")
 	add_to_group(&"radar_terrain_masks")
+	_load_collision_polygons()
 	if mask_texture != null:
 		mask_image = mask_texture.get_image()
-		_build_collision_grid()
 
 
 func contains_global_point(point: Vector2) -> bool:
@@ -28,7 +32,18 @@ func contains_global_point(point: Vector2) -> bool:
 
 
 func radar_point_is_accessible(world_point: Vector2) -> bool:
-	return contains_global_point(world_point)
+	var local_point := to_local(world_point)
+	if not map_rect.has_point(local_point):
+		return false
+	if mask_image == null or mask_image.is_empty():
+		return _is_accessible_local(local_point)
+	var normalized := (local_point - map_rect.position) / map_rect.size
+	var pixel := Vector2i(
+		clampi(floori(normalized.x * mask_image.get_width()), 0, mask_image.get_width() - 1),
+		clampi(floori(normalized.y * mask_image.get_height()), 0, mask_image.get_height() - 1)
+	)
+	var color := mask_image.get_pixelv(pixel)
+	return color.b <= color.r
 
 
 func contains_agent_at(center_global: Vector2, radius: float) -> bool:
@@ -36,26 +51,19 @@ func contains_agent_at(center_global: Vector2, radius: float) -> bool:
 		return false
 	if radius <= 0.0:
 		return true
-	var cell_world_size := maxf(
-		map_rect.size.x / maxf(float(collision_grid_size.x), 1.0),
-		map_rect.size.y / maxf(float(collision_grid_size.y), 1.0)
-	)
-	var ring_step := maxf(cell_world_size * 0.5, 4.0)
-	var ring_radius := ring_step
-	while ring_radius < radius:
-		if not _is_accessible_ring(center_global, ring_radius, ring_step):
-			return false
-		ring_radius += ring_step
-	if not _is_accessible_ring(center_global, radius, ring_step):
+	var center_local := to_local(center_global)
+	var local_radius := to_local(center_global + Vector2(radius, 0.0)).distance_to(center_local)
+	if not map_rect.grow(-local_radius).has_point(center_local):
 		return false
-	return true
-
-
-func _is_accessible_ring(center_global: Vector2, radius: float, arc_step: float) -> bool:
-	var sample_count := maxi(ceili(TAU * radius / maxf(arc_step, 1.0)), 12)
-	for index in sample_count:
-		var sample := center_global + Vector2.from_angle(TAU * float(index) / float(sample_count)) * radius
-		if not contains_global_point(sample):
+	var radius_squared := local_radius ** 2
+	var query_rect := Rect2(
+		center_local - Vector2.ONE * local_radius,
+		Vector2.ONE * local_radius * 2.0
+	)
+	for edge_index in _edge_indices_in_rect(query_rect):
+		var edge = blocked_edges[edge_index]
+		var closest := Geometry2D.get_closest_point_to_segment(center_local, edge[0], edge[1])
+		if center_local.distance_squared_to(closest) < radius_squared:
 			return false
 	return true
 
@@ -126,69 +134,202 @@ func _furthest_valid_position(start_global: Vector2, end_global: Vector2, radius
 
 
 func _blocked_normal(center_global: Vector2, radius: float, fallback: Vector2) -> Vector2:
-	var normal := Vector2.ZERO
-	var probe_distance := maxf(radius * 0.35, 6.0)
-	for index in 24:
-		var direction := Vector2.from_angle(TAU * float(index) / 24.0)
-		if not contains_agent_at(center_global + direction * probe_distance, radius):
-			normal += direction
-	return normal.normalized() if not normal.is_zero_approx() else fallback
+	var center_local := to_local(center_global)
+	var fallback_local := to_local(center_global + fallback) - center_local
+	var best_normal := Vector2.ZERO
+	var best_distance_squared := INF
+	var best_alignment := -INF
+	var edge_indices := _edge_indices_in_rect(
+		Rect2(center_local - Vector2.ONE * (radius + 2.0), Vector2.ONE * (radius + 2.0) * 2.0)
+	)
+	var corners := [
+		map_rect.position,
+		Vector2(map_rect.end.x, map_rect.position.y),
+		map_rect.end,
+		Vector2(map_rect.position.x, map_rect.end.y),
+	]
+	var nearby_edges: Array = []
+	for edge_index in edge_indices:
+		nearby_edges.append(blocked_edges[edge_index])
+	for index in 4:
+		nearby_edges.append([corners[index], corners[(index + 1) % 4]])
+	for edge in nearby_edges:
+		var closest := Geometry2D.get_closest_point_to_segment(center_local, edge[0], edge[1])
+		var offset := closest - center_local
+		if offset.is_zero_approx():
+			continue
+		var distance_squared := offset.length_squared()
+		var alignment := offset.normalized().dot(fallback_local.normalized())
+		if (
+			distance_squared < best_distance_squared - 0.01
+			or (
+				is_equal_approx(distance_squared, best_distance_squared)
+				and alignment > best_alignment
+			)
+		):
+			best_normal = offset.normalized()
+			best_distance_squared = distance_squared
+			best_alignment = alignment
+	if best_normal.is_zero_approx():
+		return fallback
+	return (to_global(center_local + best_normal) - center_global).normalized()
 
 
 func projectile_block_position(start_global: Vector2, end_global: Vector2):
 	var start_local := to_local(start_global)
 	var end_local := to_local(end_global)
-	var distance := start_local.distance_to(end_local)
-	var steps := maxi(ceili(distance / 2.0), 1)
-	for index in range(steps + 1):
-		var sample := start_local.lerp(end_local, float(index) / float(steps))
-		if not _is_accessible_local(sample):
-			return to_global(sample)
-	return null
+	if not _is_accessible_local(start_local):
+		return start_global
+	var nearest_hit = null
+	var nearest_distance_squared := INF
+	var segment_rect := Rect2(start_local, end_local - start_local).abs().grow(0.01)
+	for edge_index in _edge_indices_in_rect(segment_rect):
+		var edge = blocked_edges[edge_index]
+		var hit = Geometry2D.segment_intersects_segment(
+			start_local,
+			end_local,
+			edge[0],
+			edge[1]
+		)
+		if not hit is Vector2:
+			continue
+		var distance_squared := start_local.distance_squared_to(hit)
+		if distance_squared < nearest_distance_squared:
+			nearest_hit = hit
+			nearest_distance_squared = distance_squared
+	if nearest_hit is Vector2:
+		return to_global(nearest_hit)
+	if not map_rect.has_point(end_local):
+		var corners := [
+			map_rect.position,
+			Vector2(map_rect.end.x, map_rect.position.y),
+			map_rect.end,
+			Vector2(map_rect.position.x, map_rect.end.y),
+		]
+		for index in 4:
+			var hit = Geometry2D.segment_intersects_segment(
+				start_local,
+				end_local,
+				corners[index],
+				corners[(index + 1) % 4]
+			)
+			if not hit is Vector2:
+				continue
+			var distance_squared := start_local.distance_squared_to(hit)
+			if distance_squared < nearest_distance_squared:
+				nearest_hit = hit
+				nearest_distance_squared = distance_squared
+	return to_global(nearest_hit) if nearest_hit is Vector2 else null
 
 
 func _is_accessible_local(local_point: Vector2) -> bool:
-	if mask_image == null or mask_image.is_empty() or collision_grid.is_empty():
+	if blocked_polygons.is_empty():
 		return false
 	if not map_rect.has_point(local_point):
 		return false
-	var normalized := (local_point - map_rect.position) / map_rect.size
-	var cell := Vector2i(
-		clampi(floori(normalized.x * collision_grid_size.x), 0, collision_grid_size.x - 1),
-		clampi(floori(normalized.y * collision_grid_size.y), 0, collision_grid_size.y - 1)
-	)
-	return collision_grid[cell.y * collision_grid_size.x + cell.x] == 0
+	for index in blocked_polygons.size():
+		if not blocked_polygon_bounds[index].has_point(local_point):
+			continue
+		var polygon := blocked_polygons[index]
+		if Geometry2D.is_point_in_polygon(local_point, polygon):
+			return false
+	return true
 
 
-func _build_collision_grid() -> void:
-	var cell_size := maxi(collision_cell_pixels, 2)
-	collision_grid_size = Vector2i(
-		ceili(float(mask_image.get_width()) / float(cell_size)),
-		ceili(float(mask_image.get_height()) / float(cell_size))
-	)
-	var raw_grid := PackedByteArray()
-	raw_grid.resize(collision_grid_size.x * collision_grid_size.y)
-	for cell_y in collision_grid_size.y:
-		for cell_x in collision_grid_size.x:
-			var blocked_samples := 0
-			for sample_y in 3:
-				for sample_x in 3:
-					var pixel := Vector2i(
-						mini(cell_x * cell_size + floori((float(sample_x) + 0.5) * cell_size / 3.0), mask_image.get_width() - 1),
-						mini(cell_y * cell_size + floori((float(sample_y) + 0.5) * cell_size / 3.0), mask_image.get_height() - 1)
-					)
-					var color := mask_image.get_pixelv(pixel)
-					if color.b > color.r:
-						blocked_samples += 1
-			raw_grid[cell_y * collision_grid_size.x + cell_x] = 1 if blocked_samples >= 3 else 0
-	collision_grid = raw_grid.duplicate()
-	for cell_y in collision_grid_size.y:
-		for cell_x in collision_grid_size.x:
-			if raw_grid[cell_y * collision_grid_size.x + cell_x] == 0:
+func _load_collision_polygons() -> void:
+	blocked_polygons.clear()
+	blocked_edges.clear()
+	blocked_polygon_bounds.clear()
+	blocked_edge_cells.clear()
+	blocked_edge_query_marks.clear()
+	if collision_polygons_path.is_empty() or not FileAccess.file_exists(collision_polygons_path):
+		push_error("Missing vector collision data: %s" % collision_polygons_path)
+		return
+	var file := FileAccess.open(collision_polygons_path, FileAccess.READ)
+	if file == null:
+		push_error("Unable to read vector collision data: %s" % collision_polygons_path)
+		return
+	var parser := JSON.new()
+	if parser.parse(file.get_as_text()) != OK or not parser.data is Dictionary:
+		push_error("Invalid vector collision data: %s" % collision_polygons_path)
+		return
+	var document: Dictionary = parser.data
+	var source_size_data = document.get("source_size", [])
+	var polygon_data = document.get("blocked_polygons", [])
+	if (
+		int(document.get("schema_version", 0)) != 1
+		or not source_size_data is Array
+		or source_size_data.size() != 2
+		or not polygon_data is Array
+	):
+		push_error("Unsupported vector collision data: %s" % collision_polygons_path)
+		return
+	var source_size := Vector2(float(source_size_data[0]), float(source_size_data[1]))
+	if source_size.x <= 0.0 or source_size.y <= 0.0:
+		push_error("Invalid vector collision source size: %s" % collision_polygons_path)
+		return
+	for serialized_polygon in polygon_data:
+		if not serialized_polygon is Array or serialized_polygon.size() < 3:
+			continue
+		var polygon := PackedVector2Array()
+		for serialized_point in serialized_polygon:
+			if not serialized_point is Array or serialized_point.size() != 2:
 				continue
-			for offset_y in range(-blocked_margin_cells, blocked_margin_cells + 1):
-				for offset_x in range(-blocked_margin_cells, blocked_margin_cells + 1):
-					var target_x := cell_x + offset_x
-					var target_y := cell_y + offset_y
-					if target_x >= 0 and target_x < collision_grid_size.x and target_y >= 0 and target_y < collision_grid_size.y:
-						collision_grid[target_y * collision_grid_size.x + target_x] = 1
+			var source_point := Vector2(
+				float(serialized_point[0]),
+				float(serialized_point[1])
+			)
+			polygon.append(map_rect.position + source_point / source_size * map_rect.size)
+		if polygon.size() < 3:
+			continue
+		blocked_polygons.append(polygon)
+		var polygon_bounds := Rect2(polygon[0], Vector2.ZERO)
+		for point in polygon:
+			polygon_bounds = polygon_bounds.expand(point)
+		blocked_polygon_bounds.append(polygon_bounds)
+		for index in polygon.size():
+			blocked_edges.append([polygon[index], polygon[(index + 1) % polygon.size()]])
+	_build_edge_index()
+
+
+func _build_edge_index() -> void:
+	blocked_edge_cells.clear()
+	blocked_edge_query_marks.resize(blocked_edges.size())
+	blocked_edge_query_marks.fill(0)
+	blocked_edge_query_id = 0
+	for edge_index in blocked_edges.size():
+		var edge = blocked_edges[edge_index]
+		var edge_rect := Rect2(edge[0], edge[1] - edge[0]).abs().grow(0.01)
+		var first_cell := _collision_cell(edge_rect.position)
+		var last_cell := _collision_cell(edge_rect.end)
+		for cell_y in range(first_cell.y, last_cell.y + 1):
+			for cell_x in range(first_cell.x, last_cell.x + 1):
+				var cell := Vector2i(cell_x, cell_y)
+				if not blocked_edge_cells.has(cell):
+					blocked_edge_cells[cell] = []
+				blocked_edge_cells[cell].append(edge_index)
+
+
+func _edge_indices_in_rect(query_rect: Rect2) -> Array[int]:
+	var result: Array[int] = []
+	if blocked_edges.is_empty():
+		return result
+	blocked_edge_query_id += 1
+	var first_cell := _collision_cell(query_rect.position)
+	var last_cell := _collision_cell(query_rect.end)
+	for cell_y in range(first_cell.y, last_cell.y + 1):
+		for cell_x in range(first_cell.x, last_cell.x + 1):
+			var edge_indices = blocked_edge_cells.get(Vector2i(cell_x, cell_y), [])
+			for edge_index in edge_indices:
+				if blocked_edge_query_marks[edge_index] == blocked_edge_query_id:
+					continue
+				blocked_edge_query_marks[edge_index] = blocked_edge_query_id
+				result.append(edge_index)
+	return result
+
+
+func _collision_cell(point: Vector2) -> Vector2i:
+	return Vector2i(
+		floori(point.x / COLLISION_CELL_SIZE),
+		floori(point.y / COLLISION_CELL_SIZE)
+	)

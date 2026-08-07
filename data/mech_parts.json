@@ -706,7 +706,7 @@
 	  "type": "ARM_EQUIPMENT",
 	  "display_name": "CYCLONE FLECHETTE",
 	  "designation": "AR-S01",
-	  "description": "5개의 탄자를 빠르게 일제사격하는 경량 근거리 플레셰트 투사기.",
+	  "description": "이동과 회전 제약 없이 5개의 탄자를 빠르게 일제사격하는 경량 근거리 플레셰트 투사기.",
 	  "art_path": "res://Sprites/Arm-Shotgun-0001.png",
 	  "anchor_path": "res://Sprites/Arm-Shotgun-0001.anchors.png",
 	  "wireframe_art_path": "res://Sprites/Wireframe/Arm-Shotgun-0001.png",
