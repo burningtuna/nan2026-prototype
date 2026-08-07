@@ -33,6 +33,8 @@ enum PartType {
 @export var sensor_period := 1.0
 @export var enemy_track_limit := 0
 @export var projectile_track_limit := 0
+@export var repair_rate := 0.0
+@export var repair_power_generation := 0.0
 
 
 func provides_weapon() -> bool:

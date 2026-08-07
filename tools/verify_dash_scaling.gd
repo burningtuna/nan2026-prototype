@@ -50,8 +50,8 @@ func _initialize() -> void:
 		"swift_core", "falcon_sensor", "courier_legs", "arc_repeater_arm", "", "",
 	])
 	var heaviest := _loadout(part_catalog, [
-		"bulwark_core", "bastion_array", "anvil_legs",
-		"avalanche_flak_arm", "avalanche_flak_arm", "avalanche_flak_backpack",
+		"swift_core", "falcon_sensor", "anvil_legs",
+		"avalanche_flak_arm", "avalanche_flak_arm", "field_repair_backpack",
 	])
 
 	var agent := AiMechAgent.new()

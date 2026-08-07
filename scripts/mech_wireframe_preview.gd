@@ -104,8 +104,8 @@ func _assemble(paths: Dictionary) -> void:
 		return
 	var body_map := AnchorMap.load_map(body_paths[1])
 	_add_part(&"Body", body_paths[0], Vector2.ZERO, 3)
-	_attach_part(paths, body_map, &"Backpack", &"backpack_socket", 1)
-	_attach_part(paths, body_map, &"Legs", &"legs_socket", 2)
+	_attach_part(paths, body_map, &"Backpack", &"backpack_socket", 2)
+	_attach_part(paths, body_map, &"Legs", &"legs_socket", 1)
 	_attach_part(paths, body_map, &"LeftArm", &"left_arm_socket", 4)
 	_attach_part(paths, body_map, &"RightArm", &"right_arm_socket", 4, true)
 	_attach_part(paths, body_map, &"Head", &"head_socket", 5)

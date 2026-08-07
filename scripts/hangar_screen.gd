@@ -420,7 +420,11 @@ func _update_candidate_details() -> void:
 	if _pending_part == null:
 		_detail_name.text = "EMPTY MOUNT"
 		_detail_kind.text = "NO COMPONENT"
-		_detail_description.text = "선택한 팔 파츠를 제거하고 장착부를 비웁니다."
+		_detail_description.text = (
+			"선택한 백팩 파츠를 제거하고 장착부를 비웁니다."
+			if _active_slot == MechLoadout.MechSlot.BACKPACK
+			else "선택한 팔 파츠를 제거하고 장착부를 비웁니다."
+		)
 		_detail_stats.text = "ARMOR 0    WEIGHT 0\nPOWER +0   MOBILITY +0"
 		_detail_weapon.text = ""
 		return

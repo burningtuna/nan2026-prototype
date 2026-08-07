@@ -24,7 +24,7 @@ func finish_mission(success: bool, message := "") -> void:
 	if success:
 		overlay.show_result_message("STAGE CLEAR")
 	else:
-		overlay.show_team_victory(2)
+		overlay.show_result_message("MISSION FAILED")
 	if _is_smoke_test():
 		return
 	await get_tree().create_timer(RESULT_DELAY_SECONDS).timeout

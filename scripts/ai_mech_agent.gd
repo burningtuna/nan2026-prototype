@@ -12,7 +12,7 @@ const DASH_HEAT_COST := 15.0
 const MIN_LOADOUT_MOBILITY := 10.0
 const MAX_LOADOUT_MOBILITY := 108.0
 const MIN_LOADOUT_WEIGHT := 23.0
-const MAX_LOADOUT_WEIGHT := 138.0
+const MAX_LOADOUT_WEIGHT := 155.0
 const MIN_DASH_SPEED_MULTIPLIER := 1.0 / 3.0
 const MIN_DASH_DISTANCE_MULTIPLIER := 0.5
 const MAX_DASH_DISTANCE_MULTIPLIER := 1.5
@@ -26,6 +26,9 @@ const WEAPON_SELECT_LEFT := 1
 const WEAPON_SELECT_RIGHT := 2
 const WEAPON_SELECT_BACKPACK := 4
 const WEAPON_SELECT_ALL := WEAPON_SELECT_LEFT | WEAPON_SELECT_RIGHT | WEAPON_SELECT_BACKPACK
+const REPAIR_PART_ORDER: Array[StringName] = [
+	&"Body", &"Head", &"Legs", &"LeftArm", &"RightArm", &"Backpack",
+]
 
 signal hit_received(part_name: StringName, aspect: StringName)
 signal part_destroyed(part_name: StringName)
@@ -33,6 +36,7 @@ signal hit_landed(weapon_family: WeaponSpec.WeaponFamily)
 signal weapon_fired(weapon: WeaponRuntime)
 signal defeated
 signal parts_repaired
+signal part_repaired(part_name: StringName)
 
 enum MovementType {
 	AGGRESSIVE,
@@ -174,6 +178,7 @@ var current_energy := DEFAULT_MAX_ENERGY
 var current_heat := 0.0
 var heat_generation_locked := false
 var energy_spent_this_frame := false
+var repair_backpack_active := false
 var part_durability: Dictionary = {}
 var part_max_durability: Dictionary = {}
 var part_hitboxes: Dictionary = {}
@@ -359,7 +364,11 @@ func energy_capacity() -> float:
 	if mech_loadout == null:
 		return DEFAULT_MAX_ENERGY
 	var stats := mech_loadout.stats()
-	return maxf(float(stats["power_generation"]) - float(stats["power_draw"]), 0.0)
+	var power_generation := float(stats["power_generation"])
+	var backpack := mech_loadout.backpack
+	if repair_backpack_active and backpack != null and backpack.repair_rate > 0.0:
+		power_generation += backpack.repair_power_generation - backpack.power_generation
+	return maxf(power_generation - float(stats["power_draw"]), 0.0)
 
 
 func cooling_rate() -> float:
@@ -699,6 +708,41 @@ func repair_surviving_parts(maximum_ratio: float) -> float:
 	if repaired_total > 0.0:
 		parts_repaired.emit()
 	return repaired_total
+
+
+func _update_repair_backpack(delta: float) -> void:
+	repair_backpack_active = false
+	if mech_loadout == null or is_defeated():
+		return
+	var backpack := mech_loadout.backpack
+	if backpack == null or backpack.repair_rate <= 0.0 or is_part_destroyed(&"Backpack"):
+		return
+	var target := _repair_backpack_target()
+	if target.is_empty():
+		return
+	repair_backpack_active = true
+	var current := float(part_durability[target])
+	var maximum := float(part_max_durability[target])
+	var repaired := minf(backpack.repair_rate * maxf(delta, 0.0), maximum - current)
+	if repaired <= 0.0:
+		return
+	part_durability[target] = current + repaired
+	part_repaired.emit(target)
+
+
+func _repair_backpack_target() -> StringName:
+	var target := StringName()
+	var lowest_ratio := INF
+	for part_name in REPAIR_PART_ORDER:
+		var maximum := float(part_max_durability.get(part_name, 0.0))
+		var current := float(part_durability.get(part_name, 0.0))
+		if current <= 0.0 or current >= maximum or maximum <= 0.0:
+			continue
+		var ratio := current / maximum
+		if ratio < lowest_ratio:
+			lowest_ratio = ratio
+			target = part_name
+	return target
 
 
 func restore_all_parts() -> float:
@@ -1356,6 +1400,7 @@ func _consume_dash_resources() -> bool:
 
 
 func _update_resources(delta: float) -> void:
+	_update_repair_backpack(delta)
 	var maximum_energy := energy_capacity()
 	if not energy_spent_this_frame and dash_time_remaining <= 0.0 and maximum_energy > 0.0:
 		current_energy = minf(
@@ -1600,10 +1645,8 @@ func _aim_at_opponent(delta: float) -> void:
 		weapon_aim_valid.append(aim_is_valid)
 	for weapon_index in range(arm_aim_nodes.size(), weapons.size()):
 		var weapon := weapons[weapon_index]
-		var aim_origin := global_position
-		if not weapon.muzzles.is_empty():
-			aim_origin = weapon.muzzles[0].global_position
-		var aim_vector := target_position - aim_origin
+		# Fixed backpack weapons traverse around the mech center even when their muzzle is offset.
+		var aim_vector := target_position - global_position
 		var desired_local_rotation := wrapf(
 			aim_vector.angle() - upper_body.global_rotation,
 			-PI,
@@ -1664,8 +1707,9 @@ func _try_fire_linked_group() -> void:
 	):
 		return
 
+	var search_start := next_weapon_index
 	for offset in weapons.size():
-		var weapon_index := (next_weapon_index + offset) % weapons.size()
+		var weapon_index := (search_start + offset) % weapons.size()
 		var weapon := weapons[weapon_index]
 		if player_controlled and (_weapon_selection_bit(weapon) & selected_weapon_mask) == 0:
 			continue
@@ -1682,10 +1726,16 @@ func _try_fire_linked_group() -> void:
 			aim_blocked_count += 1
 			continue
 		if effective_weapon_preparation_time(weapon) > 0.0:
+			if preparing_weapon_index >= 0:
+				continue
 			if not _can_complete_preparation(weapon_index):
 				preparation_prediction_blocked_count += 1
 				continue
 			_start_preparation(weapon_index)
+			next_weapon_index = (weapon_index + 1) % weapons.size()
+			linked_fire_cooldown = linked_fire_stagger
+			if player_controlled and selected_weapon_mask == WEAPON_SELECT_ALL:
+				continue
 		else:
 			_fire_weapon(weapon)
 		next_weapon_index = (weapon_index + 1) % weapons.size()
@@ -2006,7 +2056,7 @@ func _build_mech() -> void:
 			backpack_art,
 			backpack_anchors,
 			backpack_socket,
-			1
+			2
 		)
 
 	var legs_socket := AnchorMap.one(body_map, &"legs_socket")
@@ -2015,7 +2065,7 @@ func _build_mech() -> void:
 	if mech_loadout != null:
 		legs_art = mech_loadout.legs.art_path
 		legs_anchors = mech_loadout.legs.anchor_path
-	var legs := _attach_static_part(lower_body, "Legs", legs_art, legs_anchors, legs_socket, 2)
+	var legs := _attach_static_part(lower_body, "Legs", legs_art, legs_anchors, legs_socket, 1)
 	_attach_boosts(legs)
 
 	var head_socket := AnchorMap.one(body_map, &"head_socket")
@@ -2112,7 +2162,7 @@ func _attach_backpack_weapon(backpack: Dictionary, weapon_spec: WeaponSpec) -> v
 		backpack_root.add_child(muzzle)
 		muzzles.append(muzzle)
 
-	# The test backpack has no weapon art yet, so recoil is applied to an invisible proxy.
+	# Weapon art is baked into the backpack composite; keep recoil on a logical proxy.
 	var recoil_proxy := Sprite2D.new()
 	recoil_proxy.name = "BackpackWeaponProxy"
 	backpack_root.add_child(recoil_proxy)

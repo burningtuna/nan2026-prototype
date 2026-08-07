@@ -137,6 +137,8 @@ func _add_part(data: Dictionary) -> bool:
 	part.sensor_period = float(stats.get("sensor_period", part.sensor_period))
 	part.enemy_track_limit = int(stats.get("enemy_track_limit", part.enemy_track_limit))
 	part.projectile_track_limit = int(stats.get("projectile_track_limit", part.projectile_track_limit))
+	part.repair_rate = float(stats.get("repair_rate", 0.0))
+	part.repair_power_generation = float(stats.get("repair_power_generation", 0.0))
 
 	var wireframe_paths: Array = WIREFRAME_PATHS[part_type]
 	part.wireframe_art_path = str(data.get("wireframe_art_path", wireframe_paths[0]))

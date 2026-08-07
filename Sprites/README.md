@@ -11,11 +11,13 @@ This directory contains the first top-down test mech set for `SUBJECT//12`. The 
 | `Head-Falcon-0001.png` | 6×6 | Up |
 | `Head-Bastion-0001.png` | 24×24 | Up |
 | `Legs-0001.png` | 12×12 | Up |
+| `Legs-0002.png` | 18×18 | Up |
 | `Arm-Cannon-0001.png` | 24×12 | Right (`+X`) |
 | `Arm-Shotgun-0001.png` | 24×12 | Right (`+X`) |
 | `Arm-Rifle-0001.png` | 24×12 | Right (`+X`) |
 | `Arm-Pistol-0001.png` | 24×12 | Right (`+X`) |
 | `Backpack-Generator-0001.png` | 24×12 | Up |
+| `Backpack-*-0001.png` | 24×12 | Up |
 | `Backpack-Rail-0001.svg` | 24×12 | Up |
 | `Backpack-Energy-0001.svg` | 24×12 | Up |
 | `Backpack-Missile-0001.svg` | 24×12 | Up |
@@ -74,6 +76,12 @@ Run the generator from the project root:
 
 ```bash
 bash Sprites/generate_test_set.sh
+```
+
+Weapon backpacks place a half-size rotated arm part at the right edge of the canvas:
+
+```bash
+bash Sprites/generate_weapon_backpacks.sh
 ```
 
 Front-view wireframe parts use the same socket and `mount` anchor names with

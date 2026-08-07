@@ -100,8 +100,32 @@ func _build_interface() -> void:
 	diamond.position = Vector2(387.0, 258.0)
 	diamond.color = MUTED
 	add_child(diamond)
+	_build_submission_badge()
 	_build_delete_panel()
 	_build_license_panel()
+
+
+func _build_submission_badge() -> void:
+	var badge := PanelContainer.new()
+	badge.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	badge.position = Vector2(8.0, -34.0)
+	badge.size = Vector2(218.0, 26.0)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var badge_style := StyleBoxFlat.new()
+	badge_style.bg_color = Color(PANEL, 0.92)
+	badge_style.border_color = LINE
+	badge_style.set_border_width_all(1)
+	badge_style.set_content_margin_all(6.0)
+	badge.add_theme_stylebox_override("panel", badge_style)
+	add_child(badge)
+
+	var label := Label.new()
+	label.text = "NHN GAME X AI 해커톤 사전 과제 제출물"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 8)
+	label.add_theme_color_override("font_color", TEXT)
+	badge.add_child(label)
 
 
 func _build_delete_panel() -> void:

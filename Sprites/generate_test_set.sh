@@ -150,6 +150,10 @@ render "Legs-0001.anchors.png" "12x12" \
     -fill "#FF0000" -draw "point 5,0" \
     -fill "#00FFFF" -draw "point 2,11 point 9,11"
 
+render "Legs-0002.anchors.png" "18x18" \
+    -fill "#FF0000" -draw "point 8,8" \
+    -fill "#00FFFF" -draw "point 0,0 point 17,0 point 0,17 point 17,17"
+
 render "Arm-Cannon-0001.anchors.png" "24x12" \
     -fill "#FF0000" -draw "point 3,6" \
     -fill "#FF00FF" -draw "point 4,6" \

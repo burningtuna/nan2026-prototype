@@ -53,6 +53,7 @@ func bind(combat_player: AiMechAgent, allies: Array, enemies: Array, projectiles
 	player.part_destroyed.connect(_on_player_part_destroyed)
 	player.hit_landed.connect(_on_player_hit_landed)
 	player.parts_repaired.connect(_update_wireframe_durability)
+	player.part_repaired.connect(_on_player_part_repaired)
 	_update_wireframe_durability()
 	set_process(true)
 
@@ -320,6 +321,10 @@ func _update_wireframe_durability() -> void:
 	for part_name in PART_NAMES:
 		if player.part_max_durability.has(part_name):
 			wireframe.set_part_durability(part_name, player.part_durability_ratio(part_name))
+
+
+func _on_player_part_repaired(part_name: StringName) -> void:
+	wireframe.set_part_durability(part_name, player.part_durability_ratio(part_name))
 
 
 func _on_player_hit_landed(weapon_family: WeaponSpec.WeaponFamily) -> void:

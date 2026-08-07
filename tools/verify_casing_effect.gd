@@ -45,15 +45,22 @@ func _verify_mirrored_arm_eject(weapon_catalog: WeaponCatalog) -> void:
 
 func _verify_backpack_art(part_catalog: MechPartCatalog) -> void:
 	var expected_art := {
-		"siege_rail_backpack": "res://Sprites/Backpack-Rail-0001.svg",
-		"nova_beam_backpack": "res://Sprites/Backpack-Energy-0001.svg",
-		"longbow_cruise_backpack": "res://Sprites/Backpack-Missile-0001.svg",
-		"avalanche_flak_backpack": "res://Sprites/Backpack-Flak-0001.svg",
+		"tempest_rack": "res://Sprites/Backpack-Tempest-Rack-0001.png",
+		"siege_rail_backpack": "res://Sprites/Backpack-Siege-Rail-0001.png",
+		"nova_beam_backpack": "res://Sprites/Backpack-Nova-Beam-0001.png",
+		"longbow_cruise_backpack": "res://Sprites/Backpack-Longbow-Cruise-0001.png",
+		"avalanche_flak_backpack": "res://Sprites/Backpack-Avalanche-Flak-0001.png",
 	}
 	for part_id in expected_art:
 		var part := part_catalog.parts_by_id[part_id] as MechPartSpec
 		assert(part.art_path == expected_art[part_id])
+		assert(part.wireframe_art_path == "res://Sprites/Wireframe/Backpack-Generator-0002.png")
+		assert(part.wireframe_anchor_path == "res://Sprites/Wireframe/Backpack-Generator-0002.anchors.png")
 		assert((load(part.art_path) as Texture2D).get_size() == Vector2(24.0, 12.0))
+		var anchor_map := SpriteAnchorMap.load_map(part.anchor_path)
+		assert(anchor_map["size"] == Vector2i(24, 12))
+		assert(SpriteAnchorMap.many(anchor_map, &"mount").size() == 1)
+		assert(not SpriteAnchorMap.many(anchor_map, &"muzzle").is_empty())
 
 
 func _verify_casing_motion(weapon_catalog: WeaponCatalog) -> void:
