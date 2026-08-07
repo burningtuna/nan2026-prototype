@@ -4,6 +4,7 @@ const SIDEBAR_RATIO := 0.3
 const SIDEBAR_MIN_WIDTH := 136.0
 const SIDEBAR_MAX_WIDTH := 192.0
 const HUD_DESIGN_SIZE := Vector2(144.0, 270.0)
+const RENDER_SCALE := 2.0
 const HANGAR_SCENE_PATH := "res://scenes/hangar_screen.tscn"
 const TUTORIAL_SCENARIO_PATH := "res://data/scenarios/combat_hud_tutorial.json"
 const RESULT_DISPLAY_SECONDS := 2.5
@@ -87,15 +88,18 @@ func _update_layout() -> void:
 		maxf(size.y, 1.0)
 	)
 	var render_size := Vector2i(
-		maxi(roundi(logical_combat_size.x), 1),
-		maxi(roundi(logical_combat_size.y), 1)
+		maxi(roundi(logical_combat_size.x * RENDER_SCALE), 1),
+		maxi(roundi(logical_combat_size.y * RENDER_SCALE), 1)
 	)
 
 	combat_container.position = combat_position
 	combat_container.size = Vector2(render_size)
-	combat_container.scale = Vector2.ONE
+	combat_container.scale = Vector2.ONE / RENDER_SCALE
 	combat_viewport.size = render_size
-	combat_viewport.size_2d_override = render_size
+	combat_viewport.size_2d_override = Vector2i(
+		maxi(roundi(logical_combat_size.x), 1),
+		maxi(roundi(logical_combat_size.y), 1)
+	)
 	combat_viewport.size_2d_override_stretch = true
 
 
