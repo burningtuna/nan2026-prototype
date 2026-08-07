@@ -54,9 +54,9 @@ color = Color(0, 0, 0, 1)
 [node name="MapBackground" type="Sprite2D" parent="CombatContainer/CombatViewport/StoryStage"]
 z_index = -100
 position = Vector2(200, 0)
-scale = Vector2(2.16763, 2.16763)
+scale = Vector2(4.33526, 4.33526)
 texture = ExtResource("7_background")
-texture_filter = 1
+texture_filter = 2
 
 [node name="WalkabilityMask" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage"]
 visible = false

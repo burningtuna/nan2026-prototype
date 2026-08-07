@@ -45,8 +45,8 @@ color = Color(0.055, 0.13, 0.16, 1)
 z_index = -90
 material = SubResource("ShaderMaterial_stage5_ocean_fade")
 position = Vector2(0, -500)
-scale = Vector2(1.82292, 1.82292)
-texture_filter = 1
+scale = Vector2(3.64584, 3.64584)
+texture_filter = 2
 texture = ExtResource("6_background")
 
 [node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="4"]
