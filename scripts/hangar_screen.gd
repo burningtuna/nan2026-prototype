@@ -416,9 +416,9 @@ func _update_candidate_details() -> void:
 	if _pending_part == null:
 		_detail_name.text = "EMPTY MOUNT"
 		_detail_kind.text = "NO COMPONENT"
-		_detail_description.text = "Remove the component currently installed in this optional slot."
+		_detail_description.text = "선택한 팔 파츠를 제거하고 장착부를 비웁니다."
 		_detail_stats.text = "ARMOR 0    WEIGHT 0\nPOWER +0   MOBILITY +0"
-		_detail_weapon.text = "NO WEAPON LINK"
+		_detail_weapon.text = ""
 		return
 
 	_detail_name.text = "%s // %s" % [_pending_part.designation, _pending_part.display_name]
@@ -439,7 +439,7 @@ func _update_candidate_details() -> void:
 	if _pending_part.weapon == null:
 		var type_name: String = MechPartSpec.PartType.keys()[_pending_part.part_type]
 		_detail_kind.text = "SYSTEM // %s" % type_name
-		_detail_weapon.text = "NO WEAPON LINK"
+		_detail_weapon.text = ""
 		return
 
 	var weapon := _pending_part.weapon
