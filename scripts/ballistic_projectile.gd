@@ -39,8 +39,11 @@ var homing_observation_valid := false
 var homing_observation_enabled := true
 var hit_resolved := false
 var source_hitbox_rids: Array[RID] = []
+var penetrated_hitbox_rids: Array[RID] = []
+var penetrated_mech_ids: Dictionary = {}
 var visuals_enabled := true
 var multi_projectile_launch := false
+var penetrates_targets := false
 
 
 func configure(
@@ -57,7 +60,8 @@ func configure(
 	observed_velocity := Vector2.ZERO,
 	target_was_dashing := false,
 	observation_valid := false,
-	launched_in_multi_projectile_volley := false
+	launched_in_multi_projectile_volley := false,
+	target_penetration_enabled := false
 ) -> void:
 	spec = projectile_spec
 	direction = launch_direction.normalized()
@@ -73,6 +77,7 @@ func configure(
 	launch_spread_degrees = spread_degrees
 	weapon_family = family
 	multi_projectile_launch = launched_in_multi_projectile_volley
+	penetrates_targets = target_penetration_enabled
 	homing_target = target
 	if is_instance_valid(target) and observation_valid:
 		update_homing_observation(observed_position, observed_velocity, target_was_dashing)
@@ -187,6 +192,7 @@ func _check_swept_hit(start_position: Vector2, end_position: Vector2) -> bool:
 		return false
 	var ray_start := start_position
 	var exclusions := source_hitbox_rids.duplicate()
+	exclusions.append_array(penetrated_hitbox_rids)
 	while true:
 		var query := PhysicsRayQueryParameters2D.create(ray_start, end_position, 2, exclusions)
 		query.collide_with_areas = true
@@ -204,8 +210,12 @@ func _check_swept_hit(start_position: Vector2, end_position: Vector2) -> bool:
 			exclusions.append(hitbox.get_rid())
 			ray_start = Vector2(result.get("position", ray_start)).move_toward(end_position, 0.01)
 			continue
-		_apply_hit(hitbox, result.get("position", end_position))
-		return true
+		var hit_position: Vector2 = result.get("position", end_position)
+		if _apply_hit(hitbox, hit_position):
+			return true
+		exclusions = source_hitbox_rids.duplicate()
+		exclusions.append_array(penetrated_hitbox_rids)
+		ray_start = hit_position.move_toward(end_position, 0.01)
 	return false
 
 
@@ -276,6 +286,7 @@ func _on_area_entered(area: Area2D) -> void:
 		or area.get_script() != PART_HITBOX
 		or area.mech == source_mech
 		or _is_allied_target(area.mech)
+		or _has_penetrated_mech(area.mech)
 	):
 		return
 	hit_candidates.append(area)
@@ -285,11 +296,16 @@ func _on_area_entered(area: Area2D) -> void:
 
 
 func _resolve_hit_candidates() -> void:
+	hit_resolution_queued = false
 	if hit_resolved or is_queued_for_deletion() or hit_candidates.is_empty():
 		return
 	var valid_candidates: Array[Area2D] = []
 	for hitbox in hit_candidates:
-		if is_instance_valid(hitbox) and is_instance_valid(hitbox.mech):
+		if (
+			is_instance_valid(hitbox)
+			and is_instance_valid(hitbox.mech)
+			and not _has_penetrated_mech(hitbox.mech)
+		):
 			valid_candidates.append(hitbox)
 	hit_candidates.clear()
 	if valid_candidates.is_empty():
@@ -305,19 +321,42 @@ func _resolve_hit_candidates() -> void:
 	_apply_hit(selected_hitbox, global_position)
 
 
-func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> void:
+func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> bool:
 	if hit_resolved:
-		return
+		return true
 	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and spec.splash_radius > 0.0:
 		_detonate(hit_position, hitbox.mech)
-		return
-	hit_resolved = true
+		return true
+	if _has_penetrated_mech(hitbox.mech):
+		return false
+	if not penetrates_targets:
+		hit_resolved = true
 	_spawn_impact_effect(hit_position)
 	_spawn_impact_sound(hit_position, hitbox.mech)
 	hitbox.mech.register_hit(hitbox.part_name, direction, spec.damage)
 	if is_instance_valid(source_mech) and source_mech.has_method("register_landed_hit"):
 		source_mech.register_landed_hit(weapon_family)
+	if penetrates_targets:
+		_record_penetrated_mech(hitbox.mech)
+		return false
 	queue_free()
+	return true
+
+
+func _has_penetrated_mech(mech: Node) -> bool:
+	return is_instance_valid(mech) and penetrated_mech_ids.has(mech.get_instance_id())
+
+
+func _record_penetrated_mech(mech: Node) -> void:
+	if not is_instance_valid(mech):
+		return
+	penetrated_mech_ids[mech.get_instance_id()] = true
+	for node in mech.find_children("*", "Area2D", true, false):
+		if node.get_script() != PART_HITBOX:
+			continue
+		var rid: RID = node.get_rid()
+		if not penetrated_hitbox_rids.has(rid):
+			penetrated_hitbox_rids.append(rid)
 
 
 func _apply_environment_hit(target: Node, hit_position: Vector2) -> void:
@@ -346,32 +385,32 @@ func _detonate(
 	if play_impact_sound:
 		_spawn_impact_sound(hit_position, primary_target)
 	var damaged_hitboxes := 0
-	var radius_squared := spec.splash_radius ** 2
-	var scene_tree := source_mech.get_tree() if is_instance_valid(source_mech) else get_tree()
-	if scene_tree == null:
-		queue_free()
-		return
-	for target in scene_tree.get_nodes_in_group(&"mech_combatants"):
+	var splash_shape := CircleShape2D.new()
+	splash_shape.radius = spec.splash_radius
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = splash_shape
+	query.transform = Transform2D(0.0, hit_position)
+	query.collision_mask = 2
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+	for result in get_world_2d().direct_space_state.intersect_shape(query, 1024):
+		var hitbox := result.get("collider") as Area2D
+		if hitbox == null or hitbox.get_script() != PART_HITBOX:
+			continue
+		var target: Node = hitbox.mech
 		if (
 			not is_instance_valid(target)
+			or not target.is_in_group(&"mech_combatants")
 			or target == source_mech
 			or _is_allied_target(target)
 			or (target.has_method("is_defeated") and target.is_defeated())
 		):
 			continue
-		for node in target.find_children("*", "Area2D", true, false):
-			var hitbox := node as Area2D
-			if (
-				hitbox == null
-				or hitbox.get_script() != PART_HITBOX
-				or hitbox.global_position.distance_squared_to(hit_position) > radius_squared
-			):
-				continue
-			var impact_direction := (hitbox.global_position - hit_position).normalized()
-			if impact_direction.is_zero_approx():
-				impact_direction = direction
-			hitbox.mech.register_hit(hitbox.part_name, impact_direction, spec.damage)
-			damaged_hitboxes += 1
+		var impact_direction: Vector2 = (hitbox.global_position - hit_position).normalized()
+		if impact_direction.is_zero_approx():
+			impact_direction = direction
+		target.register_hit(hitbox.part_name, impact_direction, spec.damage)
+		damaged_hitboxes += 1
 	if (
 		damaged_hitboxes > 0
 		and is_instance_valid(source_mech)

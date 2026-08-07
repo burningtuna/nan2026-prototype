@@ -18,6 +18,14 @@ func _run() -> void:
 	var spec := catalog.weapon("weapon_ballistic_standard")
 	assert(spec != null and spec.fire_sound != null)
 	assert(spec.fire_sound.resource_path == "res://Sounds/weapons/ballistic_standard.ogg")
+	for weapon_value in catalog.weapons_by_id.values():
+		var weapon := weapon_value as WeaponSpec
+		if weapon.weapon_family == WeaponSpec.WeaponFamily.MISSILE:
+			assert(weapon.fire_sound != null)
+			assert(
+				weapon.fire_sound.resource_path
+				== "res://Sounds/weapons/fire_sound_effect.mp3"
+			)
 	var test_stream := AudioStreamWAV.new()
 	test_stream.format = AudioStreamWAV.FORMAT_8_BITS
 	test_stream.mix_rate = 8000

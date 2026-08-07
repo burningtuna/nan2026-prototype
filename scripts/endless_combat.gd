@@ -10,6 +10,7 @@ const ENDLESS_SCENE_PATH := "res://scenes/endless_combat.tscn"
 func _process(delta: float) -> void:
 	super(delta)
 	if director != null:
+		_update_endless_player_damage(director.elapsed_seconds)
 		endless_hud.set_time(director.elapsed_seconds, director.tier)
 
 
@@ -37,7 +38,10 @@ func _on_combat_bound() -> void:
 func _apply_endless_player_balance() -> void:
 	if not GameSession.endless_player_balance_enabled:
 		return
-	combat_player.incoming_damage_multiplier = GameSession.endless_player_damage_multiplier
+	_update_endless_player_damage(0.0)
+	combat_player.ignore_weapon_preparation = true
+	combat_player.ignore_preparation_move_speed_penalty = true
+	combat_player.endless_non_missile_penetration_enabled = true
 	for weapon in combat_player.weapons:
 		weapon.reload_duration_multiplier = (
 			GameSession.endless_missile_reload_multiplier
@@ -45,7 +49,19 @@ func _apply_endless_player_balance() -> void:
 			else GameSession.endless_other_reload_multiplier
 		)
 
-func _on_tier_changed(next_tier: int, _elapsed: float) -> void:
+
+func _update_endless_player_damage(elapsed_seconds: float) -> void:
+	if not GameSession.endless_player_balance_enabled or not is_instance_valid(combat_player):
+		return
+	var completed_minutes := floori(maxf(elapsed_seconds, 0.0) / 60.0)
+	combat_player.incoming_damage_multiplier = (
+		GameSession.endless_player_damage_multiplier
+		* (1.0 + completed_minutes * GameSession.endless_damage_growth_per_minute)
+	)
+
+
+func _on_tier_changed(next_tier: int, elapsed: float) -> void:
+	_update_endless_player_damage(elapsed)
 	system_messages.push_message("THREAT TIER %02d" % (next_tier + 1))
 
 
@@ -91,6 +107,9 @@ func _run_endless_smoke() -> void:
 		combat_player.incoming_damage_multiplier,
 		GameSession.endless_player_damage_multiplier
 	))
+	assert(combat_player.ignore_weapon_preparation)
+	assert(combat_player.ignore_preparation_move_speed_penalty)
+	assert(combat_player.endless_non_missile_penetration_enabled)
 	for weapon in combat_player.weapons:
 		var expected_reload_multiplier := (
 			GameSession.endless_missile_reload_multiplier
@@ -98,6 +117,7 @@ func _run_endless_smoke() -> void:
 			else GameSession.endless_other_reload_multiplier
 		)
 		assert(is_equal_approx(weapon.reload_duration_multiplier, expected_reload_multiplier))
+		assert(is_zero_approx(combat_player.effective_weapon_preparation_time(weapon)))
 	director.spawn_remaining = 999.0
 	var head_drone := director.spawn_drone(DroneAgent.DroneKind.HEAD)
 	assert(head_drone != null and head_drone.unit_class == AiMechAgent.UnitClass.DRONE)
@@ -138,8 +158,18 @@ func _run_endless_smoke() -> void:
 	)
 	assert(combat_player._part_weapon_is_disabled(&"LeftArm"))
 	director.elapsed_seconds = 59.9
+	_update_endless_player_damage(director.elapsed_seconds)
+	assert(is_equal_approx(
+		combat_player.incoming_damage_multiplier,
+		GameSession.endless_player_damage_multiplier
+	))
 	director.next_mech_time = 60.0
 	director._process(0.2)
+	assert(is_equal_approx(
+		combat_player.incoming_damage_multiplier,
+		GameSession.endless_player_damage_multiplier
+		* (1.0 + GameSession.endless_damage_growth_per_minute)
+	))
 	assert(director._living_mechs() == 1)
 	var mech: AiMechAgent
 	for agent in battle.agents:
@@ -149,6 +179,9 @@ func _run_endless_smoke() -> void:
 	assert(mech != null and mech.appears_in_enemy_roster())
 	assert(mech.has_meta(AlienInfestationOverlay.META_KEY))
 	assert(is_equal_approx(mech.incoming_damage_multiplier, 1.0))
+	assert(not mech.ignore_weapon_preparation)
+	assert(not mech.ignore_preparation_move_speed_penalty)
+	assert(not mech.endless_non_missile_penetration_enabled)
 	for weapon in mech.weapons:
 		assert(is_equal_approx(weapon.reload_duration_multiplier, 1.0))
 	mech.register_hit(&"Body", Vector2.RIGHT, float(mech.part_durability[&"Body"]))

@@ -59,6 +59,16 @@ func _initialize() -> void:
 	assert(is_equal_approx(agent.effective_dash_speed(), agent.dash_speed))
 	agent.mech_loadout = slowest
 	assert(is_equal_approx(agent.effective_dash_speed(), agent.dash_speed / 3.0))
+	agent.player_controlled = true
+	assert(is_equal_approx(agent.player_mobility_turn_multiplier(), 1.0))
+	assert(is_equal_approx(agent.effective_upper_turn_speed_degrees(), 67.5))
+	assert(is_equal_approx(agent.effective_arm_turn_speed_degrees(), 45.0))
+	agent.mech_loadout = fastest
+	assert(is_equal_approx(agent.player_mobility_turn_multiplier(), 2.0))
+	assert(is_equal_approx(agent.effective_upper_turn_speed_degrees(), 135.0))
+	assert(is_equal_approx(agent.effective_arm_turn_speed_degrees(), 90.0))
+	agent.player_controlled = false
+	assert(is_equal_approx(agent.player_mobility_turn_multiplier(), 1.0))
 	agent.mech_loadout = lightest
 	assert(is_equal_approx(
 		agent.effective_dash_distance(),

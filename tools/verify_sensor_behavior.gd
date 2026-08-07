@@ -199,12 +199,15 @@ func _verify_freed_projectile_snapshot() -> void:
 
 func _verify_target_cycle() -> void:
 	var player := AiMechAgent.new()
+	var stale := AiMechAgent.new()
 	var first := AiMechAgent.new()
 	var second := AiMechAgent.new()
 	player.sensor_snapshot.units.assign([
+		{"target": stale},
 		{"target": first},
 		{"target": second},
 	])
+	stale.free()
 	player._cycle_sensor_target()
 	assert(player.selected_sensor_target == first)
 	player._cycle_sensor_target()

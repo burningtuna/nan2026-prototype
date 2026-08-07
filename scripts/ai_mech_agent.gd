@@ -16,6 +16,8 @@ const MAX_LOADOUT_WEIGHT := 138.0
 const MIN_DASH_SPEED_MULTIPLIER := 1.0 / 3.0
 const MIN_DASH_DISTANCE_MULTIPLIER := 0.5
 const MAX_DASH_DISTANCE_MULTIPLIER := 1.5
+const MIN_PLAYER_TURN_SPEED_MULTIPLIER := 1.0
+const MAX_PLAYER_TURN_SPEED_MULTIPLIER := 2.0
 const ENERGY_FULL_RECHARGE_SECONDS := 10.0
 const MOBILITY_SPEED_MULTIPLIER := 2.0
 const WALL_BLOCKED_TURN_MULTIPLIER := 2.0
@@ -158,6 +160,9 @@ var weapon_specs: Array[WeaponSpec] = []
 var mech_loadout: MechLoadout
 var preparing_weapon_index := -1
 var preparation_time_remaining := 0.0
+var ignore_weapon_preparation := false
+var ignore_preparation_move_speed_penalty := false
+var endless_non_missile_penetration_enabled := false
 var preparation_started_count := 0
 var preparation_completed_count := 0
 var preparation_cancelled_count := 0
@@ -291,6 +296,30 @@ func movement_speed() -> float:
 			* movement_speed_multiplier
 		)
 	return cruise_speed * MOBILITY_SPEED_MULTIPLIER * movement_speed_multiplier
+
+
+func player_mobility_turn_multiplier() -> float:
+	if not player_controlled or mech_loadout == null:
+		return MIN_PLAYER_TURN_SPEED_MULTIPLIER
+	var mobility := float(mech_loadout.stats().get("mobility", MIN_LOADOUT_MOBILITY))
+	var ratio := clampf(
+		inverse_lerp(MIN_LOADOUT_MOBILITY, MAX_LOADOUT_MOBILITY, mobility),
+		0.0,
+		1.0
+	)
+	return lerpf(
+		MIN_PLAYER_TURN_SPEED_MULTIPLIER,
+		MAX_PLAYER_TURN_SPEED_MULTIPLIER,
+		ratio
+	)
+
+
+func effective_upper_turn_speed_degrees() -> float:
+	return upper_turn_speed_degrees * player_mobility_turn_multiplier()
+
+
+func effective_arm_turn_speed_degrees() -> float:
+	return arm_visual_turn_speed_degrees * player_mobility_turn_multiplier()
 
 
 func effective_dash_speed() -> float:
@@ -472,9 +501,12 @@ func _scan_sensor() -> void:
 	sensor_snapshot.units.assign(unit_contacts)
 	if player_controlled:
 		for contact in unit_contacts:
-			var newly_detected := contact.get("target") as AiMechAgent
+			var target_value = contact.get("target")
+			if not is_instance_valid(target_value):
+				continue
+			var newly_detected := target_value as AiMechAgent
 			if (
-				is_instance_valid(newly_detected)
+				newly_detected != null
 				and not previously_detected.has(newly_detected.get_instance_id())
 			):
 				selected_sensor_target = newly_detected
@@ -1074,9 +1106,8 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, 13.0, Color(0.2, 0.34, 0.42, 0.75), false, 0.25)
 	draw_circle(Vector2.ZERO, 17.0, Color(0.12, 0.22, 0.28, 0.65), false, 0.25)
 	if preparing_weapon_index >= 0:
-		var spec := weapons[preparing_weapon_index].spec
 		var progress := 1.0 - preparation_time_remaining / maxf(
-			spec.preparation_time * weapon_range_multiplier,
+			effective_weapon_preparation_time(weapons[preparing_weapon_index]),
 			0.001
 		)
 		draw_arc(Vector2.ZERO, 20.0, -PI * 0.5, -PI * 0.5 + TAU * progress, 24, Color("ffd34d"), 1.0)
@@ -1095,7 +1126,9 @@ func _update_random_movement(delta: float) -> void:
 	if preparing_weapon_index >= 0:
 		var preparation_spec := weapons[preparing_weapon_index].spec
 		turn_multiplier = preparation_spec.preparation_turn_speed_multiplier
-		move_multiplier = preparation_spec.preparation_move_speed_multiplier
+		move_multiplier = effective_preparation_move_speed_multiplier(
+			weapons[preparing_weapon_index]
+		)
 	turn_multiplier *= wall_turn_speed_multiplier()
 
 	var desired_rotation := movement_direction.angle() + PI * 0.5
@@ -1196,7 +1229,12 @@ func _update_player_movement(delta: float) -> void:
 		_try_start_player_dash(input_direction)
 	dash_input_was_pressed = dash_input_pressed
 
-	var target_velocity := input_direction * movement_speed()
+	var move_multiplier := 1.0
+	if preparing_weapon_index >= 0:
+		move_multiplier = effective_preparation_move_speed_multiplier(
+			weapons[preparing_weapon_index]
+		)
+	var target_velocity := input_direction * movement_speed() * move_multiplier
 	velocity = velocity.move_toward(target_velocity, acceleration * delta)
 	var movement_step := velocity * delta
 	var dashed_this_step := false
@@ -1218,14 +1256,14 @@ func _update_player_movement(delta: float) -> void:
 		lower_body.rotation = rotate_toward(
 			lower_body.rotation,
 			input_direction.angle() + PI * 0.5,
-			deg_to_rad(upper_turn_speed_degrees) * turn_multiplier * delta
+			deg_to_rad(effective_upper_turn_speed_degrees()) * turn_multiplier * delta
 		)
 	var aim_vector := manual_aim_position - global_position
 	if aim_vector.length_squared() > 1.0:
 		upper_body.rotation = rotate_toward(
 			upper_body.rotation,
 			aim_vector.angle() + PI * 0.5,
-			deg_to_rad(upper_turn_speed_degrees) * turn_multiplier * delta
+			deg_to_rad(effective_upper_turn_speed_degrees()) * turn_multiplier * delta
 		)
 
 
@@ -1366,12 +1404,11 @@ func force_reload_selected_weapons() -> int:
 
 
 func _update_player_target_selection() -> void:
-	if (
-		is_instance_valid(selected_sensor_target)
-		and (
-			selected_sensor_target.is_defeated()
-			or not sensor_snapshot.has_unit(selected_sensor_target)
-		)
+	if not is_instance_valid(selected_sensor_target):
+		selected_sensor_target = null
+	elif (
+		selected_sensor_target.is_defeated()
+		or not sensor_snapshot.has_unit(selected_sensor_target)
 	):
 		selected_sensor_target = null
 	var select_pressed := Input.is_physical_key_pressed(KEY_TAB)
@@ -1383,8 +1420,11 @@ func _update_player_target_selection() -> void:
 func _cycle_sensor_target() -> void:
 	var targets: Array[AiMechAgent] = []
 	for contact in sensor_snapshot.units:
-		var target := contact.get("target") as AiMechAgent
-		if is_instance_valid(target) and not target.is_defeated():
+		var target_value = contact.get("target")
+		if not is_instance_valid(target_value):
+			continue
+		var target := target_value as AiMechAgent
+		if target != null and not target.is_defeated():
 			targets.append(target)
 	if targets.is_empty():
 		selected_sensor_target = null
@@ -1555,7 +1595,7 @@ func _aim_at_opponent(delta: float) -> void:
 		aim_node.rotation = rotate_toward(
 			aim_node.rotation,
 			visual_target_rotation,
-			deg_to_rad(arm_visual_turn_speed_degrees) * delta
+			deg_to_rad(effective_arm_turn_speed_degrees()) * delta
 		)
 		weapon_aim_valid.append(aim_is_valid)
 	for weapon_index in range(arm_aim_nodes.size(), weapons.size()):
@@ -1641,7 +1681,7 @@ func _try_fire_linked_group() -> void:
 		if weapon_index >= weapon_aim_valid.size() or not weapon_aim_valid[weapon_index]:
 			aim_blocked_count += 1
 			continue
-		if weapon.spec.preparation_time > 0.0:
+		if effective_weapon_preparation_time(weapon) > 0.0:
 			if not _can_complete_preparation(weapon_index):
 				preparation_prediction_blocked_count += 1
 				continue
@@ -1655,19 +1695,22 @@ func _try_fire_linked_group() -> void:
 
 func _start_preparation(weapon_index: int) -> void:
 	preparing_weapon_index = weapon_index
-	preparation_time_remaining = weapons[weapon_index].spec.preparation_time * weapon_range_multiplier
+	preparation_time_remaining = effective_weapon_preparation_time(weapons[weapon_index])
 	preparation_started_count += 1
 
 
 func _can_complete_preparation(weapon_index: int) -> bool:
 	var weapon_spec := weapons[weapon_index].spec
-	var duration := weapon_spec.preparation_time * weapon_range_multiplier
+	var duration := effective_weapon_preparation_time(weapons[weapon_index])
 	if duration <= 0.0 or not is_instance_valid(opponent):
 		return true
 	if player_controlled:
 		return weapon_index < weapon_aim_valid.size() and weapon_aim_valid[weapon_index]
 
-	var future_self_position := global_position + velocity * weapon_spec.preparation_move_speed_multiplier * duration
+	var future_self_position := (
+		global_position
+		+ velocity * effective_preparation_move_speed_multiplier(weapons[weapon_index]) * duration
+	)
 	var future_target_position := observed_target_position + observed_target_velocity * duration
 	var future_aim_vector := future_target_position - future_self_position
 	if future_aim_vector.length_squared() <= 1.0:
@@ -1711,6 +1754,18 @@ func _finish_preparation() -> void:
 		return
 	_fire_weapon(weapons[weapon_index])
 	preparation_completed_count += 1
+
+
+func effective_weapon_preparation_time(weapon: WeaponRuntime) -> float:
+	if ignore_weapon_preparation:
+		return 0.0
+	return maxf(weapon.spec.preparation_time * weapon_range_multiplier, 0.0)
+
+
+func effective_preparation_move_speed_multiplier(weapon: WeaponRuntime) -> float:
+	if ignore_preparation_move_speed_penalty:
+		return 1.0
+	return weapon.spec.preparation_move_speed_multiplier
 
 
 func _fire_weapon(weapon: WeaponRuntime) -> void:
@@ -1854,10 +1909,20 @@ func _spawn_projectile(
 		observed_velocity,
 		observed_dashing,
 		observation_valid,
-		weapon.spec.projectiles_per_shot > 1
+		weapon.spec.projectiles_per_shot > 1,
+		_endless_projectile_penetrates_targets(weapon)
 	)
 	projectile_layer.add_child(projectile)
 	projectile.global_position = spawn_position
+
+
+func _endless_projectile_penetrates_targets(weapon: WeaponRuntime) -> bool:
+	return (
+		endless_non_missile_penetration_enabled
+		and weapon.spec.weapon_family != WeaponSpec.WeaponFamily.MISSILE
+		and not weapon.spec.projectile.homing
+		and weapon_maximum_range(weapon) >= 500.0
+	)
 
 
 func _spawn_muzzle_flash(

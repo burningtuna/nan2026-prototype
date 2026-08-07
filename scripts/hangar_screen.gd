@@ -125,6 +125,10 @@ func _run_endless_hangar_entry_smoke() -> void:
 	_scenario_dialogue.advance()
 	assert(_scenario_dialogue.current_text() == "다른 모드와 별개의 장비 스탯을 사용합니다. 재장전 스트레스 없이 열, EN 관리가 목표가 됩니다.")
 	_scenario_dialogue.advance()
+	assert(_scenario_dialogue.current_text() == "전투 시간이 1분 증가할 때마다 플레이어가 받는 피해가 기본 배율 대비 5%씩 증가합니다.")
+	_scenario_dialogue.advance()
+	assert(_scenario_dialogue.current_text() == "발사 준비시간과 준비 중 이동 속도 감소가 제거됩니다. 최대 사거리 500 이상의 실탄 및 에너지 직선 공격은 적을 관통합니다.")
+	_scenario_dialogue.advance()
 	assert(not _scenario_dialogue.active)
 	_confirm_loadout()
 

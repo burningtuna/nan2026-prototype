@@ -213,6 +213,12 @@ func _run_stage_smoke() -> void:
 	assert(boss.mech_loadout.backpack.part_id == "grid_generator")
 	assert(boss.mech_loadout.legs.part_id == "courier_legs")
 	assert(is_equal_approx(boss.movement_speed_multiplier, 2.0))
+	assert(is_equal_approx(
+		boss.movement_speed(),
+		float(boss.mech_loadout.stats()["mobility"])
+		* AiMechAgent.MOBILITY_SPEED_MULTIPLIER
+		* 2.0
+	))
 	assert(is_equal_approx(boss.dash_cooldown, boss_base_dash_cooldown / 3.0))
 	assert(is_equal_approx(boss.dash_speed, boss_base_dash_speed * 2.0))
 	assert(is_equal_approx(boss.upper_turn_speed_degrees, boss_base_turn_speed * 2.0))

@@ -268,7 +268,6 @@ unit_id = "COMMAND-BOSS"
 spawn_mode = 1
 spawn_group = &"BOSS_WAVE"
 unit_class = 2
-movement_speed_scale = 0.85
 fire_rate_scale = 1.35
 incoming_damage_scale = 0.65
 random_seed = 4999

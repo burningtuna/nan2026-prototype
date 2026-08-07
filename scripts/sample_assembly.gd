@@ -167,6 +167,13 @@ func _update_last_ally_behavior() -> void:
 
 func _run_battle_result_smoke() -> void:
 	assert(agents.size() == 4)
+	for agent in agents:
+		assert(is_equal_approx(agent.movement_speed_multiplier, 1.0))
+		assert(is_equal_approx(
+			agent.movement_speed(),
+			float(agent.mech_loadout.stats()["mobility"])
+			* AiMechAgent.MOBILITY_SPEED_MULTIPLIER
+		))
 	var emitted_results: Array[int] = []
 	battle_finished.connect(func(team_id: int) -> void:
 		emitted_results.append(team_id)
@@ -365,7 +372,6 @@ func _spawn_agents() -> void:
 			agent.weapon_range_multiplier = 0.5
 			agent.movement_type = AiMechAgent.MovementType.AGGRESSIVE
 		else:
-			agent.movement_speed_multiplier *= 0.5
 			agent.acceleration *= 0.5
 			agent.dash_cooldown *= 0.5
 			agent.dash_speed *= 0.5

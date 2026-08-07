@@ -32,6 +32,7 @@ var endless_player_balance_enabled := true
 var endless_missile_reload_multiplier := 0.2
 var endless_other_reload_multiplier := 0.0
 var endless_player_damage_multiplier := 0.2
+var endless_damage_growth_per_minute := 0.05
 var endless_intro_shown := false
 var story_progress: Dictionary = {}
 
