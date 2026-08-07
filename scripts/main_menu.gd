@@ -188,6 +188,9 @@ func _load_license_notice() -> String:
 			notice.get("license_file", "Unavailable"),
 			notice.get("source", "Unavailable"),
 		])
+	var footer := str(data.get("footer", "")).strip_edges()
+	if not footer.is_empty():
+		sections.append(footer)
 	return "\n\n".join(sections) if not sections.is_empty() else "NO LICENSE NOTICES FOUND"
 
 
@@ -287,6 +290,7 @@ func _run_main_menu_smoke() -> void:
 	assert(license_panel.visible)
 	assert(_load_license_notice().contains("IBM Plex Sans"))
 	assert(_load_license_notice().contains("https://opengameart.org/"))
+	assert(_load_license_notice().ends_with("이 게임에는 생성형 AI 를 사용한 이미지가 사용되었습니다."))
 	_close_license()
 	assert(not license_panel.visible)
 	var original_path: String = GameSession.endless_progress_path
