@@ -355,16 +355,25 @@ func _fire_boss_strike() -> void:
 
 
 func _spawn_boss_strike_beam() -> void:
+	var lower_beam_end := boss.global_position.y + BEAM_LENGTH * 0.5
+	var upper_beam_end := minf(
+		ufo_placeholder.global_position.y,
+		boss.global_position.y - BEAM_LENGTH * 0.5
+	)
+	var beam_length := lower_beam_end - upper_beam_end
 	boss_strike_beam = Sprite2D.new()
 	boss_strike_beam.name = "BossStrikeBeam"
 	boss_strike_beam.texture = BEAM_TEXTURE
 	boss_strike_beam.scale = Vector2(
 		BEAM_WIDTH / float(BEAM_TEXTURE.get_width()),
-		BEAM_LENGTH / float(BEAM_TEXTURE.get_height())
+		beam_length / float(BEAM_TEXTURE.get_height())
 	)
-	boss_strike_beam.z_index = 12
+	boss_strike_beam.z_index = ufo_placeholder.z_index - 1
 	cutscene_world.add_child(boss_strike_beam)
-	boss_strike_beam.global_position = boss.global_position
+	boss_strike_beam.global_position = Vector2(
+		boss.global_position.x,
+		(upper_beam_end + lower_beam_end) * 0.5
+	)
 	var fade := create_tween()
 	fade.tween_interval(BEAM_FIRING_SECONDS)
 	fade.tween_property(
@@ -515,6 +524,8 @@ func _run_stage_05_cutscene_smoke() -> void:
 			CUTSCENE_SNAPSHOT.DEFAULT_ALLY_POSITIONS[index]
 		))
 	assert(is_instance_valid(boss) and boss.unit_class == AiMechAgent.UnitClass.BOSS)
+	assert(boss.mech_loadout.left_arm.part_id == "cyclone_flechette_arm")
+	assert(boss.mech_loadout.right_arm.part_id == "cyclone_flechette_arm")
 	var expected_boss_rotation := BOSS_FLIGHT_OFFSET.angle() + PI * 0.5
 	assert(is_equal_approx(boss.rotation, expected_boss_rotation))
 	assert(ufo_placeholder.global_position.is_equal_approx(boss_flight_target))
@@ -575,6 +586,12 @@ func _run_stage_05_cutscene_smoke() -> void:
 	assert(is_instance_valid(boss_strike_beam))
 	assert(boss_strike_beam.global_position.x > BOSS_START_OFFSET.x)
 	assert(boss_strike_beam.global_position.x < boss_flight_target.x)
+	var beam_top := (
+		boss_strike_beam.global_position.y
+		- boss_strike_beam.scale.y * BEAM_TEXTURE.get_height() * 0.5
+	)
+	assert(beam_top <= ufo_placeholder.global_position.y)
+	assert(boss_strike_beam.z_index < ufo_placeholder.z_index)
 	assert(is_instance_valid(boss_trail) and boss_trail.points.size() > 2)
 	assert(is_equal_approx(boss_trail.sample_spacing, 1.5))
 	assert(boss_trail.max_missile_points == BOSS_TRAIL_MAX_POINTS)

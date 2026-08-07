@@ -114,7 +114,7 @@ unit_class = 2
 head_id = "falcon_sensor"
 body_id = "swift_core"
 left_arm_id = "cyclone_flechette_arm"
-right_arm_id = ""
+right_arm_id = "cyclone_flechette_arm"
 backpack_id = "grid_generator"
 legs_id = "courier_legs"
 

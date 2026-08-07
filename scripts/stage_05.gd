@@ -3,6 +3,7 @@ extends StoryMission
 const DRONE_AGENT := preload("res://scripts/drone_agent.gd")
 const ALIEN_INFESTATION_OVERLAY := preload("res://scripts/alien_infestation_overlay.gd")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
+const STAGE_05_CUTSCENE_PATH := "res://scenes/stage_05_cutscene.tscn"
 const DRONE_TARGET := 20
 const MAX_LIVING_DRONES := 4
 const DRONE_SPAWN_INTERVAL := 1.5
@@ -263,7 +264,7 @@ func _on_stage_agent_defeated(agent: AiMechAgent) -> void:
 		running = false
 		beam_hazard.active = false
 		beam_hazard.queue_redraw()
-		finish_mission(true, "MISSION COMPLETE // DRONE SCREEN ELIMINATED")
+		_finish_stage_success()
 
 
 func _remove_drone_after_frame(agent: AiMechAgent) -> void:
@@ -279,6 +280,54 @@ func _on_stage_player_defeated() -> void:
 	beam_hazard.active = false
 	beam_hazard.queue_redraw()
 	finish_mission(false, "MISSION FAILED // COMBAT UNIT DISABLED")
+
+
+func _finish_stage_success() -> void:
+	if mission_finished:
+		return
+	mission_finished = true
+	system_messages.push_message("MISSION COMPLETE // DRONE SCREEN ELIMINATED")
+	overlay.show_result_message("STAGE CLEAR")
+	GameSession.set_stage_05_cutscene_snapshot(_capture_cutscene_snapshot())
+	if _is_smoke_test():
+		return
+	await get_tree().create_timer(RESULT_DELAY_SECONDS).timeout
+	var error := SceneTransition.transition_to(STAGE_05_CUTSCENE_PATH)
+	if error != OK:
+		push_error("Unable to start Stage 5 cutscene: %s" % error_string(error))
+
+
+func _capture_cutscene_snapshot() -> Dictionary:
+	var surviving_allies: Array[Dictionary] = []
+	for ally in allies:
+		if is_instance_valid(ally) and not ally.is_defeated():
+			surviving_allies.append({
+				"unit_id": str(ally.name),
+				"position": ally.global_position,
+			})
+	var surviving_enemies: Array[Dictionary] = []
+	for agent in battle.agents:
+		if not agent is DroneAgent or not is_instance_valid(agent) or agent.is_defeated():
+			continue
+		var drone := agent as DroneAgent
+		surviving_enemies.append({
+			"unit_id": str(drone.name),
+			"kind": DroneAgent.DroneKind.keys()[drone.drone_kind],
+			"part_id": drone.drone_part.part_id,
+			"position": drone.global_position,
+			"rotation": drone.rotation,
+		})
+	return {
+		"schema_version": 1,
+		"rescued_ally_count": survivor_count,
+		"camera": {
+			"position": battle.camera.global_position,
+			"zoom": battle.camera.zoom,
+		},
+		"player": {"position": combat_player.global_position},
+		"allies": surviving_allies,
+		"enemies": surviving_enemies,
+	}
 
 
 func _on_beam_warning_started(_target_x: float) -> void:
@@ -324,6 +373,7 @@ func _on_beam_lethal_hit_imminent(_target_x: float) -> void:
 
 func _run_stage_05_smoke() -> void:
 	assert(DRONE_TARGET == 20)
+	assert(ResourceLoader.exists(STAGE_05_CUTSCENE_PATH, "PackedScene"))
 	assert(MAX_LIVING_DRONES == 4)
 	assert(not battle.floor_tile_enabled)
 	var black_floor := $CombatContainer/CombatViewport/BlackFloor as Polygon2D
@@ -427,6 +477,9 @@ func _run_stage_05_smoke() -> void:
 	assert(forced_drone.is_defeated())
 	assert(drones_defeated == 0)
 	assert(not combat_player.is_dashing() and combat_player.velocity.is_zero_approx())
+	_finish_stage_success()
+	assert(mission_finished and not GameSession.stage_05_cutscene_snapshot.is_empty())
+	GameSession.clear_stage_05_cutscene_snapshot()
 	beam_hazard.preparation_audio.stop()
 	print("STAGE_05_CHECK passed")
 	get_tree().quit(0)

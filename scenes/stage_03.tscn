@@ -1,46 +1,49 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene format=3 uid="uid://dnld11xogwihy"]
 
 [ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
-[ext_resource type="Script" path="res://scripts/stage_03.gd" id="2_screen"]
-[ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
-[ext_resource type="Script" path="res://scripts/story_walkable_area.gd" id="4_walkable"]
-[ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="5_spawn"]
-[ext_resource type="Texture2D" path="res://Sprites/Scene/Stage3End.png" id="6_stage_end"]
+[ext_resource type="Script" uid="uid://bg83g0na2plvw" path="res://scripts/stage_03.gd" id="2_screen"]
+[ext_resource type="Script" uid="uid://bpo7h28hkimyt" path="res://scripts/story_stage.gd" id="3_stage"]
+[ext_resource type="Script" uid="uid://kk6va55lndj6" path="res://scripts/story_walkable_area.gd" id="4_walkable"]
+[ext_resource type="Script" uid="uid://c4dvtng3o70ds" path="res://scripts/story_spawn_point.gd" id="5_spawn"]
+[ext_resource type="Texture2D" uid="uid://cj4m5ixmc6x1g" path="res://Sprites/Scene/Stage3End.png" id="6_stage_end"]
 [ext_resource type="PackedScene" path="res://scenes/scenario_dialogue.tscn" id="7_dialogue"]
 
-[node name="Stage03" instance=ExtResource("1_base")]
+[node name="Stage03" unique_id=609394264 instance=ExtResource("1_base")]
 script = ExtResource("2_screen")
+finish_from_team_result = null
 automatic_return_to_hangar = false
 tutorial_enabled = false
+
+[node name="HudCanvas" parent="Sidebar/HudStack" index="0"]
+anchors_preset = 0
 
 [node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
 arena = Rect2(-1600, -1100, 3200, 2200)
 centered_camera_zoom = 0.28
 two_vs_two = false
-enable_player_control = true
 randomize_loadouts = false
 automatic_agent_spawn = false
 
-[node name="Title" parent="CombatContainer/CombatViewport/SampleAssembly/UI" index="0"]
+[node name="Title" parent="CombatContainer/CombatViewport/SampleAssembly/UI" index="0" unique_id=931000570]
 text = "STAGE 03 // HEAVY CONTACT"
 
-[node name="Hint" parent="CombatContainer/CombatViewport/SampleAssembly/UI" index="1"]
+[node name="Hint" parent="CombatContainer/CombatViewport/SampleAssembly/UI" index="1" unique_id=815779549]
 text = "DEFEAT THE ENHANCED BOSS UNIT"
 
-[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="1"]
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="1" unique_id=853459673]
 script = ExtResource("3_stage")
 stage_id = "stage_03"
 battle_path = NodePath("../SampleAssembly")
 editor_guides_visible_in_game = false
 
-[node name="WalkableArea" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage"]
-polygon = PackedVector2Array(-1550, -1050, 1550, -1050, 1550, 1050, -1550, 1050)
+[node name="WalkableArea" type="Polygon2D" parent="CombatContainer/CombatViewport/StoryStage" index="0" unique_id=1577483179]
 color = Color(0.14, 0.08, 0.1, 0.82)
+polygon = PackedVector2Array(-1550, -1050, 1550, -1050, 1550, 1050, -1550, 1050)
 script = ExtResource("4_walkable")
 
-[node name="Spawns" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+[node name="Spawns" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage" index="1" unique_id=1678706148]
 
-[node name="PlayerSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+[node name="PlayerSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns" index="0" unique_id=46776474]
 position = Vector2(-1050, -300)
 script = ExtResource("5_spawn")
 unit_id = "PLAYER"
@@ -49,7 +52,7 @@ player_controlled = true
 use_session_loadout = true
 team_color = Color(0.443137, 0.85098, 0.909804, 1)
 
-[node name="AllySpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+[node name="AllySpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns" index="1" unique_id=1957858732]
 position = Vector2(-1050, 300)
 script = ExtResource("5_spawn")
 unit_id = "ALLY-01"
@@ -58,33 +61,35 @@ movement_type = 1
 random_seed = 9119
 team_color = Color(0.560784, 0.682353, 1, 1)
 
-[node name="BossSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
+[node name="BossSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns" index="2" unique_id=1516654362]
 position = Vector2(850, 0)
 rotation = 3.14159
 script = ExtResource("5_spawn")
 unit_id = "BOSS-01"
-unit_class = 2
 random_seed = 17038
 team_color = Color(1, 0.3, 0.22, 1)
+unit_class = 2
 head_id = "falcon_sensor"
 body_id = "swift_core"
 left_arm_id = "cyclone_flechette_arm"
-right_arm_id = ""
-backpack_id = "grid_generator"
+right_arm_id = "cyclone_flechette_arm"
 legs_id = "courier_legs"
 
-[node name="StageEndPresentation" type="Control" parent="." index="3"]
-visible = false
+[node name="CombatOverlay" parent="CombatContainer/CombatViewport/OverlayLayer" index="0"]
 layout_mode = 3
+
+[node name="StageEndPresentation" type="Control" parent="." index="3" unique_id=1573538985]
+visible = false
+layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 0
 
-[node name="Image" type="TextureRect" parent="StageEndPresentation"]
+[node name="Image" type="TextureRect" parent="StageEndPresentation" index="0" unique_id=1728113814]
 visible = false
+texture_filter = 2
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -93,11 +98,10 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 texture = ExtResource("6_stage_end")
-texture_filter = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Fade" type="ColorRect" parent="StageEndPresentation"]
+[node name="Fade" type="ColorRect" parent="StageEndPresentation" index="1" unique_id=1998786642]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -107,6 +111,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0)
 
-[node name="Dialogue" parent="StageEndPresentation" instance=ExtResource("7_dialogue")]
+[node name="Dialogue" parent="StageEndPresentation" index="2" unique_id=1943129963 instance=ExtResource("7_dialogue")]
+layout_mode = 1
 
 [editable path="CombatContainer/CombatViewport/SampleAssembly"]
