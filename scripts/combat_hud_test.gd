@@ -86,31 +86,17 @@ func _update_layout() -> void:
 		maxf(size.x - combat_position.x, 1.0),
 		maxf(size.y, 1.0)
 	)
-	var render_scale := _screen_render_scale()
 	var render_size := Vector2i(
-		maxi(roundi(logical_combat_size.x * render_scale.x), 1),
-		maxi(roundi(logical_combat_size.y * render_scale.y), 1)
+		maxi(roundi(logical_combat_size.x), 1),
+		maxi(roundi(logical_combat_size.y), 1)
 	)
 
 	combat_container.position = combat_position
 	combat_container.size = Vector2(render_size)
-	combat_container.scale = Vector2(1.0 / render_scale.x, 1.0 / render_scale.y)
+	combat_container.scale = Vector2.ONE
 	combat_viewport.size = render_size
-	combat_viewport.size_2d_override = Vector2i(
-		maxi(roundi(logical_combat_size.x), 1),
-		maxi(roundi(logical_combat_size.y), 1)
-	)
+	combat_viewport.size_2d_override = render_size
 	combat_viewport.size_2d_override_stretch = true
-
-
-func _screen_render_scale() -> Vector2:
-	var window_size := Vector2(DisplayServer.window_get_size())
-	if window_size.x <= 0.0 or window_size.y <= 0.0 or size.x <= 0.0 or size.y <= 0.0:
-		return Vector2.ONE
-	return Vector2(
-		maxf(window_size.x / size.x, 0.25),
-		maxf(window_size.y / size.y, 0.25)
-	)
 
 
 func _bind_combat() -> void:
