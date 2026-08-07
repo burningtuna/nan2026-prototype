@@ -12,6 +12,9 @@ var sample_spacing := 2.0
 var finish_lifetime := 1.0
 var finish_elapsed := 0.0
 var finished := false
+var max_missile_points := MAX_MISSILE_POINTS
+var fill_sample_gaps := false
+var smoke_expansion_speed_multiplier := 1.0
 var points: Array[Vector2] = []
 var ages: Array[float] = []
 
@@ -41,14 +44,31 @@ func setup(
 func add_sample(world_position: Vector2) -> void:
 	if finished:
 		return
-	if not points.is_empty() and points[-1].distance_to(world_position) < sample_spacing:
-		return
+	if not points.is_empty():
+		var previous_position := points[-1]
+		var sample_distance := previous_position.distance_to(world_position)
+		if sample_distance < sample_spacing:
+			return
+		if weapon_family == WeaponSpec.WeaponFamily.MISSILE and fill_sample_gaps:
+			var sample_direction := previous_position.direction_to(world_position)
+			var offset := sample_spacing
+			while offset < sample_distance:
+				_append_sample(previous_position + sample_direction * offset)
+				offset += sample_spacing
 	points.append(world_position)
 	ages.append(0.0)
-	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and points.size() > MAX_MISSILE_POINTS:
+	if weapon_family == WeaponSpec.WeaponFamily.MISSILE and points.size() > max_missile_points:
 		points.pop_front()
 		ages.pop_front()
 	queue_redraw()
+
+
+func _append_sample(world_position: Vector2) -> void:
+	points.append(world_position)
+	ages.append(0.0)
+	if points.size() > max_missile_points:
+		points.pop_front()
+		ages.pop_front()
 
 
 func finish() -> void:
@@ -104,7 +124,7 @@ func _draw_streak(outer_color: Color) -> void:
 
 
 func _draw_missile_trail() -> void:
-	var trail_width := 3.0
+	var trail_width := 3.0 * width_multiplier
 	var finish_ratio := clampf(finish_elapsed / finish_lifetime, 0.0, 1.0) if finished else 0.0
 	var finish_alpha := 1.0 - finish_ratio
 	if points.size() >= 2:
@@ -118,9 +138,20 @@ func _draw_missile_trail() -> void:
 	for index in points.size():
 		var age_ratio := clampf(ages[index] / sample_lifetime, 0.0, 1.0)
 		var smoke_alpha := (1.0 - age_ratio) * 0.5 * finish_alpha
-		var smoke_radius := lerpf(3.0, 15.0, maxf(age_ratio, finish_ratio))
+		var expansion_ratio := clampf(
+			age_ratio * smoke_expansion_speed_multiplier,
+			0.0,
+			1.0
+		)
+		var smoke_radius := (
+			lerpf(3.0, 15.0, maxf(expansion_ratio, finish_ratio)) * width_multiplier
+		)
 		draw_circle(points[index], smoke_radius, Color(0.9, 0.92, 0.94, smoke_alpha))
 
 	if not finished and not points.is_empty():
-		var flame_position := points[-1] - launch_direction * 3.0
-		draw_circle(flame_position, 2.0, Color(1.0, 0.78, 0.18, 0.85))
+		var flame_position := points[-1] - launch_direction * 3.0 * width_multiplier
+		draw_circle(
+			flame_position,
+			2.0 * width_multiplier,
+			Color(1.0, 0.78, 0.18, 0.85)
+		)

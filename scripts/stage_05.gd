@@ -334,7 +334,18 @@ func _run_stage_05_smoke() -> void:
 	assert(battle.arena == Rect2(-1600.0, -250.0, 3200.0, 750.0))
 	assert(map_background.material is ShaderMaterial)
 	assert(is_equal_approx(beam_hazard.beam_width, 200.0))
-	assert(is_equal_approx(beam_hazard.warning_duration, 2.0))
+	assert(is_equal_approx(beam_hazard.warning_duration, 5.0))
+	var maximum_visible_height: float = (
+		battle.get_viewport_rect().size.y / battle._map_fit_zoom()
+	)
+	assert(beam_hazard.firing_beam_length >= battle.arena.size.y + maximum_visible_height)
+	assert(is_equal_approx(beam_hazard.fade_out_duration, 2.0))
+	assert(is_equal_approx(
+		beam_hazard.warning_duration
+		+ beam_hazard.firing_duration
+		+ beam_hazard.cooldown_duration,
+		15.0
+	))
 	assert(not beam_hazard.active and BEAM_UNLOCK_DRONE_KILLS == 2)
 	assert(survivor_count == ALLY_COUNT and allies.size() == ALLY_COUNT)
 	for ally in allies:
@@ -390,9 +401,11 @@ func _run_stage_05_smoke() -> void:
 	beam_hazard.firing_started.connect(func(_x: float) -> void: event_counts[1] += 1)
 	var original_player := beam_hazard.player
 	beam_hazard._begin_warning()
+	assert(beam_hazard.preparation_audio.playing)
 	beam_hazard.player = null
 	beam_hazard._begin_firing()
 	beam_hazard._begin_cooldown()
+	assert(is_equal_approx(beam_hazard.fade_remaining, 2.0))
 	beam_hazard.player = original_player
 	assert(event_counts == [1, 1])
 	assert(beam_hazard.state == VerticalBeamHazard.State.COOLDOWN)
@@ -414,5 +427,6 @@ func _run_stage_05_smoke() -> void:
 	assert(forced_drone.is_defeated())
 	assert(drones_defeated == 0)
 	assert(not combat_player.is_dashing() and combat_player.velocity.is_zero_approx())
+	beam_hazard.preparation_audio.stop()
 	print("STAGE_05_CHECK passed")
 	get_tree().quit(0)

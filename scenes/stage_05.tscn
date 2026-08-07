@@ -116,9 +116,11 @@ left_arm_id = "breach_scattergun_arm"
 [node name="VerticalBeamHazard" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
 z_index = 12
 script = ExtResource("5_beam")
-warning_duration = 2.0
+warning_duration = 5.0
 firing_duration = 0.35
-cooldown_duration = 3.0
+cooldown_duration = 9.65
 beam_width = 200.0
+firing_beam_length = 6000.0
+fade_out_duration = 2.0
 
 [editable path="CombatContainer/CombatViewport/SampleAssembly"]
