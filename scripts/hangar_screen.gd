@@ -17,6 +17,7 @@ const SKIRMISH_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
 const ENDLESS_SCENE_PATH := "res://scenes/endless_combat.tscn"
 const STORY_STAGE_SELECT_PATH := "res://scenes/story_stage_select.tscn"
 const STAGE_02_PATH := "res://scenes/stage_02.tscn"
+const STAGE_03_PATH := "res://scenes/stage_03.tscn"
 const ENDLESS_INTRO_PATH := "res://data/scenarios/endless_intro.json"
 const STAGE_02_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_02_hangar.json"
 const STAGE_03_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_03_hangar.json"
@@ -59,6 +60,18 @@ const STAGE_02_FALLBACK_PART_IDS := {
 	MechLoadout.MechSlot.RIGHT_ARM: "rx_autocannon",
 	MechLoadout.MechSlot.BACKPACK: "grid_generator",
 	MechLoadout.MechSlot.LEGS: "strider_legs",
+}
+const STAGE_03_ALLOWED_PART_DESIGNATIONS := {
+	MechLoadout.MechSlot.BODY: ["BD-00", "BD-01"],
+	MechLoadout.MechSlot.HEAD: ["HD-01", "HD-02"],
+	MechLoadout.MechSlot.LEFT_ARM: [
+		"AR-11", "AR-15", "AR-22", "AR-31", "AR-B01", "AR-B02", "AR-E01", "AR-E02", "AR-M01",
+	],
+	MechLoadout.MechSlot.RIGHT_ARM: [
+		"AR-11", "AR-15", "AR-22", "AR-31", "AR-B01", "AR-B02", "AR-E01", "AR-E02", "AR-M01",
+	],
+	MechLoadout.MechSlot.BACKPACK: ["BP-05", "BP-09"],
+	MechLoadout.MechSlot.LEGS: ["LG-01", "LG-03"],
 }
 
 @onready var mech_preview: MechWireframePreview = $MechPreview
@@ -104,7 +117,7 @@ func _ready() -> void:
 		GameSession.story_deployment_scene_path = "res://scenes/stage_04.tscn"
 	elif user_args.has("--story-hangar-smoke") or user_args.has("--story-deploy-smoke"):
 		GameSession.selected_game_mode = GameSession.GameMode.STORY
-		GameSession.story_deployment_scene_path = "res://scenes/stage_03.tscn"
+		GameSession.story_deployment_scene_path = STAGE_03_PATH
 	if not _build_catalog():
 		return
 	if user_args.has("--story-hangar-stage-02-smoke"):
@@ -128,7 +141,7 @@ func _ready() -> void:
 		dialogue_started = _scenario_dialogue.play_file(STAGE_02_HANGAR_DIALOGUE_PATH)
 	elif (
 		GameSession.selected_game_mode == GameSession.GameMode.STORY
-		and GameSession.story_deployment_scene_path == "res://scenes/stage_03.tscn"
+		and GameSession.story_deployment_scene_path == STAGE_03_PATH
 	):
 		dialogue_started = _scenario_dialogue.play_file(STAGE_03_HANGAR_DIALOGUE_PATH)
 	elif (
@@ -188,8 +201,22 @@ func _run_endless_hangar_entry_smoke() -> void:
 
 func _run_story_hangar_smoke() -> void:
 	assert(GameSession.selected_game_mode == GameSession.GameMode.STORY)
-	assert(_deployment_scene_path() == "res://scenes/stage_03.tscn")
+	assert(_deployment_scene_path() == STAGE_03_PATH)
 	assert(_confirm_button.text == "DEPLOY STORY")
+	assert(_loadout_matches_deployment_policy(_working_loadout))
+	for slot in SLOT_ORDER:
+		_open_part_picker(slot)
+		var actual_designations: Array[String] = []
+		for part_value in _candidate_parts.values():
+			var part := part_value as MechPartSpec
+			if part != null:
+				actual_designations.append(part.designation)
+		var expected_designations: Array[String] = []
+		expected_designations.assign(STAGE_03_ALLOWED_PART_DESIGNATIONS[slot])
+		actual_designations.sort()
+		expected_designations.sort()
+		assert(actual_designations == expected_designations)
+	_close_part_picker()
 	assert(_scenario_dialogue.current_speaker() == "오퍼레이터")
 	assert(_scenario_dialogue.current_text() == "아레나의 보스에 도전할 기회를 얻었네 축하해.")
 	assert(_scenario_dialogue.dialogue.size() == 4)
@@ -534,7 +561,9 @@ func _initial_loadout() -> MechLoadout:
 		var fallback := _create_stage_02_fallback_loadout()
 		GameSession.player_mech_loadout = fallback.copy()
 		return fallback
-	return _part_catalog.create_default_loadout()
+	var fallback := _part_catalog.create_default_loadout()
+	assert(_loadout_matches_deployment_policy(fallback))
+	return fallback
 
 
 func _is_stage_02_story_deployment() -> bool:
@@ -545,7 +574,7 @@ func _is_stage_02_story_deployment() -> bool:
 
 
 func _loadout_matches_deployment_policy(loadout: MechLoadout) -> bool:
-	if not _is_stage_02_story_deployment():
+	if not _has_deployment_part_restrictions():
 		return true
 	if loadout == null or not loadout.is_valid():
 		return false
@@ -556,11 +585,20 @@ func _loadout_matches_deployment_policy(loadout: MechLoadout) -> bool:
 
 
 func _is_part_allowed_for_deployment(slot: MechLoadout.MechSlot, part: MechPartSpec) -> bool:
-	if not _is_stage_02_story_deployment():
+	if not _has_deployment_part_restrictions():
 		return true
 	if part == null:
 		return _is_optional(slot)
-	return part.part_id in STAGE_02_ALLOWED_PART_IDS[slot]
+	if _is_stage_02_story_deployment():
+		return part.part_id in STAGE_02_ALLOWED_PART_IDS[slot]
+	return part.designation in STAGE_03_ALLOWED_PART_DESIGNATIONS[slot]
+
+
+func _has_deployment_part_restrictions() -> bool:
+	return (
+		GameSession.selected_game_mode == GameSession.GameMode.STORY
+		and GameSession.story_deployment_scene_path in [STAGE_02_PATH, STAGE_03_PATH]
+	)
 
 
 func _create_stage_02_fallback_loadout() -> MechLoadout:
@@ -693,7 +731,11 @@ func _close_part_picker() -> void:
 
 func _confirm_loadout() -> void:
 	if not _loadout_matches_deployment_policy(_working_loadout):
-		_working_loadout = _create_stage_02_fallback_loadout()
+		_working_loadout = (
+			_create_stage_02_fallback_loadout()
+			if _is_stage_02_story_deployment()
+			else _part_catalog.create_default_loadout()
+		)
 		_refresh()
 	if not _working_loadout.is_valid():
 		return

@@ -470,6 +470,8 @@ func _run_stage_05_smoke() -> void:
 	assert(is_instance_valid(arena_boss_ally))
 	assert(arena_boss_ally.name == "ARENA-BOSS")
 	assert(arena_boss_ally.unit_class == AiMechAgent.UnitClass.BOSS)
+	assert(arena_boss_ally.modulate == Color.WHITE)
+	assert((arena_boss_ally.get_node("UpperBody/BodySprite") as Sprite2D).self_modulate == Color.WHITE)
 	assert(arena_boss_ally.global_position == Vector2(0.0, 220.0))
 	assert(arena_boss_ally.movement_type == AiMechAgent.MovementType.AGGRESSIVE)
 	assert(arena_boss_ally.combat_actions_enabled)
@@ -481,6 +483,10 @@ func _run_stage_05_smoke() -> void:
 		assert(ally.movement_type == AiMechAgent.MovementType.AGGRESSIVE)
 		assert(ally.combat_actions_enabled)
 		assert(not ally.mech_collision_enabled)
+		assert(ally.modulate == Color.WHITE)
+		assert((ally.get_node("UpperBody/BodySprite") as Sprite2D).self_modulate != Color.WHITE)
+		for boost in ally.boost_sprites:
+			assert(boost.self_modulate == Color.WHITE)
 		assert(is_zero_approx(ally.incoming_damage_multiplier))
 		for hitbox_value in ally.part_hitboxes.values():
 			var hitbox := hitbox_value as PartHitbox

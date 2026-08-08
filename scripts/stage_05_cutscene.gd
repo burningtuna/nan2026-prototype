@@ -529,6 +529,8 @@ func _run_stage_05_cutscene_smoke() -> void:
 			CUTSCENE_SNAPSHOT.DEFAULT_ALLY_POSITIONS[index]
 		))
 	assert(is_instance_valid(boss) and boss.unit_class == AiMechAgent.UnitClass.BOSS)
+	assert(boss.modulate == Color.WHITE)
+	assert((boss.get_node("UpperBody/BodySprite") as Sprite2D).self_modulate == Color.WHITE)
 	assert(battle.camera.global_position == CAMERA_START_POSITION)
 	assert(boss.global_position == CAMERA_START_POSITION + BOSS_START_OFFSET)
 	assert(boss.mech_loadout.left_arm.part_id == "cyclone_flechette_arm")

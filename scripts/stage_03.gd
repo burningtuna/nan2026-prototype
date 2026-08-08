@@ -100,6 +100,7 @@ func _configure_boss() -> void:
 	boss.dash_speed *= 2.0
 	boss.upper_turn_speed_degrees *= 2.0
 	boss.sensor_period_override = BOSS_SENSOR_PERIOD
+	boss.mech_collision_player_only = true
 	boss.hit_and_run_enabled = true
 	boss.hit_and_run_retreat_distance = 1200.0
 	boss.hit_and_run_shots_per_weapon = 5
@@ -248,6 +249,8 @@ func _run_stage_smoke() -> void:
 	assert(boss.mech_loadout.right_arm.part_id == "cyclone_flechette_arm")
 	assert(boss.mech_loadout.backpack.part_id == "grid_generator")
 	assert(boss.mech_loadout.legs.part_id == "courier_legs")
+	assert(boss.modulate == Color.WHITE)
+	assert((boss.get_node("UpperBody/BodySprite") as Sprite2D).self_modulate == Color.WHITE)
 	assert(is_equal_approx(boss.movement_speed_multiplier, 2.0))
 	assert(is_equal_approx(
 		boss.movement_speed(),
@@ -259,6 +262,7 @@ func _run_stage_smoke() -> void:
 	assert(is_equal_approx(boss.dash_speed, boss_base_dash_speed * 2.0))
 	assert(is_equal_approx(boss.upper_turn_speed_degrees, boss_base_turn_speed * 2.0))
 	assert(is_equal_approx(boss.sensor_period(), BOSS_SENSOR_PERIOD))
+	assert(boss.mech_collision_player_only)
 	assert(boss.hit_and_run_enabled)
 	assert(boss.hit_and_run_shots_per_weapon == 5)
 	assert(is_equal_approx(boss.arena_center_recovery_margin, BOSS_CENTER_RECOVERY_MARGIN))
@@ -270,6 +274,19 @@ func _run_stage_smoke() -> void:
 		if agent.team_id == 0 and not agent.player_controlled:
 			ally = agent
 	assert(ally != null)
+	var boss_collision_position := boss.global_position
+	var ally_position_before_collision := ally.global_position
+	var player_position_before_collision := combat_player.global_position
+	ally.global_position = boss_collision_position
+	MechCollisionResolver.resolve([boss, ally])
+	assert(boss.global_position == boss_collision_position)
+	assert(ally.global_position == boss_collision_position)
+	combat_player.global_position = boss_collision_position
+	MechCollisionResolver.resolve([boss, combat_player])
+	assert(not boss.global_position.is_equal_approx(combat_player.global_position))
+	boss.global_position = boss_collision_position
+	ally.global_position = ally_position_before_collision
+	combat_player.global_position = player_position_before_collision
 	boss.sensor_snapshot.units.assign([
 		{"target": combat_player, "position": boss.global_position + Vector2(100.0, 0.0)},
 		{"target": ally, "position": boss.global_position + Vector2(500.0, 0.0)},

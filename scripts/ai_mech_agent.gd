@@ -22,6 +22,7 @@ const ENERGY_FULL_RECHARGE_SECONDS := 10.0
 const MOBILITY_SPEED_MULTIPLIER := 2.0
 const WALL_BLOCKED_TURN_MULTIPLIER := 2.0
 const PLAYER_ARM_DURABILITY_MULTIPLIER := 3.0
+const PREPARED_ARM_AIM_TOLERANCE_DEGREES := 2.0
 const WEAPON_SELECT_LEFT := 1
 const WEAPON_SELECT_RIGHT := 2
 const WEAPON_SELECT_BACKPACK := 4
@@ -76,6 +77,11 @@ const BOOST_FRAMES := [
 	"res://Sprites/Boost-0002.png",
 	"res://Sprites/Boost-0003.png",
 ]
+const DASH_FRAMES := [
+	"res://Sprites/Dash-0001.png",
+	"res://Sprites/Dash-0002.png",
+	"res://Sprites/Dash-0003.png",
+]
 
 @export var cruise_speed := 70.0
 @export var acceleration := 180.0
@@ -94,6 +100,7 @@ const BOOST_FRAMES := [
 @export var evasion_range := 1500.0
 @export var mech_collision_radius := 28.0
 @export var mech_collision_enabled := true
+@export var mech_collision_player_only := false
 @export var player_controlled := false
 @export var team_id := 0
 @export var unit_class := UnitClass.MECH
@@ -142,6 +149,7 @@ var fired_shots := {
 
 var arena := Rect2(-360.0, -220.0, 720.0, 440.0)
 var projectile_layer: Node2D
+var mech_visual_color := Color.WHITE
 var lower_body: Node2D
 var upper_body: Node2D
 var head_aim_node: Node2D
@@ -234,7 +242,8 @@ func setup(
 	projectile_layer = shot_parent
 	arena = movement_arena
 	rng.seed = random_seed
-	modulate = team_color
+	mech_visual_color = team_color
+	modulate = Color.WHITE
 	scale = Vector2.ONE * 4.0
 	weapon_specs = loadout
 	mech_loadout = configured_loadout.copy() if configured_loadout != null else null
@@ -1696,8 +1705,11 @@ func _select_nearest_sensor_target() -> void:
 	var nearest_target: AiMechAgent
 	var nearest_distance_squared := INF
 	for contact in sensor_snapshot.units:
-		var target := contact.get("target") as AiMechAgent
-		if not is_instance_valid(target) or target.is_defeated():
+		var target_value = contact.get("target")
+		if not is_instance_valid(target_value):
+			continue
+		var target := target_value as AiMechAgent
+		if target == null or target.is_defeated():
 			continue
 		var observed_position: Vector2 = contact.get("position", target.global_position)
 		var distance_squared := global_position.distance_squared_to(observed_position)
@@ -1910,13 +1922,24 @@ func _aim_at_opponent(delta: float) -> void:
 		var desired_local_rotation := wrapf(arm_vector.angle() - upper_body.global_rotation, -PI, PI)
 		var traverse_delta := angle_difference(-PI * 0.5, desired_local_rotation)
 		var traverse_limit := deg_to_rad(weapons[weapon_index].spec.traverse_limit_degrees)
-		var aim_is_valid := absf(traverse_delta) <= traverse_limit
-		var visual_target_rotation := desired_local_rotation if aim_is_valid else -PI * 0.5
+		var within_traverse := absf(traverse_delta) <= traverse_limit
+		var tracking_prepared_shot := preparing_weapon_index == weapon_index
+		var visual_target_rotation := (
+			desired_local_rotation
+			if within_traverse or tracking_prepared_shot
+			else -PI * 0.5
+		)
 		aim_node.rotation = rotate_toward(
 			aim_node.rotation,
 			visual_target_rotation,
 			deg_to_rad(effective_arm_turn_speed_degrees()) * delta
 		)
+		var aim_is_valid := within_traverse
+		if tracking_prepared_shot:
+			aim_is_valid = absf(angle_difference(
+			aim_node.rotation,
+			desired_local_rotation
+		)) <= deg_to_rad(PREPARED_ARM_AIM_TOLERANCE_DEGREES)
 		weapon_aim_valid.append(aim_is_valid)
 	for weapon_index in range(arm_aim_nodes.size(), weapons.size()):
 		var weapon := weapons[weapon_index]
@@ -2028,49 +2051,7 @@ func _start_preparation(weapon_index: int) -> void:
 
 
 func _can_complete_preparation(weapon_index: int) -> bool:
-	var weapon_spec := weapons[weapon_index].spec
-	var duration := effective_weapon_preparation_time(weapons[weapon_index])
-	if duration <= 0.0 or not is_instance_valid(opponent):
-		return true
-	if player_controlled:
-		return weapon_index < weapon_aim_valid.size() and weapon_aim_valid[weapon_index]
-
-	var future_self_position := (
-		global_position
-		+ velocity * effective_preparation_move_speed_multiplier(weapons[weapon_index]) * duration
-	)
-	var future_target_position := observed_target_position + observed_target_velocity * duration
-	var future_aim_vector := future_target_position - future_self_position
-	if future_aim_vector.length_squared() <= 1.0:
-		return true
-
-	var desired_torso_rotation := movement_direction.angle() + PI * 0.5
-	var turn_amount := (
-		deg_to_rad(upper_turn_speed_degrees)
-		* weapon_spec.preparation_turn_speed_multiplier
-		* duration
-	)
-	var future_torso_rotation := rotate_toward(
-		upper_body.global_rotation,
-		desired_torso_rotation,
-		turn_amount
-	)
-	var future_local_aim := wrapf(
-		future_aim_vector.angle() - future_torso_rotation,
-		-PI,
-		PI
-	)
-	var future_traverse := absf(angle_difference(-PI * 0.5, future_local_aim))
-
-	var possible_target_displacement := (
-		observed_target_velocity.length() * duration
-		+ effective_dash_distance()
-	)
-	var target_distance := maxf(future_aim_vector.length(), 1.0)
-	var maneuver_margin := asin(clampf(possible_target_displacement / target_distance, 0.0, 0.95))
-	var fixed_margin := deg_to_rad(2.0)
-	var traverse_limit := deg_to_rad(weapon_spec.traverse_limit_degrees)
-	return future_traverse + maneuver_margin + fixed_margin <= traverse_limit
+	return weapon_index >= 0 and weapon_index < weapons.size()
 
 
 func _finish_preparation() -> void:
@@ -2695,6 +2676,11 @@ func _attach_boosts(legs: Dictionary) -> void:
 	frames.set_animation_speed(&"burn", 8.0)
 	for texture_path in BOOST_FRAMES:
 		frames.add_frame(&"burn", load(texture_path) as Texture2D)
+	frames.add_animation(&"dash")
+	frames.set_animation_loop(&"dash", true)
+	frames.set_animation_speed(&"dash", 12.0)
+	for texture_path in DASH_FRAMES:
+		frames.add_frame(&"dash", load(texture_path) as Texture2D)
 
 	var boost_anchors := AnchorMap.many(legs_map, &"boost")
 	for index in boost_anchors.size():
@@ -2711,8 +2697,22 @@ func _attach_boosts(legs: Dictionary) -> void:
 
 
 func _update_boost_effect() -> void:
+	var dashing := is_dashing()
 	for boost in boost_sprites:
-		boost.visible = not is_part_destroyed(&"Legs") and velocity.length_squared() > 4.0
+		if dashing:
+			if boost.animation != &"dash":
+				boost.animation = &"dash"
+				boost.play()
+			boost.global_rotation = dash_direction.angle() + PI * 0.5
+		else:
+			if boost.animation != &"burn":
+				boost.animation = &"burn"
+				boost.play()
+			boost.rotation = 0.0
+		boost.visible = (
+			not is_part_destroyed(&"Legs")
+			and (dashing or velocity.length_squared() > 4.0)
+		)
 
 
 func _create_sprite(texture_path: String, z_index_value: int) -> Sprite2D:
@@ -2721,6 +2721,7 @@ func _create_sprite(texture_path: String, z_index_value: int) -> Sprite2D:
 	sprite.centered = true
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.z_index = z_index_value
+	sprite.self_modulate = mech_visual_color
 	var shadow := Sprite2D.new()
 	if not combat_visuals_enabled:
 		return sprite

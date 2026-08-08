@@ -11,6 +11,11 @@ static func resolve(combatants: Array) -> void:
 			var second := combatants[second_index] as AiMechAgent
 			if not is_instance_valid(second) or second.is_defeated() or not second.mech_collision_enabled:
 				continue
+			if (
+				(first.mech_collision_player_only and not second.player_controlled)
+				or (second.mech_collision_player_only and not first.player_controlled)
+			):
+				continue
 			_resolve_pair(first, second)
 
 

@@ -91,11 +91,13 @@ func _initialize() -> void:
 	assert(is_equal_approx(_decision_period(AiMechAgent.MovementType.BALANCED), 0.5))
 	assert(is_equal_approx(_decision_period(AiMechAgent.MovementType.DEFENSIVE), 1.0))
 	_verify_freed_projectile_snapshot()
+	_verify_freed_unit_target_selection()
 	_verify_sensor_guided_missile()
 	_verify_target_cycle()
 	_verify_selected_target_persistence(part_catalog, projectile_layer)
 	_verify_missile_radar_sensor(part_catalog, projectile_layer)
 	_verify_missile_radar_guidance(part_catalog, projectile_layer)
+	await _verify_charged_arm_and_dash_visuals(part_catalog)
 	_verify_backpack_muzzle_positions()
 	assert(not target.is_defeated())
 	target.combat_visuals_enabled = false
@@ -218,6 +220,19 @@ func _verify_freed_projectile_snapshot() -> void:
 	snapshot.projectiles.append({"projectile": projectile})
 	projectile.free()
 	assert(snapshot.tracked_projectiles().is_empty())
+
+
+func _verify_freed_unit_target_selection() -> void:
+	var observer := AiMechAgent.new()
+	var target := AiMechAgent.new()
+	observer.sensor_snapshot.units.append({
+		"target": target,
+		"position": Vector2.ZERO,
+	})
+	target.free()
+	observer._select_nearest_sensor_target()
+	assert(observer.selected_sensor_target == null)
+	observer.free()
 
 
 func _verify_target_cycle() -> void:
@@ -452,3 +467,46 @@ func _verify_backpack_muzzle_positions() -> void:
 	})
 	assert(fallback == [Vector2(0.0, -6.0)])
 	agent.free()
+
+
+func _verify_charged_arm_and_dash_visuals(part_catalog: MechPartCatalog) -> void:
+	var projectile_layer := Node2D.new()
+	get_root().add_child(projectile_layer)
+	var loadout := part_catalog.create_default_loadout()
+	loadout.left_arm = part_catalog.parts_by_id["nova_beam_cannon_arm"]
+	loadout.right_arm = null
+	var agent := _make_agent("ChargedAim", projectile_layer, loadout)
+	agent.player_controlled = true
+	get_root().add_child(agent)
+	await process_frame
+	agent.manual_aim_position = Vector2(1000.0, 0.0)
+	agent._aim_at_opponent(10.0)
+	assert(not agent.weapon_aim_valid[0])
+	agent.preparing_weapon_index = 0
+	agent.preparation_time_remaining = agent.effective_weapon_preparation_time(agent.weapons[0])
+	agent._aim_at_opponent(10.0)
+	assert(agent.weapon_aim_valid[0])
+	assert(absf(angle_difference(
+		agent.arm_aim_nodes[0].rotation,
+		agent.manual_aim_position.angle()
+	)) <= deg_to_rad(AiMechAgent.PREPARED_ARM_AIM_TOLERANCE_DEGREES))
+	var shots_before := agent.shot_count
+	agent._finish_preparation()
+	assert(agent.shot_count == shots_before + 1)
+	assert(not agent.boost_sprites.is_empty())
+	agent.dash_direction = Vector2.RIGHT
+	agent.dash_time_remaining = 0.5
+	agent.velocity = Vector2.RIGHT * 100.0
+	agent._update_boost_effect()
+	for boost in agent.boost_sprites:
+		assert(boost.animation == &"dash" and boost.visible)
+		assert(boost.sprite_frames.get_frame_texture(&"dash", 0).resource_path == AiMechAgent.DASH_FRAMES[0])
+		assert(is_equal_approx(boost.global_rotation, PI * 0.5))
+		assert(boost.self_modulate == Color.WHITE)
+	agent.dash_time_remaining = 0.0
+	agent._update_boost_effect()
+	for boost in agent.boost_sprites:
+		assert(boost.animation == &"burn")
+		assert(is_zero_approx(boost.rotation))
+	agent.free()
+	projectile_layer.free()
