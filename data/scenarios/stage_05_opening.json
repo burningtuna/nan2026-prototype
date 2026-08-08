@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "stage_05_opening",
+  "branch_basis": "surviving_allies_excluding_player_and_arena_boss",
+  "branches": {
+	"0": [
+	  {
+		"speaker": "아레나 보스",
+		"text": "사람 없이 깡통이랑 싸워야 하다니 최악의 날이군."
+	  }
+	],
+	"1": [
+	  {
+		"speaker": "아레나 보스",
+		"text": "사람이 깡통에게 질 수는 없지. 간다!"
+	  }
+	],
+	"2": [
+	  {
+		"speaker": "아레나 보스",
+		"text": "... 아직 이만큼이나 싸울 수 있는 사람이 있어. 가자!"
+	  }
+	],
+	"3": [
+	  {
+		"speaker": "아레나 보스",
+		"text": "... "
+	  }
+	],
+	"4": [
+	  {
+		"speaker": "아레나 보스",
+		"text": "... 모두 살아서 보니 반갑군. 할 수 있는 만큼 해보는 거다!"
+	  }
+	]
+  }
+}

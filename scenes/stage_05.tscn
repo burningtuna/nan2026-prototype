@@ -1,61 +1,73 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene format=3 uid="uid://csnrokmgiou8l"]
 
 [ext_resource type="PackedScene" path="res://scenes/combat_hud_test.tscn" id="1_base"]
-[ext_resource type="Script" path="res://scripts/stage_05.gd" id="2_screen"]
-[ext_resource type="Script" path="res://scripts/story_stage.gd" id="3_stage"]
-[ext_resource type="Script" path="res://scripts/story_spawn_point.gd" id="4_spawn"]
-[ext_resource type="Script" path="res://scripts/vertical_beam_hazard.gd" id="5_beam"]
-[ext_resource type="Texture2D" path="res://Sprites/Background/Stage5.png" id="6_background"]
+[ext_resource type="Script" uid="uid://dsmk53uyvaknb" path="res://scripts/stage_05.gd" id="2_screen"]
+[ext_resource type="Script" uid="uid://bpo7h28hkimyt" path="res://scripts/story_stage.gd" id="3_stage"]
+[ext_resource type="Script" uid="uid://c4dvtng3o70ds" path="res://scripts/story_spawn_point.gd" id="4_spawn"]
+[ext_resource type="Script" uid="uid://dqbh6por07bmf" path="res://scripts/vertical_beam_hazard.gd" id="5_beam"]
+[ext_resource type="Texture2D" uid="uid://bkbgt4vu41o85" path="res://Sprites/Background/Stage5.png" id="6_background"]
 
 [sub_resource type="Shader" id="Shader_stage5_ocean_fade"]
-code = "shader_type canvas_item;\n\nuniform float fade_end : hint_range(0.01, 0.5) = 0.14;\n\nvoid fragment() {\n\tvec4 color = texture(TEXTURE, UV);\n\tcolor.a *= smoothstep(0.0, fade_end, UV.y);\n\tCOLOR = color;\n}\n"
+code = "shader_type canvas_item;
+
+uniform float fade_end : hint_range(0.01, 0.5) = 0.14;
+
+void fragment() {
+	vec4 color = texture(TEXTURE, UV);
+	color.a *= smoothstep(0.0, fade_end, UV.y);
+	COLOR = color;
+}
+"
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_stage5_ocean_fade"]
 shader = SubResource("Shader_stage5_ocean_fade")
+shader_parameter/fade_end = 0.14
 
-[node name="Stage05" instance=ExtResource("1_base")]
+[node name="Stage05" unique_id=82596851 instance=ExtResource("1_base")]
 script = ExtResource("2_screen")
+finish_from_team_result = false
+next_story_stage_path = ""
 automatic_return_to_hangar = false
 tutorial_enabled = false
-finish_from_team_result = false
+
+[node name="HudCanvas" parent="Sidebar/HudStack" index="0"]
+anchors_preset = 0
 
 [node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
 arena = Rect2(-1600, -250, 3200, 750)
-camera_mode = 1
 centered_camera_zoom = 0.35
 two_vs_two = false
-enable_player_control = true
 randomize_loadouts = false
 solo_player = true
 automatic_battle_completion = false
 automatic_agent_spawn = false
 floor_tile_enabled = false
 
-[node name="BlackFloor" type="Polygon2D" parent="CombatContainer/CombatViewport" index="1"]
+[node name="BlackFloor" type="Polygon2D" parent="CombatContainer/CombatViewport" index="1" unique_id=1209129963]
 z_index = -100
-polygon = PackedVector2Array(-1700, -1400, 1700, -1400, 1700, 1400, -1700, 1400)
 color = Color(0, 0, 0, 1)
+polygon = PackedVector2Array(-1700, -1400, 1700, -1400, 1700, 1400, -1700, 1400)
 
-[node name="OceanBackdrop" type="Polygon2D" parent="CombatContainer/CombatViewport" index="2"]
+[node name="OceanBackdrop" type="Polygon2D" parent="CombatContainer/CombatViewport" index="2" unique_id=146689696]
 z_index = -95
-polygon = PackedVector2Array(-2800, -1900, 2800, -1900, 2800, 900, -2800, 900)
 color = Color(0.055, 0.13, 0.16, 1)
+polygon = PackedVector2Array(-2800, -1900, 2800, -1900, 2800, 900, -2800, 900)
 
-[node name="MapBackground" type="Sprite2D" parent="CombatContainer/CombatViewport" index="3"]
+[node name="MapBackground" type="Sprite2D" parent="CombatContainer/CombatViewport" index="3" unique_id=1284108607]
 z_index = -90
+texture_filter = 2
 material = SubResource("ShaderMaterial_stage5_ocean_fade")
 position = Vector2(0, -500)
 scale = Vector2(3.64584, 3.64584)
-texture_filter = 2
 texture = ExtResource("6_background")
 
-[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="4"]
+[node name="StoryStage" type="Node2D" parent="CombatContainer/CombatViewport" index="4" unique_id=419723752]
 script = ExtResource("3_stage")
 stage_id = "stage_05"
 battle_path = NodePath("../SampleAssembly")
 editor_guides_visible_in_game = false
 
-[node name="PlayerSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage"]
+[node name="PlayerSpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage" index="0" unique_id=1810533839]
 script = ExtResource("4_spawn")
 unit_id = "PLAYER"
 team_id = 0
@@ -63,9 +75,9 @@ player_controlled = true
 use_session_loadout = true
 team_color = Color(0.443137, 0.85098, 0.909804, 1)
 
-[node name="Allies" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+[node name="Allies" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage" index="1" unique_id=110307706]
 
-[node name="Ally1" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+[node name="Ally1" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies" index="0" unique_id=733534220]
 position = Vector2(-220, 120)
 script = ExtResource("4_spawn")
 unit_id = "ALLY-01"
@@ -77,7 +89,7 @@ random_seed = 5101
 team_color = Color(0.35, 0.85, 0.42, 1)
 left_arm_id = "viper_rotary_arm"
 
-[node name="Ally2" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+[node name="Ally2" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies" index="1" unique_id=479169599]
 position = Vector2(220, 120)
 script = ExtResource("4_spawn")
 unit_id = "ALLY-02"
@@ -89,7 +101,7 @@ random_seed = 5102
 team_color = Color(0.38, 0.72, 1, 1)
 left_arm_id = "arc_repeater_arm"
 
-[node name="Ally3" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+[node name="Ally3" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies" index="2" unique_id=1410853091]
 position = Vector2(-220, -120)
 script = ExtResource("4_spawn")
 unit_id = "ALLY-03"
@@ -101,26 +113,24 @@ random_seed = 5103
 team_color = Color(1, 0.72, 0.28, 1)
 left_arm_id = "tempest_guided_arm"
 
-[node name="Ally4" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+[node name="Ally4" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies" index="3" unique_id=448155077]
 position = Vector2(220, -120)
 script = ExtResource("4_spawn")
 unit_id = "ALLY-04"
 team_id = 0
 spawn_mode = 1
 spawn_group = &"STAGE_05_ALLY_4"
-movement_type = 0
 random_seed = 5104
 team_color = Color(0.92, 0.45, 0.4, 1)
 left_arm_id = "breach_scattergun_arm"
 
-[node name="ArenaBoss" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies"]
+[node name="ArenaBoss" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Allies" index="4" unique_id=692611984]
 position = Vector2(0, 220)
 script = ExtResource("4_spawn")
 unit_id = "ARENA-BOSS"
 team_id = 0
 spawn_mode = 1
 spawn_group = &"STAGE_05_ARENA_BOSS"
-movement_type = 0
 random_seed = 5300
 team_color = Color(1, 1, 1, 1)
 unit_class = 2
@@ -128,17 +138,13 @@ head_id = "falcon_sensor"
 body_id = "swift_core"
 left_arm_id = "cyclone_flechette_arm"
 right_arm_id = "cyclone_flechette_arm"
-backpack_id = "grid_generator"
 legs_id = "courier_legs"
 
-[node name="VerticalBeamHazard" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage"]
+[node name="VerticalBeamHazard" type="Node2D" parent="CombatContainer/CombatViewport/StoryStage" index="2" unique_id=861798468]
 z_index = 12
 script = ExtResource("5_beam")
-warning_duration = 5.0
-firing_duration = 0.35
-cooldown_duration = 9.65
-beam_width = 200.0
-firing_beam_length = 6000.0
-fade_out_duration = 2.0
+
+[node name="CombatOverlay" parent="CombatContainer/CombatViewport/OverlayLayer" index="0"]
+layout_mode = 3
 
 [editable path="CombatContainer/CombatViewport/SampleAssembly"]

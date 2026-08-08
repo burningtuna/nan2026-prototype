@@ -4,6 +4,8 @@ const DRONE_AGENT := preload("res://scripts/drone_agent.gd")
 const ALIEN_INFESTATION_OVERLAY := preload("res://scripts/alien_infestation_overlay.gd")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const DIALOGUE_PATH := "res://data/scenarios/stage_05_events.json"
+const OPENING_DIALOGUE_PATH := "res://data/scenarios/stage_05_opening.json"
+const OPENING_DIALOGUE_ID := "stage_05_opening"
 const STAGE_05_CUTSCENE_PATH := "res://scenes/stage_05_cutscene.tscn"
 const DRONE_TARGET := 50
 const MAX_LIVING_DRONES := 4
@@ -30,6 +32,7 @@ const BEAM_WARNING := &"BEAM_WARNING"
 
 var part_catalog: MechPartCatalog
 var dialogue_events: Dictionary = {}
+var opening_dialogue_branches: Dictionary = {}
 var rng := RandomNumberGenerator.new()
 var survivor_count := 0
 var drone_sequence := 0
@@ -84,6 +87,9 @@ func _on_combat_bound() -> void:
 	if not _load_dialogue_events():
 		push_error("Unable to load Stage 5 dialogue events")
 		return
+	if not _load_opening_dialogue():
+		push_error("Unable to load Stage 5 opening dialogue")
+		return
 	rng.seed = 5052026
 	battle.agent_defeated.connect(_on_stage_agent_defeated)
 	combat_player.defeated.connect(_on_stage_player_defeated)
@@ -94,12 +100,13 @@ func _on_combat_bound() -> void:
 	_spawn_surviving_allies()
 	_spawn_arena_boss_ally()
 	observed_reload_count = _player_reload_count()
-	running = true
 	beam_hazard.setup(battle.arena, combat_player, false)
 	spawn_remaining = 0.25
 	system_messages.push_message(
 		"STAGE 05 // STAGE 04 SURVIVORS: %d" % survivor_count
 	)
+	if not _play_opening_dialogue():
+		running = true
 	if OS.get_cmdline_user_args().has("--stage-05-smoke"):
 		call_deferred("_run_stage_05_smoke")
 
@@ -193,6 +200,56 @@ func _load_dialogue_events() -> bool:
 			return false
 	dialogue_events = events
 	return true
+
+
+func _load_opening_dialogue() -> bool:
+	if not FileAccess.file_exists(OPENING_DIALOGUE_PATH):
+		return false
+	var file := FileAccess.open(OPENING_DIALOGUE_PATH, FileAccess.READ)
+	if file == null:
+		return false
+	var parser := JSON.new()
+	if parser.parse(file.get_as_text()) != OK or not parser.data is Dictionary:
+		return false
+	var document: Dictionary = parser.data
+	var branches = document.get("branches")
+	if (
+		int(document.get("schema_version", 0)) != 1
+		or str(document.get("id", "")) != OPENING_DIALOGUE_ID
+		or not branches is Dictionary
+	):
+		return false
+	for ally_count in ALLY_COUNT + 1:
+		var branch = branches.get(str(ally_count))
+		if not branch is Array or branch.is_empty():
+			return false
+		for entry in branch:
+			if (
+				not entry is Dictionary
+				or str(entry.get("speaker", "")).strip_edges().is_empty()
+				or str(entry.get("text", "")).strip_edges().is_empty()
+			):
+				return false
+	opening_dialogue_branches = branches
+	return true
+
+
+func _opening_dialogue_document(ally_count: int) -> Dictionary:
+	var branch = opening_dialogue_branches.get(str(clampi(ally_count, 0, ALLY_COUNT)), [])
+	if not branch is Array or branch.is_empty():
+		return {}
+	return {
+		"schema_version": 1,
+		"id": OPENING_DIALOGUE_ID,
+		"dialogue": branch.duplicate(true),
+	}
+
+
+func _play_opening_dialogue() -> bool:
+	var document := _opening_dialogue_document(survivor_count)
+	if document.is_empty():
+		return false
+	return scenario_dialogue.play_document(document, OPENING_DIALOGUE_PATH)
 
 
 func _dialogue_event(event_id: StringName) -> Dictionary:
@@ -409,7 +466,9 @@ func _on_beam_warning_started(_target_x: float) -> void:
 
 
 func _on_stage_05_dialogue_finished(scenario_id: String) -> void:
-	if scenario_id == "stage_05_beam_warning":
+	if scenario_id == OPENING_DIALOGUE_ID:
+		running = true
+	elif scenario_id == "stage_05_beam_warning":
 		_resume_after_beam_intro()
 
 
@@ -441,6 +500,20 @@ func _on_beam_lethal_hit_imminent(_target_x: float) -> void:
 func _run_stage_05_smoke() -> void:
 	assert(DRONE_TARGET == 50)
 	assert(dialogue_events.size() == 5)
+	assert(opening_dialogue_branches.size() == ALLY_COUNT + 1)
+	for ally_count in ALLY_COUNT + 1:
+		var opening_document := _opening_dialogue_document(ally_count)
+		assert(opening_document["id"] == OPENING_DIALOGUE_ID)
+		assert(opening_document["dialogue"].size() >= 1)
+		assert(opening_document["dialogue"][0]["speaker"] == "아레나 보스")
+	assert(scenario_dialogue.active and scenario_dialogue.scenario_id == OPENING_DIALOGUE_ID)
+	assert(scenario_dialogue.current_speaker() == "아레나 보스")
+	assert(scenario_dialogue.current_text() == opening_dialogue_branches["4"][0]["text"])
+	assert(not running and battle.process_mode == Node.PROCESS_MODE_DISABLED)
+	for _line in scenario_dialogue.dialogue.size():
+		scenario_dialogue.advance()
+	assert(running and not scenario_dialogue.active)
+	assert(battle.process_mode == Node.PROCESS_MODE_INHERIT)
 	assert(_dialogue_event(ALLY_4_SACRIFICE)["speaker"] == "아군4")
 	assert(ResourceLoader.exists(STAGE_05_CUTSCENE_PATH, "PackedScene"))
 	assert(MAX_LIVING_DRONES == 4)
