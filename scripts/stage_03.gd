@@ -7,6 +7,7 @@ const BOSS_ARMORED_PARTS: Array[StringName] = [
 ]
 const BOSS_CENTER_RECOVERY_MARGIN := 220.0
 const BOSS_SENSOR_PERIOD := 0.1
+const BOSS_CLOSE_TARGET_BACKSTEP_COOLDOWN := 5.0
 const LEG_DESTROYED_DIALOGUE := {
 	"schema_version": 1,
 	"id": "stage_03_legs_destroyed",
@@ -107,6 +108,7 @@ func _configure_boss() -> void:
 	boss.arena_center_recovery_margin = BOSS_CENTER_RECOVERY_MARGIN
 	boss.dash_stops_at_effective_range = true
 	boss.close_target_backstep_enabled = true
+	boss.close_target_backstep_cooldown = BOSS_CLOSE_TARGET_BACKSTEP_COOLDOWN
 	boss.prefer_non_player_targets = true
 	boss.hit_received.connect(_on_boss_hit_received)
 	boss.part_destroyed.connect(_on_boss_part_destroyed)
@@ -268,6 +270,10 @@ func _run_stage_smoke() -> void:
 	assert(is_equal_approx(boss.arena_center_recovery_margin, BOSS_CENTER_RECOVERY_MARGIN))
 	assert(boss.dash_stops_at_effective_range)
 	assert(boss.close_target_backstep_enabled)
+	assert(is_equal_approx(
+		boss.close_target_backstep_cooldown,
+		BOSS_CLOSE_TARGET_BACKSTEP_COOLDOWN
+	))
 	assert(boss.prefer_non_player_targets)
 	var ally: AiMechAgent
 	for agent: AiMechAgent in battle.agents:
@@ -346,10 +352,38 @@ func _run_stage_smoke() -> void:
 	) > 0.99)
 	assert(not boss.sensor_missile_evasion_active)
 	assert(is_equal_approx(boss.dash_time_remaining, boss.effective_dash_duration()))
+	assert(is_equal_approx(
+		boss.close_target_backstep_cooldown_remaining,
+		BOSS_CLOSE_TARGET_BACKSTEP_COOLDOWN
+	))
 	boss._update_random_movement(0.0)
 	assert(boss.is_dashing())
 	boss.dash_time_remaining = 0.0
 	boss.close_target_backstep_active = false
+	boss.weapon_aim_valid.assign([true, true])
+	boss._try_start_ai_dash_from_decision()
+	assert(not boss.is_dashing() and boss.close_target_backstep_armed)
+	boss.weapon_aim_valid.assign([false, false])
+	boss.dash_cooldown_remaining = 0.0
+	boss.dash_decision_time_remaining = 0.0
+	boss._try_start_ai_dash_from_decision()
+	assert(not boss.is_dashing())
+	boss.close_target_backstep_cooldown_remaining = 0.0
+	var boss_position_before_wall_backstep := boss.global_position
+	boss.global_position = Vector2(boss.arena.end.x - 200.0, boss.arena.get_center().y)
+	boss.observed_target_position = boss.global_position - Vector2(100.0, 0.0)
+	boss.weapon_aim_valid.assign([false, false])
+	boss.close_target_backstep_armed = true
+	boss.dash_cooldown_remaining = 0.0
+	boss.dash_decision_time_remaining = 0.0
+	assert(not boss._dash_path_is_clear(Vector2.RIGHT))
+	boss._try_start_ai_dash_from_decision()
+	assert(boss.is_dashing() and boss.close_target_backstep_active)
+	assert(is_zero_approx(boss.dash_direction.dot(Vector2.RIGHT)))
+	assert(boss._dash_path_is_clear(boss.dash_direction))
+	boss.dash_time_remaining = 0.0
+	boss.close_target_backstep_active = false
+	boss.global_position = boss_position_before_wall_backstep
 	boss.weapon_aim_valid.assign([true, true])
 	for _shot in 5:
 		boss._register_hit_and_run_attack_shot(0)

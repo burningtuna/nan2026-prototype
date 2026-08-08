@@ -4,9 +4,10 @@ extends SceneTree
 class LinkedFireAgent extends AiMechAgent:
 	var fired_parts: Array[StringName] = []
 
-	func _fire_weapon(weapon: WeaponRuntime) -> void:
+	func _fire_weapon(weapon: WeaponRuntime, _reserved_energy := 0.0) -> bool:
 		fired_parts.append(weapon.part_name)
 		weapon.cooldown_remaining = 1.0
+		return true
 
 
 func _initialize() -> void:

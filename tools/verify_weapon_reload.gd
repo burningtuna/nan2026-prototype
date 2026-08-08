@@ -5,9 +5,9 @@ func _initialize() -> void:
 	var catalog := WeaponCatalog.new()
 	assert(catalog.load_file("res://data/weapons.json"))
 	_verify_reload(catalog.weapon("test_cannon"))
-	_verify_reload(catalog.weapon("test_energy_cannon"))
 	_verify_reload(catalog.weapon("weapon_ballistic_heavy"))
 	_verify_reload(catalog.weapon("weapon_missile_rapid"))
+	_verify_energy_weapons(catalog)
 	_verify_reload_multiplier(catalog.weapon("test_missile"), 0.2)
 	_verify_reload_multiplier(catalog.weapon("test_cannon"), 0.0)
 	_verify_forced_reload(catalog.weapon("test_cannon"))
@@ -15,6 +15,34 @@ func _initialize() -> void:
 	_verify_selected_forced_reload(catalog.weapon("test_cannon"))
 	print("WEAPON_RELOAD_CHECK passed")
 	quit(0)
+
+
+func _verify_energy_weapons(catalog: WeaponCatalog) -> void:
+	var energy_weapon_count := 0
+	for spec_value in catalog.weapons_by_id.values():
+		var spec := spec_value as WeaponSpec
+		if spec == null or spec.resource_type != WeaponSpec.ResourceType.EN:
+			continue
+		energy_weapon_count += 1
+		assert(spec.magazine_capacity == 0)
+		assert(is_zero_approx(spec.reload_duration))
+		var muzzle := Marker2D.new()
+		var runtime := WeaponRuntime.new()
+		runtime.setup(spec, Sprite2D.new(), [muzzle], &"EnergyWeapon", 100.0)
+		assert(runtime.fire() != null)
+		assert(runtime.ammo == 0)
+		assert(not runtime.is_reloading())
+		assert(is_equal_approx(
+			runtime.cooldown_remaining,
+			WeaponSpec.MIN_ENERGY_COOLDOWN_SECONDS
+		))
+		assert(runtime.fire() == null)
+		runtime.tick(WeaponSpec.MIN_ENERGY_COOLDOWN_SECONDS)
+		assert(runtime.fire() != null)
+		assert(runtime.ammo == 0 and not runtime.is_reloading())
+		runtime.visual.free()
+		muzzle.free()
+	assert(energy_weapon_count == 5)
 
 
 func _verify_reload(spec: WeaponSpec) -> void:

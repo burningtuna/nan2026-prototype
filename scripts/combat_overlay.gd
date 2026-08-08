@@ -300,11 +300,15 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 	for index in displayed_weapons.size():
 		var weapon := displayed_weapons[index]
 		var weapon_name := weapon.spec.display_name.to_upper().trim_prefix("TEST ").left(16)
-		var weapon_text := "%s RELOADING..." % weapon_name if weapon.is_reloading() else "%s %02d/%02d" % [
-			weapon_name,
-			weapon.ammo,
-			weapon.spec.magazine_capacity,
-		]
+		var weapon_text := weapon_name
+		if weapon.spec.resource_type == WeaponSpec.ResourceType.AMMO:
+			weapon_text = (
+				"%s RELOADING..." % weapon_name
+				if weapon.is_reloading()
+				else "%s %02d/%02d" % [weapon_name, weapon.ammo, weapon.spec.magazine_capacity]
+			)
+		elif weapon.spec.resource_type == WeaponSpec.ResourceType.EN:
+			weapon_text = "%s EN %.0f" % [weapon_name, weapon.spec.resource_cost]
 		var weapon_position := label_position + Vector2(
 			3.0,
 			17.0 + CURSOR_RESOURCE_HEIGHT + heat_status_height + index * 8.0

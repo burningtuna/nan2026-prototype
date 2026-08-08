@@ -482,8 +482,33 @@ func _verify_charged_arm_and_dash_visuals(part_catalog: MechPartCatalog) -> void
 	agent.manual_aim_position = Vector2(1000.0, 0.0)
 	agent._aim_at_opponent(10.0)
 	assert(not agent.weapon_aim_valid[0])
-	agent.preparing_weapon_index = 0
-	agent.preparation_time_remaining = agent.effective_weapon_preparation_time(agent.weapons[0])
+	agent.weapon_aim_valid.assign([true])
+	agent.current_energy = agent.weapons[0].spec.resource_cost - 0.1
+	agent._try_fire_linked_group()
+	assert(agent.preparing_weapon_index == -1)
+	assert(agent.preparation_started_count == 0)
+	var energy_cost := agent.weapons[0].spec.resource_cost
+	agent.current_energy = energy_cost
+	agent._try_fire_linked_group()
+	assert(agent.preparing_weapon_index == 0)
+	assert(agent.preparation_started_count == 1)
+	assert(is_zero_approx(agent.current_energy))
+	assert(is_equal_approx(agent.preparation_reserved_energy, energy_cost))
+	assert(not agent._consume_dash_resources())
+	agent.weapon_aim_valid.assign([false])
+	agent._finish_preparation()
+	assert(agent.preparing_weapon_index == -1)
+	assert(is_equal_approx(agent.current_energy, energy_cost))
+	assert(is_zero_approx(agent.preparation_reserved_energy))
+	assert(agent.preparation_cancelled_count == 1)
+	agent.linked_fire_cooldown = 0.0
+	agent.weapon_aim_valid.assign([true])
+	agent.current_energy = agent.energy_capacity()
+	var energy_before_preparation := agent.current_energy
+	agent._try_fire_linked_group()
+	assert(agent.preparing_weapon_index == 0)
+	assert(agent.preparation_started_count == 2)
+	assert(is_equal_approx(agent.current_energy, energy_before_preparation - energy_cost))
 	agent._aim_at_opponent(10.0)
 	assert(agent.weapon_aim_valid[0])
 	assert(absf(angle_difference(
@@ -491,8 +516,13 @@ func _verify_charged_arm_and_dash_visuals(part_catalog: MechPartCatalog) -> void
 		agent.manual_aim_position.angle()
 	)) <= deg_to_rad(AiMechAgent.PREPARED_ARM_AIM_TOLERANCE_DEGREES))
 	var shots_before := agent.shot_count
+	var energy_before := agent.current_energy
 	agent._finish_preparation()
 	assert(agent.shot_count == shots_before + 1)
+	assert(is_equal_approx(agent.current_energy, energy_before))
+	assert(is_zero_approx(agent.preparation_reserved_energy))
+	assert(agent.weapons[0].ammo == 0)
+	assert(not agent.weapons[0].is_reloading())
 	assert(not agent.boost_sprites.is_empty())
 	agent.dash_direction = Vector2.RIGHT
 	agent.dash_time_remaining = 0.5

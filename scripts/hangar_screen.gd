@@ -705,13 +705,22 @@ func _update_candidate_details() -> void:
 	var weapon := _pending_part.weapon
 	var family: String = WeaponSpec.WeaponFamily.keys()[weapon.weapon_family]
 	_detail_kind.text = "WEAPON // %s" % family
-	_detail_weapon.text = "RATE %.0f RPM   RANGE %.0f-%.0f\nMAG %d          RELOAD %.1fs" % [
-		weapon.fire_rate * 60.0,
-		weapon.effective_range,
-		weapon.max_range,
-		weapon.magazine_capacity,
-		weapon.reload_duration,
-	]
+	if weapon.resource_type == WeaponSpec.ResourceType.EN:
+		_detail_weapon.text = "RANGE %.0f-%.0f   EN %.0f\nCOOLDOWN %.1fs   CHARGE %.1fs" % [
+			weapon.effective_range,
+			weapon.max_range,
+			weapon.resource_cost,
+			weapon.cooldown_duration(),
+			weapon.preparation_time,
+		]
+	else:
+		_detail_weapon.text = "RATE %.0f RPM   RANGE %.0f-%.0f\nMAG %d          RELOAD %.1fs" % [
+			weapon.fire_rate * 60.0,
+			weapon.effective_range,
+			weapon.max_range,
+			weapon.magazine_capacity,
+			weapon.reload_duration,
+		]
 
 
 func _equip_pending_part() -> void:

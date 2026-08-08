@@ -119,6 +119,7 @@ const DASH_FRAMES := [
 @export var arena_center_recovery_margin := 0.0
 @export var dash_stops_at_effective_range := false
 @export var close_target_backstep_enabled := false
+@export var close_target_backstep_cooldown := 0.0
 
 var opponent: AiMechAgent
 var opponents: Array[AiMechAgent] = []
@@ -180,6 +181,7 @@ var weapon_specs: Array[WeaponSpec] = []
 var mech_loadout: MechLoadout
 var preparing_weapon_index := -1
 var preparation_time_remaining := 0.0
+var preparation_reserved_energy := 0.0
 var ignore_weapon_preparation := false
 var ignore_preparation_move_speed_penalty := false
 var endless_non_missile_penetration_enabled := false
@@ -220,6 +222,7 @@ var hit_and_run_weapon_shots := {}
 var arena_center_recovery_active := false
 var close_target_backstep_armed := true
 var close_target_backstep_active := false
+var close_target_backstep_cooldown_remaining := 0.0
 var movement_constraint: Node
 var ai_wall_backoff_remaining := 0.0
 var ai_wall_turn_remaining := 0.0
@@ -1202,8 +1205,7 @@ func _physics_process(delta: float) -> void:
 	if is_defeated():
 		velocity = Vector2.ZERO
 		dash_time_remaining = 0.0
-		preparing_weapon_index = -1
-		preparation_time_remaining = 0.0
+		_cancel_preparation()
 		_update_resources(delta)
 		_update_boost_effect()
 		queue_redraw()
@@ -1211,8 +1213,7 @@ func _physics_process(delta: float) -> void:
 	if not combat_actions_enabled:
 		velocity = Vector2.ZERO
 		dash_time_remaining = 0.0
-		preparing_weapon_index = -1
-		preparation_time_remaining = 0.0
+		_cancel_preparation()
 		for weapon in weapons:
 			weapon.tick(delta)
 		_update_resources(delta)
@@ -1232,6 +1233,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		hit_and_run_retreat_time_remaining = maxf(
 			hit_and_run_retreat_time_remaining - delta,
+			0.0
+		)
+		close_target_backstep_cooldown_remaining = maxf(
+			close_target_backstep_cooldown_remaining - delta,
 			0.0
 		)
 		if sensor_updated:
@@ -1313,26 +1318,60 @@ func _try_start_close_target_backstep() -> bool:
 		return false
 	if not close_target_backstep_armed:
 		return false
-	var redirects_active_dash := dash_time_remaining > 0.0
-	if not redirects_active_dash and not _consume_dash_resources():
+	if close_target_backstep_cooldown_remaining > 0.0:
 		return false
+	var redirects_active_dash := dash_time_remaining > 0.0
 	var away_from_target := global_position - observed_target_position
 	if away_from_target.length_squared() <= 1.0:
 		away_from_target = -torso_forward()
+	var backstep_direction := _available_backstep_direction(away_from_target.normalized())
+	if backstep_direction.is_zero_approx():
+		return false
+	if not redirects_active_dash and not _consume_dash_resources():
+		return false
 	close_target_backstep_armed = false
 	close_target_backstep_active = true
-	dash_direction = away_from_target.normalized()
+	close_target_backstep_cooldown_remaining = maxf(close_target_backstep_cooldown, 0.0)
+	dash_direction = backstep_direction
 	movement_direction = dash_direction
 	decision_movement_direction = dash_direction
 	dash_time_remaining = effective_dash_duration()
 	dash_cooldown_remaining = dash_cooldown
 	dash_decision_time_remaining = dash_cooldown
-	preparing_weapon_index = -1
-	preparation_time_remaining = 0.0
+	_cancel_preparation()
 	sensor_missile_evasion_active = false
 	sensor_missile_evasion_direction = Vector2.ZERO
 	dash_count += 1
 	return true
+
+
+func _available_backstep_direction(backward: Vector2) -> Vector2:
+	if _dash_path_is_clear(backward):
+		return backward
+	for side in [maneuver_side, -maneuver_side]:
+		var perpendicular := backward.rotated(side * PI * 0.5)
+		if _dash_path_is_clear(perpendicular):
+			return perpendicular
+	return Vector2.ZERO
+
+
+func _dash_path_is_clear(direction: Vector2) -> bool:
+	if direction.is_zero_approx():
+		return false
+	var dash_movement := direction.normalized() * effective_dash_distance()
+	var destination := position + dash_movement
+	if not destination.is_equal_approx(destination.clamp(arena.position, arena.end)):
+		return false
+	if not is_instance_valid(movement_constraint) or not movement_constraint.has_method("resolve_agent_motion"):
+		return true
+	var global_destination := global_position + dash_movement
+	var resolved_position: Vector2 = movement_constraint.resolve_agent_motion(
+		global_position,
+		global_destination,
+		environment_collision_radius(),
+		false
+	)
+	return resolved_position.is_equal_approx(global_destination)
 
 
 func _draw() -> void:
@@ -1454,8 +1493,7 @@ func _begin_ai_wall_recovery(blocked_direction: Vector2) -> void:
 	dash_cooldown_remaining = maxf(dash_cooldown_remaining, ai_wall_backoff_duration + ai_wall_turn_duration)
 	dash_decision_time_remaining = maxf(dash_decision_time_remaining, ai_wall_backoff_duration + ai_wall_turn_duration)
 	velocity = Vector2.ZERO
-	preparing_weapon_index = -1
-	preparation_time_remaining = 0.0
+	_cancel_preparation()
 	ai_fire_decision_pending = false
 
 
@@ -1661,9 +1699,7 @@ func force_reload_selected_weapons() -> int:
 			continue
 		reloads_started += 1
 		if preparing_weapon_index == weapon_index:
-			preparing_weapon_index = -1
-			preparation_time_remaining = 0.0
-			preparation_cancelled_count += 1
+			_cancel_preparation()
 	return reloads_started
 
 
@@ -1879,8 +1915,7 @@ func _update_arena_center_recovery() -> bool:
 		hit_and_run_retreat_time_remaining = 0.0
 		dash_time_remaining = 0.0
 		velocity = Vector2.ZERO
-		preparing_weapon_index = -1
-		preparation_time_remaining = 0.0
+		_cancel_preparation()
 		ai_fire_decision_pending = false
 	return arena_center_recovery_active
 
@@ -2016,6 +2051,8 @@ func _try_fire_linked_group() -> void:
 			continue
 		if not weapon.can_fire():
 			continue
+		if not _has_weapon_resources(weapon):
+			continue
 		if (
 			not player_controlled
 			and weapon_aim_origin(weapon).distance_to(observed_target_position)
@@ -2045,8 +2082,14 @@ func _try_fire_linked_group() -> void:
 
 
 func _start_preparation(weapon_index: int) -> void:
+	var weapon := weapons[weapon_index]
 	preparing_weapon_index = weapon_index
-	preparation_time_remaining = effective_weapon_preparation_time(weapons[weapon_index])
+	preparation_time_remaining = effective_weapon_preparation_time(weapon)
+	preparation_reserved_energy = 0.0
+	if weapon.spec.resource_type == WeaponSpec.ResourceType.EN:
+		preparation_reserved_energy = weapon.spec.resource_cost
+		current_energy = maxf(current_energy - preparation_reserved_energy, 0.0)
+		energy_spent_this_frame = true
 	preparation_started_count += 1
 
 
@@ -2056,13 +2099,39 @@ func _can_complete_preparation(weapon_index: int) -> bool:
 
 func _finish_preparation() -> void:
 	var weapon_index := preparing_weapon_index
-	preparing_weapon_index = -1
-	preparation_time_remaining = 0.0
-	if not _can_execute_weapon(weapon_index):
+	var reserved_energy := preparation_reserved_energy
+	if not _can_execute_weapon(weapon_index, reserved_energy):
+		_cancel_preparation()
+		return
+	var weapon := weapons[weapon_index]
+	_clear_preparation(false)
+	if not _fire_weapon(weapon, reserved_energy):
+		_refund_preparation_energy(reserved_energy)
 		preparation_cancelled_count += 1
 		return
-	_fire_weapon(weapons[weapon_index])
 	preparation_completed_count += 1
+
+
+func _cancel_preparation() -> void:
+	if preparing_weapon_index < 0 and is_zero_approx(preparation_reserved_energy):
+		return
+	_clear_preparation(true)
+	preparation_cancelled_count += 1
+
+
+func _clear_preparation(refund_reserved_energy: bool) -> void:
+	var reserved_energy := preparation_reserved_energy
+	preparing_weapon_index = -1
+	preparation_time_remaining = 0.0
+	preparation_reserved_energy = 0.0
+	if refund_reserved_energy:
+		_refund_preparation_energy(reserved_energy)
+
+
+func _refund_preparation_energy(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	current_energy = minf(current_energy + amount, energy_capacity())
 
 
 func effective_weapon_preparation_time(weapon: WeaponRuntime) -> float:
@@ -2108,16 +2177,17 @@ func effective_weapon_volley_arc_degrees(weapon: WeaponRuntime) -> float:
 	return volley_arc_degrees
 
 
-func _fire_weapon(weapon: WeaponRuntime) -> void:
+func _fire_weapon(weapon: WeaponRuntime, reserved_energy := 0.0) -> bool:
 	var weapon_index := weapons.find(weapon)
-	if not _can_execute_weapon(weapon_index):
-		return
+	if not _can_execute_weapon(weapon_index, reserved_energy):
+		return false
 	_update_missile_reload_override(weapon)
 	var muzzle := weapon.fire()
 	if muzzle == null:
-		return
+		return false
 	if weapon.spec.resource_type == WeaponSpec.ResourceType.EN:
-		current_energy = maxf(current_energy - weapon.spec.resource_cost, 0.0)
+		var energy_cost := maxf(weapon.spec.resource_cost - reserved_energy, 0.0)
+		current_energy = maxf(current_energy - energy_cost, 0.0)
 		energy_spent_this_frame = true
 	if weapon.spec.heat_cost > 0.0:
 		_add_heat(weapon.spec.heat_cost)
@@ -2187,6 +2257,7 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 	if hit_and_run_enabled and not player_controlled:
 		_register_hit_and_run_attack_shot(weapon_index)
 	weapon_fired.emit(weapon)
+	return true
 
 
 func _hit_and_run_weapon_quota_reached(weapon_index: int) -> bool:
@@ -2213,7 +2284,7 @@ func _register_hit_and_run_attack_shot(weapon_index: int) -> void:
 	ai_decision_time_remaining = 0.0
 
 
-func _can_execute_weapon(weapon_index: int) -> bool:
+func _can_execute_weapon(weapon_index: int, reserved_energy := 0.0) -> bool:
 	if (
 		weapon_index < 0
 		or weapon_index >= weapons.size()
@@ -2221,7 +2292,7 @@ func _can_execute_weapon(weapon_index: int) -> bool:
 		or dash_time_remaining > 0.0
 		or not weapon_aim_valid[weapon_index]
 		or not weapons[weapon_index].can_fire()
-		or not _has_weapon_resources(weapons[weapon_index])
+		or not _has_weapon_resources(weapons[weapon_index], reserved_energy)
 	):
 		return false
 	if player_controlled:
@@ -2239,10 +2310,10 @@ func _can_execute_weapon(weapon_index: int) -> bool:
 	return weapon_aim_origin(weapon).distance_to(observed_target_position) <= weapon_maximum_range(weapon)
 
 
-func _has_weapon_resources(weapon: WeaponRuntime) -> bool:
+func _has_weapon_resources(weapon: WeaponRuntime, reserved_energy := 0.0) -> bool:
 	if (
 		weapon.spec.resource_type == WeaponSpec.ResourceType.EN
-		and current_energy < weapon.spec.resource_cost
+		and current_energy + reserved_energy < weapon.spec.resource_cost
 	):
 		return false
 	if weapon.spec.heat_cost > 0.0 and heat_generation_locked:

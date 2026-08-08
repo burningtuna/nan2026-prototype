@@ -188,7 +188,7 @@ func _draw_weapon_ammo_bars() -> void:
 	var part_names: Array[StringName] = [&"LeftArm", &"RightArm", &"Backpack"]
 	for index in part_names.size():
 		var weapon := _weapon_for_part(part_names[index])
-		if weapon == null:
+		if weapon == null or weapon.spec.resource_type != WeaponSpec.ResourceType.AMMO:
 			continue
 		var bar_rect := Rect2(AMMO_BAR_POSITION + Vector2(0.0, index * 21.0), AMMO_BAR_SIZE)
 		draw_rect(bar_rect, AMMO_BAR_BACKGROUND)

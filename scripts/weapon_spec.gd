@@ -1,6 +1,8 @@
 class_name WeaponSpec
 extends Resource
 
+const MIN_ENERGY_COOLDOWN_SECONDS := 0.3
+
 enum WeaponFamily {
 	BALLISTIC,
 	MISSILE,
@@ -45,6 +47,13 @@ enum ResourceType {
 
 func fire_interval() -> float:
 	return 1.0 / maxf(fire_rate, 0.001)
+
+
+func cooldown_duration(fire_rate_multiplier: float = 1.0) -> float:
+	var duration := fire_interval() / maxf(fire_rate_multiplier, 0.001)
+	if resource_type == ResourceType.EN:
+		return maxf(duration, MIN_ENERGY_COOLDOWN_SECONDS)
+	return duration
 
 
 func spread_at_distance(distance: float) -> float:

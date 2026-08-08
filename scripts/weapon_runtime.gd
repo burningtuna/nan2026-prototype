@@ -96,7 +96,7 @@ func fire() -> Marker2D:
 				_begin_reload(duration)
 			else:
 				ammo = spec.magazine_capacity
-	cooldown_remaining = spec.fire_interval() / maxf(fire_rate_multiplier, 0.001)
+	cooldown_remaining = spec.cooldown_duration(fire_rate_multiplier)
 	recoil_offset = minf(
 		recoil_offset + spec.visual_recoil_distance,
 		spec.visual_recoil_limit
@@ -157,6 +157,6 @@ func _play_reload_sound(stream: AudioStream) -> void:
 func _magazine_cost() -> int:
 	if spec.resource_type == WeaponSpec.ResourceType.AMMO:
 		return maxi(ceili(spec.resource_cost), 1)
-	if spec.resource_type in [WeaponSpec.ResourceType.NONE, WeaponSpec.ResourceType.EN]:
+	if spec.resource_type == WeaponSpec.ResourceType.NONE:
 		return 1
 	return 0
