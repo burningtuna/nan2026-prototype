@@ -93,18 +93,25 @@ const BOOST_FRAMES := [
 @export var preferred_range := 2000.0
 @export var evasion_range := 1500.0
 @export var mech_collision_radius := 28.0
+@export var mech_collision_enabled := true
 @export var player_controlled := false
 @export var team_id := 0
 @export var unit_class := UnitClass.MECH
 @export var combat_visuals_enabled := true
 @export var combat_actions_enabled := true
 @export var incoming_damage_multiplier := 1.0
+@export var sensor_period_override := -1.0
 @export var ai_wall_backoff_duration := 0.3
 @export var ai_wall_turn_duration := 0.65
 @export var hit_and_run_enabled := false
 @export var hit_and_run_retreat_distance := 1200.0
 @export var hit_and_run_retreat_duration := 2.5
+@export var hit_and_run_shots_per_weapon := 0
 @export var prefer_non_player_targets := false
+@export var prefer_player_targets := false
+@export var arena_center_recovery_margin := 0.0
+@export var dash_stops_at_effective_range := false
+@export var close_target_backstep_enabled := false
 
 var opponent: AiMechAgent
 var opponents: Array[AiMechAgent] = []
@@ -168,6 +175,8 @@ var preparation_time_remaining := 0.0
 var ignore_weapon_preparation := false
 var ignore_preparation_move_speed_penalty := false
 var endless_non_missile_penetration_enabled := false
+var missile_damage_multiplier := 1.0
+var missile_splash_radius_multiplier := 1.0
 var preparation_started_count := 0
 var preparation_completed_count := 0
 var preparation_cancelled_count := 0
@@ -199,6 +208,10 @@ var ai_fire_decision_pending := false
 var hit_and_run_retreating := false
 var hit_and_run_retreat_time_remaining := 0.0
 var hit_and_run_attack_count := 0
+var hit_and_run_weapon_shots := {}
+var arena_center_recovery_active := false
+var close_target_backstep_armed := true
+var close_target_backstep_active := false
 var movement_constraint: Node
 var ai_wall_backoff_remaining := 0.0
 var ai_wall_turn_remaining := 0.0
@@ -268,6 +281,8 @@ func sensor_range() -> float:
 
 
 func sensor_period() -> float:
+	if sensor_period_override >= 0.0:
+		return sensor_period_override
 	var sensor_part := _active_sensor_part()
 	if sensor_part != null:
 		return maxf(sensor_part.sensor_period, 0.0)
@@ -603,7 +618,7 @@ func _scan_sensor() -> void:
 			"velocity": projectile_velocity,
 			"approaching": approaching,
 			"time_to_impact": time_to_impact,
-			"damage": projectile.spec.damage,
+			"damage": projectile.effective_damage(),
 			"distance_squared": distance_squared,
 			"targeting_self": projectile.homing_target == self,
 			"weapon_family": projectile.weapon_family,
@@ -645,13 +660,13 @@ func _update_owned_missile_observations() -> void:
 			projectile.homing_observation_valid = false
 			projectile.terminal_seeker_activated = false
 		if (
-			projectile.terminal_seeker_radius > 0.0
+			projectile.terminal_seeker_angle_degrees > 0.0
 			and not projectile.terminal_seeker_activated
 		):
 			_acquire_terminal_missile_target(projectile)
 		if not is_instance_valid(projectile.homing_target):
 			continue
-		if projectile.terminal_seeker_radius > 0.0:
+		if projectile.terminal_seeker_angle_degrees > 0.0:
 			projectile.update_homing_observation(
 				projectile.homing_target.global_position,
 				projectile.homing_target.velocity,
@@ -670,11 +685,18 @@ func _update_owned_missile_observations() -> void:
 
 func _acquire_terminal_missile_target(projectile: BallisticProjectile) -> void:
 	var nearest_target: AiMechAgent
-	var nearest_distance_squared := projectile.terminal_seeker_radius ** 2
+	var nearest_distance_squared := INF
+	var maximum_angle := deg_to_rad(projectile.terminal_seeker_angle_degrees)
 	for target in opponents:
 		if not is_instance_valid(target) or target.is_defeated():
 			continue
-		var distance_squared := projectile.global_position.distance_squared_to(target.global_position)
+		var target_vector := target.global_position - projectile.global_position
+		if (
+			target_vector.length_squared() > 0.001
+			and absf(projectile.direction.angle_to(target_vector.normalized())) > maximum_angle
+		):
+			continue
+		var distance_squared := target_vector.length_squared()
 		if distance_squared > nearest_distance_squared:
 			continue
 		if (
@@ -697,6 +719,13 @@ func _acquire_terminal_missile_target(projectile: BallisticProjectile) -> void:
 
 
 func _update_sensor_missile_evasion() -> void:
+	if close_target_backstep_active:
+		sensor_missile_evasion_active = false
+		sensor_missile_evasion_direction = Vector2.ZERO
+		movement_direction = dash_direction
+		return
+	if _try_start_close_target_backstep():
+		return
 	var threat: Dictionary = {}
 	for contact in sensor_snapshot.projectiles:
 		if (
@@ -1240,6 +1269,8 @@ func _run_ai_decision() -> void:
 
 
 func _try_start_ai_dash_from_decision() -> void:
+	if _try_start_close_target_backstep():
+		return
 	if (
 		dash_time_remaining > 0.0
 		or dash_decision_time_remaining > 0.0
@@ -1247,10 +1278,52 @@ func _try_start_ai_dash_from_decision() -> void:
 		or preparing_weapon_index >= 0
 	):
 		return
+	if dash_stops_at_effective_range and _target_within_dash_attack_range():
+		return
 	var alignment := maxf(torso_forward().dot(movement_direction), 0.0)
 	if alignment < cos(deg_to_rad(10.0)):
 		return
 	_start_random_dash()
+
+
+func _try_start_close_target_backstep() -> bool:
+	if not close_target_backstep_enabled or not is_instance_valid(opponent):
+		return false
+	var target_is_close := _target_within_dash_attack_range()
+	var has_valid_aim := false
+	for weapon_index in weapons.size():
+		if (
+			not weapons[weapon_index].disabled
+			and weapon_index < weapon_aim_valid.size()
+			and weapon_aim_valid[weapon_index]
+		):
+			has_valid_aim = true
+			break
+	if not target_is_close or has_valid_aim:
+		close_target_backstep_armed = true
+		return false
+	if not close_target_backstep_armed:
+		return false
+	var redirects_active_dash := dash_time_remaining > 0.0
+	if not redirects_active_dash and not _consume_dash_resources():
+		return false
+	var away_from_target := global_position - observed_target_position
+	if away_from_target.length_squared() <= 1.0:
+		away_from_target = -torso_forward()
+	close_target_backstep_armed = false
+	close_target_backstep_active = true
+	dash_direction = away_from_target.normalized()
+	movement_direction = dash_direction
+	decision_movement_direction = dash_direction
+	dash_time_remaining = effective_dash_duration()
+	dash_cooldown_remaining = dash_cooldown
+	dash_decision_time_remaining = dash_cooldown
+	preparing_weapon_index = -1
+	preparation_time_remaining = 0.0
+	sensor_missile_evasion_active = false
+	sensor_missile_evasion_direction = Vector2.ZERO
+	dash_count += 1
+	return true
 
 
 func _draw() -> void:
@@ -1266,6 +1339,19 @@ func _draw() -> void:
 
 func _update_random_movement(delta: float) -> void:
 	_update_ai_wall_recovery(delta)
+	if (
+		dash_time_remaining > 0.0
+		and dash_stops_at_effective_range
+		and not close_target_backstep_active
+		and _target_within_dash_attack_range()
+	):
+		dash_time_remaining = 0.0
+		velocity = Vector2.ZERO
+		ai_decision_time_remaining = 0.0
+		ai_fire_decision_pending = true
+	if _update_arena_center_recovery():
+		movement_direction = (arena.get_center() - position).normalized()
+		decision_movement_direction = movement_direction
 	var margin := 45.0
 	var safe_arena := arena.grow(-margin)
 	if not safe_arena.has_point(position):
@@ -1303,11 +1389,26 @@ func _update_random_movement(delta: float) -> void:
 		movement_step += dash_direction * expected_dash_distance
 		dashed_this_step = dash_step > 0.0
 		dash_time_remaining = maxf(dash_time_remaining - delta, 0.0)
+		if dash_time_remaining <= 0.0:
+			close_target_backstep_active = false
 	else:
 		dash_decision_time_remaining -= delta
 	var applied_movement := _apply_movement_step(movement_step, true)
 	if dashed_this_step and _dash_movement_was_blocked(applied_movement, expected_dash_distance):
 		cancel_dash_after_collision(true)
+
+
+func _target_within_dash_attack_range() -> bool:
+	if not is_instance_valid(opponent):
+		return false
+	var attack_range := 0.0
+	for weapon in weapons:
+		if not weapon.disabled:
+			attack_range = maxf(attack_range, weapon_effective_range(weapon))
+	return (
+		attack_range > 0.0
+		and global_position.distance_to(observed_target_position) <= attack_range
+	)
 
 
 func _dash_movement_was_blocked(applied_movement: Vector2, expected_dash_distance: float) -> bool:
@@ -1340,6 +1441,7 @@ func _begin_ai_wall_recovery(blocked_direction: Vector2) -> void:
 	ai_wall_backoff_remaining = maxf(ai_wall_backoff_duration, 0.0)
 	ai_wall_turn_remaining = maxf(ai_wall_turn_duration, 0.0)
 	dash_time_remaining = 0.0
+	close_target_backstep_active = false
 	dash_cooldown_remaining = maxf(dash_cooldown_remaining, ai_wall_backoff_duration + ai_wall_turn_duration)
 	dash_decision_time_remaining = maxf(dash_decision_time_remaining, ai_wall_backoff_duration + ai_wall_turn_duration)
 	velocity = Vector2.ZERO
@@ -1624,6 +1726,7 @@ func _nearest_opponent(reference_position: Vector2) -> AiMechAgent:
 	var nearest: AiMechAgent
 	var nearest_distance := INF
 	var preferred_target_found := false
+	var target_preference_enabled := prefer_non_player_targets or prefer_player_targets
 	for contact in sensor_snapshot.units:
 		var target_value = contact.get("target")
 		if not is_instance_valid(target_value):
@@ -1631,8 +1734,11 @@ func _nearest_opponent(reference_position: Vector2) -> AiMechAgent:
 		var target := target_value as AiMechAgent
 		if target == null:
 			continue
-		var preferred_target := prefer_non_player_targets and not target.player_controlled
-		if prefer_non_player_targets and preferred_target_found and not preferred_target:
+		var preferred_target := (
+			(prefer_non_player_targets and not target.player_controlled)
+			or (prefer_player_targets and target.player_controlled)
+		)
+		if target_preference_enabled and preferred_target_found and not preferred_target:
 			continue
 		var distance := reference_position.distance_squared_to(contact["position"])
 		if preferred_target and not preferred_target_found:
@@ -1658,6 +1764,10 @@ func _choose_direction() -> void:
 
 func _update_strategy_direction() -> void:
 	if not is_instance_valid(opponent):
+		return
+	if _update_arena_center_recovery():
+		evading = true
+		movement_direction = (arena.get_center() - position).normalized()
 		return
 	var target_vector := observed_target_position - global_position
 	var distance := target_vector.length()
@@ -1726,10 +1836,48 @@ func _update_strategy_direction() -> void:
 		movement_direction = (movement_direction + center_pull.normalized() * 0.8).normalized()
 
 
+func _update_arena_center_recovery() -> bool:
+	if arena_center_recovery_margin <= 0.0:
+		arena_center_recovery_active = false
+		return false
+	var horizontal_edge_distance := minf(
+		absf(position.x - arena.position.x),
+		absf(arena.end.x - position.x)
+	)
+	var vertical_edge_distance := minf(
+		absf(position.y - arena.position.y),
+		absf(arena.end.y - position.y)
+	)
+	var attack_available := not hit_and_run_retreating and _has_ready_weapon_in_range()
+	if arena_center_recovery_active:
+		var release_margin := arena_center_recovery_margin * 1.5
+		if (
+			attack_available
+			or horizontal_edge_distance > release_margin
+			or vertical_edge_distance > release_margin
+		):
+			arena_center_recovery_active = false
+	elif (
+		not attack_available
+		and horizontal_edge_distance <= arena_center_recovery_margin
+		and vertical_edge_distance <= arena_center_recovery_margin
+	):
+		arena_center_recovery_active = true
+		hit_and_run_retreating = false
+		hit_and_run_retreat_time_remaining = 0.0
+		dash_time_remaining = 0.0
+		velocity = Vector2.ZERO
+		preparing_weapon_index = -1
+		preparation_time_remaining = 0.0
+		ai_fire_decision_pending = false
+	return arena_center_recovery_active
+
+
 func _start_random_dash() -> void:
 	if not _consume_dash_resources():
 		dash_decision_time_remaining = 0.5
 		return
+	close_target_backstep_active = false
 	dash_direction = torso_forward()
 	dash_time_remaining = effective_dash_duration()
 	dash_cooldown_remaining = dash_cooldown
@@ -1823,6 +1971,7 @@ func _try_fire_linked_group() -> void:
 	if (
 		linked_fire_cooldown > 0.0
 		or weapons.is_empty()
+		or arena_center_recovery_active
 		or (hit_and_run_enabled and hit_and_run_retreating)
 		or (not player_controlled and not is_instance_valid(opponent))
 		or dash_time_remaining > 0.0
@@ -1838,6 +1987,8 @@ func _try_fire_linked_group() -> void:
 	for offset in weapons.size():
 		var weapon_index := (search_start + offset) % weapons.size()
 		var weapon := weapons[weapon_index]
+		if _hit_and_run_weapon_quota_reached(weapon_index):
+			continue
 		if player_controlled and (_weapon_selection_bit(weapon) & selected_weapon_mask) == 0:
 			continue
 		if not weapon.can_fire():
@@ -2053,12 +2204,32 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 	shot_count += 1
 	fired_shots[weapon.spec.weapon_family] = fired_shots.get(weapon.spec.weapon_family, 0) + 1
 	if hit_and_run_enabled and not player_controlled:
-		hit_and_run_retreating = true
-		hit_and_run_retreat_time_remaining = hit_and_run_retreat_duration
-		hit_and_run_attack_count += 1
-		dash_decision_time_remaining = 0.0
-		ai_decision_time_remaining = 0.0
+		_register_hit_and_run_attack_shot(weapon_index)
 	weapon_fired.emit(weapon)
+
+
+func _hit_and_run_weapon_quota_reached(weapon_index: int) -> bool:
+	return (
+		hit_and_run_enabled
+		and hit_and_run_shots_per_weapon > 0
+		and int(hit_and_run_weapon_shots.get(weapon_index, 0)) >= hit_and_run_shots_per_weapon
+	)
+
+
+func _register_hit_and_run_attack_shot(weapon_index: int) -> void:
+	if hit_and_run_shots_per_weapon > 0:
+		hit_and_run_weapon_shots[weapon_index] = int(hit_and_run_weapon_shots.get(weapon_index, 0)) + 1
+		for active_weapon_index in weapons.size():
+			if weapons[active_weapon_index].disabled:
+				continue
+			if not _hit_and_run_weapon_quota_reached(active_weapon_index):
+				return
+	hit_and_run_weapon_shots.clear()
+	hit_and_run_retreating = true
+	hit_and_run_retreat_time_remaining = hit_and_run_retreat_duration
+	hit_and_run_attack_count += 1
+	dash_decision_time_remaining = 0.0
+	ai_decision_time_remaining = 0.0
 
 
 func _can_execute_weapon(weapon_index: int) -> bool:
@@ -2141,9 +2312,21 @@ func _spawn_projectile(
 		weapon.spec.projectiles_per_shot > 1,
 		_endless_projectile_penetrates_targets(weapon),
 		missile_radar.missile_speed_multiplier if enhanced_missile else 1.0,
-		missile_radar.missile_seeker_radius if enhanced_missile else 0.0,
+		missile_radar.missile_seeker_angle_degrees if enhanced_missile else 0.0,
 		missile_radar.missile_turn_speed_override_degrees if enhanced_missile else -1.0,
-		missile_radar.missile_proximity_fuse_radius_multiplier if enhanced_missile else 1.0
+		missile_radar.missile_proximity_fuse_radius_multiplier if enhanced_missile else 1.0,
+		(missile_radar.missile_damage_multiplier if enhanced_missile else 1.0)
+		* (
+			missile_damage_multiplier
+			if weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+			else 1.0
+		),
+		missile_radar.missile_ignores_evasion if enhanced_missile else false,
+		(
+			missile_splash_radius_multiplier
+			if weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+			else 1.0
+		)
 	)
 	projectile_layer.add_child(projectile)
 	projectile.global_position = spawn_position

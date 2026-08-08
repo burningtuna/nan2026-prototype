@@ -121,7 +121,7 @@ legs_id = "courier_legs"
 [node name="UfoPlaceholder" type="Node2D" parent="CombatContainer/CombatViewport" index="3"]
 visible = false
 position = Vector2(0, -11180)
-z_index = 2
+z_index = 20
 
 [node name="Sprite" type="Sprite2D" parent="CombatContainer/CombatViewport/UfoPlaceholder"]
 scale = Vector2(2, 2)

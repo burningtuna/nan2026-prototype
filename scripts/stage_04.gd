@@ -82,6 +82,7 @@ func _mark_spawned_enemies() -> int:
 		var agent := value as AiMechAgent
 		if not is_instance_valid(agent) or agent.team_id == combat_player.team_id:
 			continue
+		agent.prefer_player_targets = true
 		if not agent.has_meta(ALIEN_INFESTATION_OVERLAY.META_KEY):
 			marked += 1
 		ALIEN_INFESTATION_OVERLAY.attach_to(agent)
@@ -402,6 +403,7 @@ func _run_stage_04_smoke() -> void:
 		var body_sprite := enemy.get_node("UpperBody/BodySprite") as Sprite2D
 		assert(body_sprite.visible and body_sprite.texture != null)
 		assert(enemy.has_meta(ALIEN_INFESTATION_OVERLAY.META_KEY))
+		assert(enemy.prefer_player_targets)
 		assert(overlay.enemies.has(enemy) and hud.tactical_map.enemies.has(enemy))
 		spawned_rescue_enemies.append(enemy)
 	assert(spawned_rescue_enemies.size() == 2)
@@ -458,6 +460,19 @@ func _run_stage_04_smoke() -> void:
 	story_stage._physics_process(0.0)
 	assert(destination_reached)
 	assert(boss_agent != null and boss_agent.unit_class == AiMechAgent.UnitClass.BOSS)
+	assert(boss_agent.prefer_player_targets)
+	var rescued_ally: AiMechAgent
+	for point in story_stage.spawn_points:
+		if point.spawn_group == &"RESCUE_1_ALLY":
+			rescued_ally = _spawned_agent(point)
+			break
+	assert(rescued_ally != null)
+	boss_agent.sensor_snapshot.units.assign([
+		{"target": rescued_ally, "position": boss_agent.global_position + Vector2(50.0, 0.0)},
+		{"target": combat_player, "position": boss_agent.global_position + Vector2(500.0, 0.0)},
+	])
+	boss_agent._select_opponent(boss_agent.global_position)
+	assert(boss_agent.opponent == combat_player)
 	assert(completed_rescues.size() == 1)
 	assert(pause_menu_context()["phase"] == "boss")
 	assert(pause_menu_context()["rescued"] == 1)

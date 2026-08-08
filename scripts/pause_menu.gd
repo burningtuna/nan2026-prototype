@@ -26,6 +26,7 @@ const RED := Color("e05a55")
 
 var overlay: Control
 var main_menu_button: Button
+var stage_action_button: Button
 var return_button: Button
 var status_label: Label
 var subtitle_label: Label
@@ -119,6 +120,10 @@ func _build_interface() -> void:
 	main_menu_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_menu_button.pressed.connect(_return_to_main_menu)
 	buttons.add_child(main_menu_button)
+	stage_action_button = _button("RESTART STAGE", CYAN)
+	stage_action_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stage_action_button.pressed.connect(_activate_stage_action)
+	buttons.add_child(stage_action_button)
 	return_button = _button("RETURN // ESC", CYAN)
 	return_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return_button.pressed.connect(_close_menu)
@@ -201,6 +206,9 @@ func _open_menu() -> void:
 	was_paused = get_tree().paused
 	status_label.text = "ESC CLOSES THIS MENU"
 	main_menu_button.disabled = false
+	stage_action_button.disabled = false
+	return_button.disabled = false
+	_configure_stage_action()
 	_populate_content()
 	overlay.visible = true
 	get_tree().paused = true
@@ -221,6 +229,49 @@ func _return_to_main_menu() -> void:
 		return
 	_open_menu()
 	status_label.text = "TRANSFER FAILED // %s" % error_string(error)
+
+
+func _configure_stage_action() -> void:
+	var scene_path := _current_scene_path()
+	stage_action_button.visible = GameSession.is_story_stage_path(scene_path)
+	if not stage_action_button.visible:
+		return
+	stage_action_button.text = (
+		"RETURN TO HANGAR"
+		if GameSession.story_stage_starts_from_hangar(scene_path)
+		else "RESTART STAGE"
+	)
+
+
+func _activate_stage_action() -> void:
+	var scene_path := _current_scene_path()
+	if not GameSession.is_story_stage_path(scene_path):
+		return
+	var returns_to_hangar := GameSession.story_stage_starts_from_hangar(scene_path)
+	var destination := HANGAR_SCENE_PATH if returns_to_hangar else scene_path
+	if returns_to_hangar:
+		_prepare_story_hangar_return(scene_path)
+	main_menu_button.disabled = true
+	stage_action_button.disabled = true
+	return_button.disabled = true
+	status_label.text = "TRANSFER // %s" % ("HANGAR" if returns_to_hangar else "RESTART")
+	_close_menu()
+	var error := SceneTransition.transition_to(destination)
+	if error == OK:
+		return
+	_open_menu()
+	return_button.disabled = false
+	status_label.text = "TRANSFER FAILED // %s" % error_string(error)
+
+
+func _prepare_story_hangar_return(scene_path: String) -> void:
+	GameSession.selected_game_mode = GameSession.GameMode.STORY
+	GameSession.story_deployment_scene_path = scene_path
+
+
+func _current_scene_path() -> String:
+	var current_scene := get_tree().current_scene
+	return current_scene.scene_file_path if current_scene != null else ""
 
 
 func _populate_content() -> void:
@@ -314,6 +365,24 @@ func _run_pause_menu_smoke() -> void:
 	assert(not current_content_kind.is_empty())
 	assert(content_stack.get_child_count() > 0)
 	var scene_path := get_tree().current_scene.scene_file_path
+	assert(stage_action_button.visible == GameSession.is_story_stage_path(scene_path))
+	if GameSession.is_story_stage_path(scene_path):
+		assert(stage_action_button.text == (
+			"RETURN TO HANGAR"
+			if GameSession.story_stage_starts_from_hangar(scene_path)
+			else "RESTART STAGE"
+		))
+		if GameSession.story_stage_starts_from_hangar(scene_path):
+			var selected_directly_before := GameSession.story_stage_selected_directly
+			GameSession.story_deployment_scene_path = "res://scenes/stage_01.tscn"
+			_prepare_story_hangar_return(scene_path)
+			assert(GameSession.selected_game_mode == GameSession.GameMode.STORY)
+			assert(GameSession.story_deployment_scene_path == scene_path)
+			assert(GameSession.story_stage_selected_directly == selected_directly_before)
+	for story_stage_path in GameSession.STORY_STAGE_PATHS:
+		assert(GameSession.story_stage_starts_from_hangar(story_stage_path) == (
+			story_stage_path != "res://scenes/stage_01.tscn"
+		))
 	if scene_path == HANGAR_SCENE_PATH:
 		assert(current_content_kind == "hangar_stats")
 		assert(rendered_texts.any(func(value: String) -> bool: return value.begins_with("ARMOR //")))

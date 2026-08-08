@@ -41,7 +41,7 @@
 	},
 	"res://scenes/stage_05.tscn": {
 	  "title": "스테이지 05 // 빔 생존전",
-	  "objective": "예고되는 수직 즉사 빔을 피하며 드론 20기를 파괴하세요.",
+	  "objective": "아군과 함께 예고되는 수직 즉사 빔을 피하며 드론 50기를 파괴하세요.",
 	  "progress": "파괴한 드론: {drones_defeated}/{drone_target} // 활성 드론: {drones_active} // 이전 스테이지 생존 아군: {survivors}"
 	}
   }

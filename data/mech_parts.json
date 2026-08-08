@@ -394,7 +394,7 @@
 	  "type": "BACKPACK",
 	  "display_name": "FIELD RADAR UNIT",
 	  "designation": "BP-15",
-	  "description": "레이더와 미사일의 성능을 극단적으로 강화한다. 유도성능을 강화하며, 재장전 시간을 줄여주고, 발사 대기 시간을 제거한다. 미사일은 별도의 락온 없이 발사 직후 근처의 적을 향해 날아가게 된다.",
+	  "description": "레이더와 미사일의 성능을 극단적으로 강화한다. 적의 회피 중에도 유도를 유지하고 미사일 피해를 1.5배로 높이며, 재장전 시간을 줄이고 발사 대기 시간을 제거한다. 미사일은 별도의 락온 없이 진행방향 전방 30도 내의 적을 포착한다.",
 	  "art_path": "res://Sprites/Backpack-Generator-0001.png",
 	  "anchor_path": "res://Sprites/Backpack-Generator-0001.anchors.png",
 	  "splash_art_path": "",
@@ -416,10 +416,12 @@
 		"missile_speed_multiplier": 2.0,
 		"missile_preparation_time_override": 0.0,
 		"missile_reload_duration_override": 5.0,
-		"missile_seeker_radius": 300.0,
+		"missile_seeker_angle_degrees": 30.0,
 		"missile_turn_speed_override_degrees": 180.0,
 		"missile_max_spread_degrees": 30.0,
-		"missile_proximity_fuse_radius_multiplier": 3.0
+		"missile_proximity_fuse_radius_multiplier": 3.0,
+		"missile_damage_multiplier": 1.5,
+		"missile_ignores_evasion": true
 	  }
 	},
 	{

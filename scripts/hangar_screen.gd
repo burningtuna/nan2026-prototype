@@ -21,6 +21,7 @@ const ENDLESS_INTRO_PATH := "res://data/scenarios/endless_intro.json"
 const STAGE_02_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_02_hangar.json"
 const STAGE_03_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_03_hangar.json"
 const STAGE_04_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_04_hangar.json"
+const STAGE_05_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_05_hangar.json"
 const SCENARIO_DIALOGUE_SCENE := preload("res://scenes/scenario_dialogue.tscn")
 const STORY_NEWS_HEADLINES := {
 	"res://scenes/stage_02.tscn": "국경 지역에서 원인 불명의 대규모 폭발 발생",
@@ -95,6 +96,9 @@ func _ready() -> void:
 	if user_args.has("--story-hangar-stage-02-smoke"):
 		GameSession.selected_game_mode = GameSession.GameMode.STORY
 		GameSession.story_deployment_scene_path = STAGE_02_PATH
+	elif user_args.has("--story-hangar-stage-05-smoke"):
+		GameSession.selected_game_mode = GameSession.GameMode.STORY
+		GameSession.story_deployment_scene_path = "res://scenes/stage_05.tscn"
 	elif user_args.has("--story-hangar-stage-04-smoke"):
 		GameSession.selected_game_mode = GameSession.GameMode.STORY
 		GameSession.story_deployment_scene_path = "res://scenes/stage_04.tscn"
@@ -132,6 +136,11 @@ func _ready() -> void:
 		and GameSession.story_deployment_scene_path == "res://scenes/stage_04.tscn"
 	):
 		dialogue_started = _scenario_dialogue.play_file(STAGE_04_HANGAR_DIALOGUE_PATH)
+	elif (
+		GameSession.selected_game_mode == GameSession.GameMode.STORY
+		and GameSession.story_deployment_scene_path == "res://scenes/stage_05.tscn"
+	):
+		dialogue_started = _scenario_dialogue.play_file(STAGE_05_HANGAR_DIALOGUE_PATH)
 	if not dialogue_started:
 		_show_story_news_headline()
 	queue_redraw()
@@ -156,6 +165,8 @@ func _ready() -> void:
 		call_deferred("_run_story_hangar_stage_02_smoke")
 	if user_args.has("--story-hangar-stage-04-smoke"):
 		call_deferred("_run_story_hangar_stage_04_smoke")
+	if user_args.has("--story-hangar-stage-05-smoke"):
+		call_deferred("_run_story_hangar_stage_05_smoke")
 	if OS.get_cmdline_user_args().has("--story-deploy-smoke"):
 		call_deferred("_confirm_loadout")
 
@@ -247,6 +258,26 @@ func _run_story_hangar_stage_04_smoke() -> void:
 	assert(not _scenario_dialogue.active)
 	assert(not _news_banner.visible)
 	print("STORY_HANGAR_STAGE_04_CHECK passed")
+	get_tree().quit(0)
+
+
+func _run_story_hangar_stage_05_smoke() -> void:
+	assert(GameSession.selected_game_mode == GameSession.GameMode.STORY)
+	assert(_deployment_scene_path() == "res://scenes/stage_05.tscn")
+	assert(_scenario_dialogue.current_speaker() == "오퍼레이터")
+	var expected_texts := [
+		"적의 본대가 사거리 안으로 들어왔어요. 모선이 직접 근처까지 왔다는건 그만큼 적도 급하다는 거겠죠.",
+		"모선의 엔진을 파괴하기 전까지는 접근하기 힘들기 때문에. 정확히 장거리 저격을 통해 모선의 엔진을 폭발시킬 거에요",
+		"이를 위해서 정확한 사격 제원을 산출하기 위해서 시간을 벌어야 해요.",
+		"적 모선의 공격을 유도해 모선의 이동을 묶고, 아군 관측소가 제원을 전달할 시간을 버는게 임무입니다.",
+	]
+	assert(_scenario_dialogue.dialogue.size() == expected_texts.size())
+	for expected_text in expected_texts:
+		assert(_scenario_dialogue.current_text() == expected_text)
+		_scenario_dialogue.advance()
+	assert(not _scenario_dialogue.active)
+	assert(not _news_banner.visible)
+	print("STORY_HANGAR_STAGE_05_CHECK passed")
 	get_tree().quit(0)
 
 

@@ -3,12 +3,14 @@ extends StoryMission
 const DRONE_AGENT := preload("res://scripts/drone_agent.gd")
 const ALIEN_INFESTATION_OVERLAY := preload("res://scripts/alien_infestation_overlay.gd")
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
+const DIALOGUE_PATH := "res://data/scenarios/stage_05_events.json"
 const STAGE_05_CUTSCENE_PATH := "res://scenes/stage_05_cutscene.tscn"
-const DRONE_TARGET := 20
+const DRONE_TARGET := 50
 const MAX_LIVING_DRONES := 4
 const DRONE_SPAWN_INTERVAL := 1.5
 const BEAM_UNLOCK_DRONE_KILLS := 2
 const ALLY_COUNT := 4
+const ARENA_BOSS_GROUP := &"STAGE_05_ARENA_BOSS"
 const RELOAD_SUPPORT_MULTIPLIER := 5.0
 const SUPPORT_APPROACH_SECONDS := 0.35
 const SUPPORT_OFFSETS := [
@@ -17,27 +19,17 @@ const SUPPORT_OFFSETS := [
 	Vector2(-90.0, -70.0),
 	Vector2(0.0, -90.0),
 ]
-const ALLY_4_DIALOGUE := {
-	"schema_version": 1,
-	"id": "stage_05_ally_4_sacrifice",
-	"dialogue": [{
-		"speaker": "아군4",
-		"text": "한눈 팔았군, 두번은 도와줄 수 없으니 다음엔 실수하지 마!",
-	}],
-}
-const BEAM_WARNING_DIALOGUE := {
-	"schema_version": 1,
-	"id": "stage_05_beam_warning",
-	"dialogue": [{
-		"speaker": "오퍼레이터",
-		"text": "적 모선에서 강력한 에너지포가 발사되려 합니다! 예상 착탄 지점을 표시할테니 피하세요",
-	}],
-}
+const ALLY_1_RELOAD_SUPPORT := &"ALLY_1_RELOAD_SUPPORT"
+const ALLY_2_ENERGY_SUPPORT := &"ALLY_2_ENERGY_SUPPORT"
+const ALLY_3_COOLING_SUPPORT := &"ALLY_3_COOLING_SUPPORT"
+const ALLY_4_SACRIFICE := &"ALLY_4_SACRIFICE"
+const BEAM_WARNING := &"BEAM_WARNING"
 
 @onready var beam_hazard: VerticalBeamHazard = \
 	$CombatContainer/CombatViewport/StoryStage/VerticalBeamHazard
 
 var part_catalog: MechPartCatalog
+var dialogue_events: Dictionary = {}
 var rng := RandomNumberGenerator.new()
 var survivor_count := 0
 var drone_sequence := 0
@@ -46,6 +38,7 @@ var drones_defeated := 0
 var spawn_remaining := 0.0
 var running := false
 var allies: Array[AiMechAgent] = []
+var arena_boss_ally: AiMechAgent
 var observed_reload_count := 0
 var player_was_cooling := false
 var energy_support_armed := true
@@ -88,6 +81,9 @@ func _on_combat_bound() -> void:
 	if not part_catalog.load_file(PARTS_DATA_PATH, battle.weapon_catalog):
 		push_error("Unable to initialize Stage 5 part catalog")
 		return
+	if not _load_dialogue_events():
+		push_error("Unable to load Stage 5 dialogue events")
+		return
 	rng.seed = 5052026
 	battle.agent_defeated.connect(_on_stage_agent_defeated)
 	combat_player.defeated.connect(_on_stage_player_defeated)
@@ -96,6 +92,7 @@ func _on_combat_bound() -> void:
 	beam_hazard.lethal_hit_imminent.connect(_on_beam_lethal_hit_imminent)
 	scenario_dialogue.dialogue_finished.connect(_on_stage_05_dialogue_finished)
 	_spawn_surviving_allies()
+	_spawn_arena_boss_ally()
 	observed_reload_count = _player_reload_count()
 	running = true
 	beam_hazard.setup(battle.arena, combat_player, false)
@@ -117,7 +114,26 @@ func _spawn_surviving_allies() -> void:
 				if point.spawn_group == group:
 					ally = story_stage._spawn_point(point)
 					break
+		if is_instance_valid(ally):
+			_configure_stage_ally(ally)
 		allies.append(ally)
+
+
+func _spawn_arena_boss_ally() -> void:
+	for point in story_stage.spawn_points:
+		if point.spawn_group != ARENA_BOSS_GROUP:
+			continue
+		arena_boss_ally = story_stage._spawn_point(point)
+		break
+	if is_instance_valid(arena_boss_ally):
+		_configure_stage_ally(arena_boss_ally)
+
+
+func _configure_stage_ally(ally: AiMechAgent) -> void:
+	ally.movement_type = AiMechAgent.MovementType.AGGRESSIVE
+	ally.combat_actions_enabled = true
+	ally.mech_collision_enabled = false
+	ally.incoming_damage_multiplier = 0.0
 
 
 func _update_ally_support() -> void:
@@ -128,14 +144,14 @@ func _update_ally_support() -> void:
 		for weapon in combat_player.weapons:
 			weapon.accelerate_reload(RELOAD_SUPPORT_MULTIPLIER)
 		_begin_support_approach(0)
-		system_messages.push_message("아군1 / 재장전을 도와줄게!")
+		_push_stage_message(ALLY_1_RELOAD_SUPPORT)
 	observed_reload_count = reload_count
 
 	if combat_player.energy_ratio() <= 0.5 and energy_support_armed and _ally_can_support(1):
 		energy_support_armed = false
 		combat_player.restore_energy_full()
 		_begin_support_approach(1)
-		system_messages.push_message("아군2 / 배터리라면 내가 충전해줄 수 있어!")
+		_push_stage_message(ALLY_2_ENERGY_SUPPORT)
 	elif combat_player.energy_ratio() > 0.55:
 		energy_support_armed = true
 
@@ -143,7 +159,7 @@ func _update_ally_support() -> void:
 	if cooling and not player_was_cooling and _ally_can_support(2):
 		combat_player.clear_overheat()
 		_begin_support_approach(2)
-		system_messages.push_message("아군3 / 방열이 필요한가?")
+		_push_stage_message(ALLY_3_COOLING_SUPPORT)
 	player_was_cooling = combat_player.heat_generation_locked
 
 
@@ -152,6 +168,56 @@ func _player_reload_count() -> int:
 	for weapon in combat_player.weapons:
 		count += weapon.reload_count
 	return count
+
+
+func _load_dialogue_events() -> bool:
+	if not FileAccess.file_exists(DIALOGUE_PATH):
+		return false
+	var file := FileAccess.open(DIALOGUE_PATH, FileAccess.READ)
+	if file == null:
+		return false
+	var parser := JSON.new()
+	if parser.parse(file.get_as_text()) != OK or not parser.data is Dictionary:
+		return false
+	var document: Dictionary = parser.data
+	var events = document.get("events")
+	if int(document.get("schema_version", 0)) != 1 or not events is Dictionary:
+		return false
+	for event_id in events:
+		var entry = events[event_id]
+		if (
+			not entry is Dictionary
+			or str(entry.get("speaker", "")).strip_edges().is_empty()
+			or str(entry.get("text", "")).strip_edges().is_empty()
+		):
+			return false
+	dialogue_events = events
+	return true
+
+
+func _dialogue_event(event_id: StringName) -> Dictionary:
+	var entry = dialogue_events.get(String(event_id), {})
+	return entry if entry is Dictionary else {}
+
+
+func _push_stage_message(event_id: StringName) -> void:
+	var entry := _dialogue_event(event_id)
+	if entry.is_empty():
+		push_error("Unknown Stage 5 dialogue event: %s" % event_id)
+		return
+	system_messages.push_message("%s / %s" % [entry["speaker"], entry["text"]])
+
+
+func _play_stage_dialogue(event_id: StringName) -> bool:
+	var entry := _dialogue_event(event_id)
+	if entry.is_empty():
+		push_error("Unknown Stage 5 dialogue event: %s" % event_id)
+		return false
+	return scenario_dialogue.play_document({
+		"schema_version": 1,
+		"id": "stage_05_%s" % String(event_id).to_lower(),
+		"dialogue": [entry.duplicate(true)],
+	}, DIALOGUE_PATH)
 
 
 func _ally_can_support(index: int) -> bool:
@@ -338,7 +404,7 @@ func _on_beam_warning_started(_target_x: float) -> void:
 	beam_intro_played = true
 	beam_intro_active = true
 	beam_hazard.process_mode = Node.PROCESS_MODE_DISABLED
-	if not scenario_dialogue.play_document(BEAM_WARNING_DIALOGUE, "stage_05.gd"):
+	if not _play_stage_dialogue(BEAM_WARNING):
 		_resume_after_beam_intro()
 
 
@@ -364,15 +430,18 @@ func _on_beam_lethal_hit_imminent(_target_x: float) -> void:
 	beam_hazard.intercept_current_firing()
 	ally.global_position = combat_player.global_position + combat_player.torso_forward() * 90.0
 	ally.rotation = combat_player.rotation
-	if not scenario_dialogue.play_document(ALLY_4_DIALOGUE, "stage_05.gd"):
-		system_messages.push_message("아군4 / 한눈 팔았군, 두번은 도와줄 수 없으니 다음엔 실수하지 마!")
+	_play_stage_dialogue(ALLY_4_SACRIFICE)
 	var body_durability := float(ally.part_durability.get(&"Body", 0.0))
 	if body_durability > 0.0:
+		ally.incoming_damage_multiplier = 1.0
 		ally.register_hit(&"Body", Vector2.UP, body_durability)
+		ally.incoming_damage_multiplier = 0.0
 
 
 func _run_stage_05_smoke() -> void:
-	assert(DRONE_TARGET == 20)
+	assert(DRONE_TARGET == 50)
+	assert(dialogue_events.size() == 5)
+	assert(_dialogue_event(ALLY_4_SACRIFICE)["speaker"] == "아군4")
 	assert(ResourceLoader.exists(STAGE_05_CUTSCENE_PATH, "PackedScene"))
 	assert(MAX_LIVING_DRONES == 4)
 	assert(not battle.floor_tile_enabled)
@@ -398,9 +467,38 @@ func _run_stage_05_smoke() -> void:
 	))
 	assert(not beam_hazard.active and BEAM_UNLOCK_DRONE_KILLS == 2)
 	assert(survivor_count == ALLY_COUNT and allies.size() == ALLY_COUNT)
-	for ally in allies:
+	assert(is_instance_valid(arena_boss_ally))
+	assert(arena_boss_ally.name == "ARENA-BOSS")
+	assert(arena_boss_ally.unit_class == AiMechAgent.UnitClass.BOSS)
+	assert(arena_boss_ally.global_position == Vector2(0.0, 220.0))
+	assert(arena_boss_ally.movement_type == AiMechAgent.MovementType.AGGRESSIVE)
+	assert(arena_boss_ally.combat_actions_enabled)
+	assert(not arena_boss_ally.mech_collision_enabled)
+	assert(is_zero_approx(arena_boss_ally.incoming_damage_multiplier))
+	for ally_index in allies.size():
+		var ally := allies[ally_index]
 		assert(is_instance_valid(ally) and not ally.is_defeated())
-	assert(pause_menu_context()["drone_target"] == 20)
+		assert(ally.movement_type == AiMechAgent.MovementType.AGGRESSIVE)
+		assert(ally.combat_actions_enabled)
+		assert(not ally.mech_collision_enabled)
+		assert(is_zero_approx(ally.incoming_damage_multiplier))
+		for hitbox_value in ally.part_hitboxes.values():
+			var hitbox := hitbox_value as PartHitbox
+			assert(hitbox.monitorable and hitbox.collision_layer == 2)
+	var invulnerable_ally := allies[0]
+	var ally_body_before := float(invulnerable_ally.part_durability[&"Body"])
+	invulnerable_ally.register_hit(&"Body", Vector2.RIGHT, 1000.0)
+	assert(is_equal_approx(float(invulnerable_ally.part_durability[&"Body"]), ally_body_before))
+	var collision_test_position := combat_player.global_position
+	invulnerable_ally.global_position = collision_test_position
+	combat_player.dash_direction = Vector2.RIGHT
+	combat_player.dash_time_remaining = 0.5
+	MechCollisionResolver.resolve([combat_player, invulnerable_ally])
+	assert(combat_player.global_position == collision_test_position)
+	assert(invulnerable_ally.global_position == collision_test_position)
+	assert(combat_player.is_dashing())
+	combat_player.dash_time_remaining = 0.0
+	assert(pause_menu_context()["drone_target"] == 50)
 	assert(pause_menu_context()["drones_defeated"] == 0)
 	var reload_weapon := combat_player.weapons[0]
 	reload_weapon.ammo = maxi(reload_weapon.ammo - 1, 0)

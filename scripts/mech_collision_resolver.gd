@@ -5,11 +5,11 @@ extends RefCounted
 static func resolve(combatants: Array) -> void:
 	for first_index in combatants.size():
 		var first := combatants[first_index] as AiMechAgent
-		if not is_instance_valid(first) or first.is_defeated():
+		if not is_instance_valid(first) or first.is_defeated() or not first.mech_collision_enabled:
 			continue
 		for second_index in range(first_index + 1, combatants.size()):
 			var second := combatants[second_index] as AiMechAgent
-			if not is_instance_valid(second) or second.is_defeated():
+			if not is_instance_valid(second) or second.is_defeated() or not second.mech_collision_enabled:
 				continue
 			_resolve_pair(first, second)
 

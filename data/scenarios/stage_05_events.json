@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "events": {
+	"ALLY_1_RELOAD_SUPPORT": {
+	  "speaker": "SYSTEM",
+	  "text": "아군의 재장전 지원을 받았다!"
+	},
+	"ALLY_2_ENERGY_SUPPORT": {
+	  "speaker": "SYSTEM",
+	  "text": "아군의 EN 충전 지원을 받았다!"
+	},
+	"ALLY_3_COOLING_SUPPORT": {
+	  "speaker": "SYSTEM",
+	  "text": "아군의 HEAT 방열 지원을 받았다!"
+	},
+	"ALLY_4_SACRIFICE": {
+	  "speaker": "아군4",
+	  "text": "한눈 팔았군, 두번은 도와줄 수 없으니 다음엔 실수하지 마!"
+	},
+	"BEAM_WARNING": {
+	  "speaker": "오퍼레이터",
+	  "text": "적 모선에서 강력한 에너지포가 발사되려 합니다! 예상 착탄 지점을 표시할테니 피하세요"
+	}
+  }
+}

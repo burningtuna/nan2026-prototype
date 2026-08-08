@@ -63,6 +63,21 @@ func _run() -> void:
 	assert(ally.damage_by_part.is_empty())
 	assert(source.missile_hits == 1)
 
+	var simultaneous := _projectile(missile, source, target)
+	get_root().add_child(simultaneous)
+	assert(simultaneous._check_proximity_fuse(Vector2(-20.0, 7.0), Vector2(20.0, 7.0)))
+	assert(is_equal_approx(target.damage_by_part[&"Body"], missile.damage * 2.0))
+	assert(is_equal_approx(target.damage_by_part[&"Head"], missile.damage * 2.0))
+	assert(source.missile_hits == 2)
+
+	var wide_explosion := _projectile(missile, source, target)
+	wide_explosion.splash_radius_multiplier = 2.0
+	get_root().add_child(wide_explosion)
+	assert(is_equal_approx(wide_explosion.effective_splash_radius(), missile.splash_radius * 2.0))
+	assert(wide_explosion._check_proximity_fuse(Vector2(-20.0, 7.0), Vector2(20.0, 7.0)))
+	assert(is_equal_approx(distant.damage_by_part[&"Body"], missile.damage))
+	assert(source.missile_hits == 3)
+
 	print("PROXIMITY_FUSE_CHECK passed")
 	quit(0)
 

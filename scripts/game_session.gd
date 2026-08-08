@@ -5,6 +5,19 @@ const STORY_PROGRESS_PATH := "user://story_progress.json"
 const ENDLESS_PROGRESS_PATH := "user://endless_progress.json"
 const LOADOUT_SCHEMA_VERSION := 1
 const PROGRESS_SCHEMA_VERSION := 1
+const STORY_STAGE_PATHS := [
+	"res://scenes/stage_01.tscn",
+	"res://scenes/stage_02.tscn",
+	"res://scenes/stage_03.tscn",
+	"res://scenes/stage_04.tscn",
+	"res://scenes/stage_05.tscn",
+]
+const STORY_HANGAR_STAGE_PATHS := [
+	"res://scenes/stage_02.tscn",
+	"res://scenes/stage_03.tscn",
+	"res://scenes/stage_04.tscn",
+	"res://scenes/stage_05.tscn",
+]
 
 enum GameMode {
 	STORY,
@@ -30,11 +43,21 @@ var story_stage_selected_directly := false
 var stage_05_cutscene_snapshot: Dictionary = {}
 var endless_player_balance_enabled := true
 var endless_missile_reload_multiplier := 0.2
+var endless_missile_damage_multiplier := 2.0
+var endless_missile_splash_radius_multiplier := 2.0
 var endless_other_reload_multiplier := 0.0
 var endless_player_damage_multiplier := 0.2
-var endless_damage_growth_per_minute := 0.05
+var endless_damage_growth_per_minute := 0.1
 var endless_intro_shown := false
 var story_progress: Dictionary = {}
+
+
+func is_story_stage_path(scene_path: String) -> bool:
+	return scene_path in STORY_STAGE_PATHS
+
+
+func story_stage_starts_from_hangar(scene_path: String) -> bool:
+	return scene_path in STORY_HANGAR_STAGE_PATHS
 
 
 func set_stage_05_cutscene_snapshot(snapshot: Dictionary) -> void:

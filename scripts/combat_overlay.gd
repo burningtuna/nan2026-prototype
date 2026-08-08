@@ -123,6 +123,8 @@ func show_team_victory(team_number: int) -> void:
 func show_result_message(message: String) -> void:
 	winning_team_number = -1
 	result_message = message.strip_edges()
+	z_index = RenderingServer.CANVAS_ITEM_Z_MAX
+	move_to_front()
 	queue_redraw()
 
 

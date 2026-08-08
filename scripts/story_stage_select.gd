@@ -29,8 +29,8 @@ func _ready() -> void:
 	queue_redraw()
 	if OS.get_cmdline_user_args().has("--story-select-smoke"):
 		assert(get_tree().get_nodes_in_group("story_stage_button").size() == STAGES.size())
-		assert(not bool(STAGES[0][3]) and bool(STAGES[1][3]))
-		assert(bool(STAGES[2][3]) and bool(STAGES[3][3]) and bool(STAGES[4][3]))
+		for stage in STAGES:
+			assert(bool(stage[3]) == GameSession.story_stage_starts_from_hangar(str(stage[2])))
 		assert(not bool(STAGES[5][3]) and str(STAGES[5][2]) == STAGE_05_CUTSCENE_PATH)
 		print("STORY_STAGE_SELECT_CHECK passed")
 		get_tree().quit(0)
@@ -153,9 +153,10 @@ func _transition(scene_path: String) -> void:
 
 func _launch_stage(stage: Array) -> void:
 	var stage_path := str(stage[2])
+	var starts_from_hangar := GameSession.story_stage_starts_from_hangar(stage_path)
 	if stage_path == STAGE_05_CUTSCENE_PATH:
 		GameSession.clear_stage_05_cutscene_snapshot()
 	GameSession.selected_game_mode = GameSession.GameMode.STORY
-	GameSession.story_deployment_scene_path = stage_path if bool(stage[3]) else ""
+	GameSession.story_deployment_scene_path = stage_path if starts_from_hangar else ""
 	GameSession.story_stage_selected_directly = true
-	_transition(HANGAR_PATH if bool(stage[3]) else stage_path)
+	_transition(HANGAR_PATH if starts_from_hangar else stage_path)

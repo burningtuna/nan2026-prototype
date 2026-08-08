@@ -42,6 +42,10 @@ func _apply_endless_player_balance() -> void:
 	combat_player.ignore_weapon_preparation = true
 	combat_player.ignore_preparation_move_speed_penalty = true
 	combat_player.endless_non_missile_penetration_enabled = true
+	combat_player.missile_damage_multiplier = GameSession.endless_missile_damage_multiplier
+	combat_player.missile_splash_radius_multiplier = (
+		GameSession.endless_missile_splash_radius_multiplier
+	)
 	for weapon in combat_player.weapons:
 		weapon.reload_duration_multiplier = (
 			GameSession.endless_missile_reload_multiplier
@@ -56,7 +60,7 @@ func _update_endless_player_damage(elapsed_seconds: float) -> void:
 	var completed_minutes := floori(maxf(elapsed_seconds, 0.0) / 60.0)
 	combat_player.incoming_damage_multiplier = (
 		GameSession.endless_player_damage_multiplier
-		* (1.0 + completed_minutes * GameSession.endless_damage_growth_per_minute)
+		+ completed_minutes * GameSession.endless_damage_growth_per_minute
 	)
 
 
@@ -110,6 +114,14 @@ func _run_endless_smoke() -> void:
 	assert(combat_player.ignore_weapon_preparation)
 	assert(combat_player.ignore_preparation_move_speed_penalty)
 	assert(combat_player.endless_non_missile_penetration_enabled)
+	assert(is_equal_approx(
+		combat_player.missile_damage_multiplier,
+		GameSession.endless_missile_damage_multiplier
+	))
+	assert(is_equal_approx(
+		combat_player.missile_splash_radius_multiplier,
+		GameSession.endless_missile_splash_radius_multiplier
+	))
 	for weapon in combat_player.weapons:
 		var expected_reload_multiplier := (
 			GameSession.endless_missile_reload_multiplier
@@ -168,8 +180,12 @@ func _run_endless_smoke() -> void:
 	assert(is_equal_approx(
 		combat_player.incoming_damage_multiplier,
 		GameSession.endless_player_damage_multiplier
-		* (1.0 + GameSession.endless_damage_growth_per_minute)
+		+ GameSession.endless_damage_growth_per_minute
 	))
+	_update_endless_player_damage(8.0 * 60.0)
+	assert(is_equal_approx(combat_player.incoming_damage_multiplier, 1.0))
+	_update_endless_player_damage(9.0 * 60.0)
+	assert(is_equal_approx(combat_player.incoming_damage_multiplier, 1.1))
 	assert(director._living_mechs() == 1)
 	var mech: AiMechAgent
 	for agent in battle.agents:
@@ -182,6 +198,8 @@ func _run_endless_smoke() -> void:
 	assert(not mech.ignore_weapon_preparation)
 	assert(not mech.ignore_preparation_move_speed_penalty)
 	assert(not mech.endless_non_missile_penetration_enabled)
+	assert(is_equal_approx(mech.missile_damage_multiplier, 1.0))
+	assert(is_equal_approx(mech.missile_splash_radius_multiplier, 1.0))
 	for weapon in mech.weapons:
 		assert(is_equal_approx(weapon.reload_duration_multiplier, 1.0))
 	mech.register_hit(&"Body", Vector2.RIGHT, float(mech.part_durability[&"Body"]))

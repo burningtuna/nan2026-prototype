@@ -14,6 +14,7 @@ const DASH_FRAMES := [
 	"res://Sprites/Dash-0002.png",
 	"res://Sprites/Dash-0003.png",
 ]
+const CAMERA_START_POSITION := Vector2.ZERO
 const BOSS_START_OFFSET := Vector2(-480.0, 320.0)
 const BOSS_FLIGHT_OFFSET := Vector2(480.0, -11500.0)
 const CAMERA_TRAIL_OFFSET := Vector2(0.0, 300.0)
@@ -123,7 +124,9 @@ func _valid_dialogue_lines(lines) -> bool:
 
 
 func _apply_snapshot() -> void:
-	combat_player.global_position = snapshot["player"]["position"]
+	var camera_data: Dictionary = snapshot["camera"]
+	var position_offset: Vector2 = CAMERA_START_POSITION - camera_data["position"]
+	combat_player.global_position = snapshot["player"]["position"] + position_offset
 	for ally_data: Dictionary in snapshot["allies"]:
 		var point := _spawn_point_for_unit(str(ally_data["unit_id"]))
 		if point == null:
@@ -131,17 +134,16 @@ func _apply_snapshot() -> void:
 		var ally := story_stage._spawn_point(point)
 		if ally == null:
 			continue
-		ally.global_position = ally_data["position"]
+		ally.global_position = ally_data["position"] + position_offset
 		spawned_allies.append(ally)
-	_spawn_snapshot_enemies()
+	_spawn_snapshot_enemies(null, position_offset)
 	boss = _spawned_agent_for_unit("ARENA-BOSS")
 	if is_instance_valid(boss):
-		boss.global_position = combat_player.global_position + BOSS_START_OFFSET
+		boss.global_position = CAMERA_START_POSITION + BOSS_START_OFFSET
 		boss_flight_target = boss.global_position + BOSS_FLIGHT_OFFSET
 		ufo_placeholder.global_position = boss_flight_target
 		_configure_boss_flight_visual()
-	var camera_data: Dictionary = snapshot["camera"]
-	battle.camera.global_position = camera_data["position"]
+	battle.camera.global_position = CAMERA_START_POSITION
 	battle.camera.zoom = camera_data["zoom"]
 	for agent in battle.agents:
 		if not is_instance_valid(agent):
@@ -151,7 +153,10 @@ func _apply_snapshot() -> void:
 		static_unit_positions[agent.get_instance_id()] = agent.global_position
 
 
-func _spawn_snapshot_enemies(enemy_entries = null) -> void:
+func _spawn_snapshot_enemies(
+	enemy_entries = null,
+	position_offset := Vector2.ZERO
+) -> void:
 	var entries: Array = snapshot["enemies"] if enemy_entries == null else enemy_entries
 	var sequence := 0
 	for enemy_data: Dictionary in entries:
@@ -170,7 +175,7 @@ func _spawn_snapshot_enemies(enemy_entries = null) -> void:
 			900 + sequence
 		)
 		drone.name = str(enemy_data["unit_id"])
-		drone.position = enemy_data["position"]
+		drone.position = enemy_data["position"] + position_offset
 		drone.rotation = float(enemy_data["rotation"])
 		battle.add_combatant(drone)
 		ALIEN_INFESTATION_OVERLAY.attach_to(drone)
@@ -524,11 +529,15 @@ func _run_stage_05_cutscene_smoke() -> void:
 			CUTSCENE_SNAPSHOT.DEFAULT_ALLY_POSITIONS[index]
 		))
 	assert(is_instance_valid(boss) and boss.unit_class == AiMechAgent.UnitClass.BOSS)
+	assert(battle.camera.global_position == CAMERA_START_POSITION)
+	assert(boss.global_position == CAMERA_START_POSITION + BOSS_START_OFFSET)
 	assert(boss.mech_loadout.left_arm.part_id == "cyclone_flechette_arm")
 	assert(boss.mech_loadout.right_arm.part_id == "cyclone_flechette_arm")
 	var expected_boss_rotation := BOSS_FLIGHT_OFFSET.angle() + PI * 0.5
 	assert(is_equal_approx(boss.rotation, expected_boss_rotation))
 	assert(ufo_placeholder.global_position.is_equal_approx(boss_flight_target))
+	assert(is_zero_approx(boss_flight_target.x))
+	assert(ufo_placeholder.z_index > boss.z_index)
 	assert(is_equal_approx(BOSS_FLIGHT_SECONDS, 7.0))
 	assert(is_equal_approx(BEAM_PREPARATION_SECONDS, 5.0))
 	assert(is_equal_approx(BEAM_FLIGHT_DELAY_SECONDS, 5.0))

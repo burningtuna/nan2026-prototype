@@ -24,10 +24,16 @@ func _initialize() -> void:
 	assert(is_equal_approx(missile_radar.missile_speed_multiplier, 2.0))
 	assert(is_zero_approx(missile_radar.missile_preparation_time_override))
 	assert(is_equal_approx(missile_radar.missile_reload_duration_override, 5.0))
-	assert(is_equal_approx(missile_radar.missile_seeker_radius, 300.0))
+	assert(is_equal_approx(missile_radar.missile_seeker_angle_degrees, 30.0))
 	assert(is_equal_approx(missile_radar.missile_turn_speed_override_degrees, 180.0))
 	assert(is_equal_approx(missile_radar.missile_max_spread_degrees, 30.0))
 	assert(is_equal_approx(missile_radar.missile_proximity_fuse_radius_multiplier, 3.0))
+	assert(is_equal_approx(missile_radar.missile_damage_multiplier, 1.5))
+	assert(missile_radar.missile_ignores_evasion)
+	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_rapid").projectile.damage, 0.9))
+	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_standard").projectile.damage, 3.75))
+	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_heavy").projectile.damage, 7.5))
+	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_sniper_backpack").projectile.damage, 200.0))
 	_verify_head_profiles(falcon, raven, bastion, weapon_catalog)
 
 	var projectile_layer := Node2D.new()
@@ -196,6 +202,8 @@ func _verify_sensor_guided_missile() -> void:
 	projectile.visuals_enabled = false
 	projectile._update_homing_direction(0.1)
 	assert(absf(projectile.direction.y) < 0.001)
+	projectile.update_homing_observation(Vector2(0.0, 100.0), Vector2.ZERO, true)
+	assert(not projectile.homing_observation_enabled)
 	projectile.update_homing_observation(Vector2(0.0, 100.0), Vector2.ZERO, false)
 	projectile._update_homing_direction(0.1)
 	assert(projectile.direction.y > 0.0)
@@ -315,13 +323,39 @@ func _verify_missile_radar_guidance(
 	assert(is_equal_approx(observer.effective_weapon_volley_arc_degrees(missile_runtime), 30.0))
 	var near_target := _make_agent("NearTarget", projectile_layer, part_catalog.create_default_loadout())
 	var far_target := _make_agent("FarTarget", projectile_layer, part_catalog.create_default_loadout())
-	near_target.position = Vector2(0.0, 100.0)
-	far_target.position = Vector2(0.0, 250.0)
-	observer.set_opponents([far_target, near_target])
+	var side_target := _make_agent("SideTarget", projectile_layer, part_catalog.create_default_loadout())
+	near_target.position = Vector2(100.0, 10.0)
+	far_target.position = Vector2(250.0, 0.0)
+	side_target.position = Vector2(0.0, 1000.0)
+	observer.set_opponents([side_target, far_target, near_target])
 	observer.sensor_snapshot.units.assign([
 		{"target": far_target, "position": far_target.position, "velocity": Vector2.ZERO, "dashing": false},
 		{"target": near_target, "position": near_target.position, "velocity": Vector2.ZERO, "dashing": false},
 	])
+	observer.missile_damage_multiplier = 2.0
+	observer.missile_splash_radius_multiplier = 2.0
+	observer._spawn_projectile(
+		missile_runtime,
+		Vector2.ZERO,
+		Vector2.RIGHT,
+		0,
+		0.0,
+		near_target
+	)
+	var spawned := projectile_layer.get_child(projectile_layer.get_child_count() - 1) as BallisticProjectile
+	assert(spawned != null)
+	assert(is_equal_approx(spawned.damage_multiplier, 3.0))
+	assert(is_equal_approx(
+		spawned.effective_damage(),
+		missile_runtime.spec.projectile.damage * 3.0
+	))
+	assert(spawned.ignores_homing_evasion)
+	assert(is_equal_approx(spawned.splash_radius_multiplier, 2.0))
+	assert(is_equal_approx(
+		spawned.effective_splash_radius(),
+		missile_runtime.spec.projectile.splash_radius * 2.0
+	))
+	spawned.free()
 	var projectile_spec := ProjectileSpec.new()
 	projectile_spec.speed = 100.0
 	projectile_spec.homing = true
@@ -345,11 +379,14 @@ func _verify_missile_radar_guidance(
 		false,
 		false,
 		2.0,
-		300.0,
+		30.0,
 		180.0,
-		3.0
+		3.0,
+		1.5,
+		true
 	)
 	assert(is_equal_approx(projectile.effective_speed(), 200.0))
+	assert(is_equal_approx(projectile.effective_damage(), projectile_spec.damage * 1.5))
 	assert(is_equal_approx(
 		projectile.effective_proximity_fuse_radius(),
 		30.0
@@ -361,10 +398,13 @@ func _verify_missile_radar_guidance(
 	observer._update_owned_missile_observations()
 	assert(projectile.homing_target == near_target)
 	assert(projectile.terminal_seeker_activated)
+	assert(is_equal_approx(projectile.terminal_seeker_angle_degrees, 30.0))
 	assert(is_equal_approx(projectile.homing_turn_speed_override_degrees, 180.0))
 	projectile._update_homing_direction(0.25)
 	assert(projectile.direction.angle() > 0.0)
 	assert(projectile.direction.angle() <= deg_to_rad(45.0) + 0.001)
+	projectile.update_homing_observation(Vector2(0.0, 100.0), Vector2.ZERO, true)
+	assert(projectile.homing_observation_enabled)
 	var distant_projectile := BallisticProjectile.new()
 	distant_projectile.configure(
 		projectile_spec,
@@ -383,19 +423,20 @@ func _verify_missile_radar_guidance(
 		false,
 		false,
 		2.0,
-		300.0,
+		30.0,
 		180.0
 	)
 	projectile_layer.add_child(distant_projectile)
-	distant_projectile.global_position = Vector2(1000.0, 0.0)
+	distant_projectile.global_position = Vector2(-1000.0, 0.0)
 	observer._update_owned_missile_observations()
-	assert(distant_projectile.homing_target == null)
+	assert(distant_projectile.homing_target == near_target)
 	projectile.queue_free()
 	distant_projectile.queue_free()
 	_free_weapon_runtime(missile_runtime)
 	observer.free()
 	near_target.free()
 	far_target.free()
+	side_target.free()
 
 
 func _verify_backpack_muzzle_positions() -> void:
