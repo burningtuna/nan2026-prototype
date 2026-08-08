@@ -10,6 +10,14 @@ const ALLY_MARKER_COLOR := Color("62ed8c")
 const HEAT_WARNING_COLOR := Color("ffd15c")
 const HEAT_CRITICAL_COLOR := Color("ff4747")
 const COOLING_COLOR := Color("66e6dc")
+const CURSOR_LABEL_WIDTH := 120.0
+const CURSOR_RESOURCE_HEIGHT := 13.0
+const CURSOR_RESOURCE_LABEL_WIDTH := 22.0
+const CURSOR_RESOURCE_BAR_WIDTH := 42.0
+const CURSOR_RESOURCE_BAR_HEIGHT := 3.0
+const HIT_MARKER_DURATION := 0.5
+const HIT_MARKER_COLOR := Color.WHITE
+const KILL_MARKER_COLOR := Color("ff4747")
 const UNIT_MARKER_MARGIN := 24.0
 const TARGET_PANEL_SIZE := Vector2(76.0, 76.0)
 const TARGET_PANEL_MARGIN := 4.0
@@ -31,6 +39,8 @@ var target_focus_active := false
 var focused_target: AiMechAgent
 var target_preview: MechWireframePreview
 var displayed_target: AiMechAgent
+var hit_marker_remaining := 0.0
+var kill_marker_active := false
 
 
 func _ready() -> void:
@@ -45,6 +55,8 @@ func _ready() -> void:
 
 func bind(combat_player: AiMechAgent, combat_allies: Array, combat_enemies: Array, projectiles: Node2D) -> void:
 	player = combat_player
+	if not player.hit_confirmed.is_connected(_on_player_hit_confirmed):
+		player.hit_confirmed.connect(_on_player_hit_confirmed)
 	projectile_layer = projectiles
 	set_roster(combat_allies, combat_enemies)
 	set_process(true)
@@ -65,6 +77,9 @@ func set_roster(combat_allies: Array, combat_enemies: Array) -> void:
 
 
 func _process(delta: float) -> void:
+	hit_marker_remaining = maxf(hit_marker_remaining - delta, 0.0)
+	if hit_marker_remaining <= 0.0:
+		kill_marker_active = false
 	if not combat_hud_visible:
 		target_preview.visible = false
 		queue_redraw()
@@ -88,6 +103,15 @@ func _process(delta: float) -> void:
 
 func _on_enemy_weapon_fired(_weapon: WeaponRuntime, enemy: AiMechAgent) -> void:
 	pending_attack_flashes[enemy.get_instance_id()] = true
+
+
+func _on_player_hit_confirmed(target_defeated: bool) -> void:
+	if target_defeated:
+		kill_marker_active = true
+	elif hit_marker_remaining <= 0.0:
+		kill_marker_active = false
+	hit_marker_remaining = HIT_MARKER_DURATION
+	queue_redraw()
 
 
 func show_team_victory(team_number: int) -> void:
@@ -137,8 +161,13 @@ func _draw() -> void:
 		if safe_rect.has_point(enemy_position):
 			_draw_target_marker(enemy_position, enemy)
 		else:
-			_draw_offscreen_unit_marker(enemy_position, safe_rect, TARGET_COLOR)
+			_draw_offscreen_unit_marker(
+				enemy_position,
+				safe_rect,
+				ALLY_MARKER_COLOR if enemy == player.selected_sensor_target else TARGET_COLOR
+			)
 	_draw_cursor_range(canvas_transform)
+	_draw_hit_marker(canvas_transform)
 	_draw_targeting_solution(canvas_transform)
 	if is_instance_valid(projectile_layer):
 		for projectile in player.detected_hostile_projectiles(projectile_layer):
@@ -202,44 +231,57 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 	var heat_status_height := 8.0 if not heat_status_text.is_empty() else 0.0
 
 	draw_arc(cursor_position, 5.0, 0.0, TAU, 16, color, 1.0)
-	draw_line(cursor_position + Vector2(7.0, 0.0), cursor_position + Vector2(11.0, 0.0), color, 1.0)
 	var text := "D%04d / R%04d" % [roundi(distance), roundi(maximum_range)]
-	var label_size := Vector2(120.0, 11.0 + heat_status_height + displayed_weapons.size() * 8.0)
-	var label_position := cursor_position + Vector2(10.0, -13.0)
-	if label_position.x + label_size.x > size.x - 3.0:
-		label_position.x = cursor_position.x - label_size.x - 10.0
-	label_position.y = clampf(label_position.y, 3.0, size.y - label_size.y - 3.0)
-	var label_rect := Rect2(label_position, label_size)
-	var sidebar_rect := _target_sidebar_rect()
-	if label_rect.intersects(sidebar_rect):
-		label_position.x = maxf(sidebar_rect.position.x - label_size.x - 3.0, 3.0)
+	var label_size := Vector2(
+		CURSOR_LABEL_WIDTH,
+		11.0 + CURSOR_RESOURCE_HEIGHT + heat_status_height + displayed_weapons.size() * 8.0
+	)
+	var label_position := _cursor_label_position(
+		cursor_position,
+		label_size,
+		_target_sidebar_rect()
+	)
+	var label_on_left := label_position.x < cursor_position.x
+	var text_alignment := (
+		HORIZONTAL_ALIGNMENT_RIGHT if label_on_left else HORIZONTAL_ALIGNMENT_LEFT
+	)
+	var connector_direction := -1.0 if label_on_left else 1.0
+	draw_line(
+		cursor_position + Vector2(7.0 * connector_direction, 0.0),
+		cursor_position + Vector2(11.0 * connector_direction, 0.0),
+		color,
+		1.0
+	)
+	var text_position := label_position + Vector2(3.0, 8.0)
+	var text_width := label_size.x - 6.0
 	draw_string_outline(
 		ThemeDB.fallback_font,
-		label_position + Vector2(3.0, 8.0),
+		text_position,
 		text,
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1.0,
+		text_alignment,
+		text_width,
 		7,
 		2,
 		Color(0.0, 0.0, 0.0, 0.9)
 	)
 	draw_string(
 		ThemeDB.fallback_font,
-		label_position + Vector2(3.0, 8.0),
+		text_position,
 		text,
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1.0,
+		text_alignment,
+		text_width,
 		7,
 		color
 	)
+	_draw_cursor_resource_gauges(label_position, label_size, label_on_left)
 	if not heat_status_text.is_empty():
-		var heat_status_position := label_position + Vector2(3.0, 17.0)
+		var heat_status_position := label_position + Vector2(3.0, 17.0 + CURSOR_RESOURCE_HEIGHT)
 		draw_string_outline(
 			ThemeDB.fallback_font,
 			heat_status_position,
 			heat_status_text,
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1.0,
+			text_alignment,
+			text_width,
 			6,
 			2,
 			Color(0.0, 0.0, 0.0, 0.9)
@@ -248,8 +290,8 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 			ThemeDB.fallback_font,
 			heat_status_position,
 			heat_status_text,
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1.0,
+			text_alignment,
+			text_width,
 			6,
 			heat_status_color
 		)
@@ -261,13 +303,16 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 			weapon.ammo,
 			weapon.spec.magazine_capacity,
 		]
-		var weapon_position := label_position + Vector2(3.0, 17.0 + heat_status_height + index * 8.0)
+		var weapon_position := label_position + Vector2(
+			3.0,
+			17.0 + CURSOR_RESOURCE_HEIGHT + heat_status_height + index * 8.0
+		)
 		draw_string_outline(
 			ThemeDB.fallback_font,
 			weapon_position,
 			weapon_text,
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1.0,
+			text_alignment,
+			text_width,
 			6,
 			2,
 			Color(0.0, 0.0, 0.0, 0.9)
@@ -276,11 +321,97 @@ func _draw_cursor_range(canvas_transform: Transform2D) -> void:
 			ThemeDB.fallback_font,
 			weapon_position,
 			weapon_text,
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1.0,
+			text_alignment,
+			text_width,
 			6,
 			ALLY_MARKER_COLOR
 		)
+
+
+func _cursor_label_position(
+	cursor_position: Vector2,
+	label_size: Vector2,
+	avoid_rect: Rect2
+) -> Vector2:
+	var right_position := cursor_position + Vector2(10.0, -13.0)
+	right_position.y = clampf(right_position.y, 3.0, size.y - label_size.y - 3.0)
+	var right_rect := Rect2(right_position, label_size)
+	if right_rect.end.x <= size.x - 3.0 and not right_rect.intersects(avoid_rect):
+		return right_position
+	var left_position := Vector2(
+		cursor_position.x - label_size.x - 10.0,
+		right_position.y
+	)
+	var left_rect := Rect2(left_position, label_size)
+	if left_position.x >= 3.0 and not left_rect.intersects(avoid_rect):
+		return left_position
+	left_position.x = clampf(left_position.x, 3.0, size.x - label_size.x - 3.0)
+	return left_position
+
+
+func _draw_cursor_resource_gauges(
+	label_position: Vector2,
+	label_size: Vector2,
+	label_on_left: bool
+) -> void:
+	var gauge_width := CURSOR_RESOURCE_LABEL_WIDTH + CURSOR_RESOURCE_BAR_WIDTH
+	var gauge_x := (
+		label_position.x + label_size.x - gauge_width - 3.0
+		if label_on_left
+		else label_position.x + 3.0
+	)
+	var ratios := [player.energy_ratio(), player.heat_ratio()]
+	var labels := ["EN", "HEAT"]
+	var colors := [COOLING_COLOR, _cursor_heat_color()]
+	for index in 2:
+		var row_y := label_position.y + 11.0 + index * 6.0
+		draw_string(
+			ThemeDB.fallback_font,
+			Vector2(gauge_x, row_y + 3.0),
+			labels[index],
+			HORIZONTAL_ALIGNMENT_LEFT,
+			CURSOR_RESOURCE_LABEL_WIDTH - 2.0,
+			5,
+			colors[index]
+		)
+		var bar_rect := Rect2(
+			Vector2(gauge_x + CURSOR_RESOURCE_LABEL_WIDTH, row_y),
+			Vector2(CURSOR_RESOURCE_BAR_WIDTH, CURSOR_RESOURCE_BAR_HEIGHT)
+		)
+		draw_rect(bar_rect, Color(0.0, 0.0, 0.0, 0.8))
+		draw_rect(bar_rect, Color(0.55, 0.68, 0.68, 0.65), false, 1.0)
+		var fill_width := CURSOR_RESOURCE_BAR_WIDTH * clampf(ratios[index], 0.0, 1.0)
+		if fill_width > 0.0:
+			draw_rect(Rect2(bar_rect.position, Vector2(fill_width, bar_rect.size.y)), colors[index])
+
+
+func _cursor_heat_color() -> Color:
+	if player.heat_generation_locked:
+		return COOLING_COLOR
+	if player.heat_ratio() >= 0.8:
+		return HEAT_CRITICAL_COLOR
+	if player.heat_ratio() >= 0.6:
+		return HEAT_WARNING_COLOR
+	return RANGE_READY_COLOR
+
+
+func _draw_hit_marker(canvas_transform: Transform2D) -> void:
+	if hit_marker_remaining <= 0.0 or not player.player_controlled:
+		return
+	var cursor_position: Vector2 = canvas_transform * player.manual_aim_position
+	var color := KILL_MARKER_COLOR if kill_marker_active else HIT_MARKER_COLOR
+	var directions := [
+		Vector2(-1.0, -1.0),
+		Vector2(1.0, -1.0),
+		Vector2(-1.0, 1.0),
+		Vector2(1.0, 1.0),
+	]
+	for direction in directions:
+		var normalized_direction: Vector2 = direction.normalized()
+		var start := cursor_position + normalized_direction * 4.0
+		var finish := cursor_position + normalized_direction * 9.0
+		draw_line(start, finish, Color(0.0, 0.0, 0.0, 0.9), 3.0)
+		draw_line(start, finish, color, 1.5)
 
 
 func _update_target_preview() -> void:

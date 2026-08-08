@@ -3,46 +3,18 @@ extends StoryMission
 const HEAT_WARNING_RATIO := 0.6
 const STAGE_02_PATH := "res://scenes/stage_02.tscn"
 const HANGAR_PATH := "res://scenes/hangar_screen.tscn"
-const INTRO_DIALOGUE := {
-	"schema_version": 1,
-	"id": "stage_01_intro",
-	"dialogue": [
-		{"speaker": "오퍼레이터", "text": "갑작스럽지만, 이런 투기장에 배치가 되었으니 싸울 방법은 알려줘야겠지."},
-		{"speaker": "오퍼레이터", "text": "1,2,3 키로 왼팔/오른팔/백팩의 무기를 선택할 수 있고, 4번 키로 모든 무장을 동시에 선택 할 수 있어."},
-		{"speaker": "오퍼레이터", "text": "WSAD로 이동, 스페이스로 대시를 할 수 있는데, 대시 중에는 적의 미사일 유도를 잠시 회피하는 기능도 있어."},
-		{"speaker": "오퍼레이터", "text": "조준은 마우스 커서로 하고, 숫자는 거리를 의미해, 빨간색이면 사정거리 밖이라는 이야기야."},
-		{"speaker": "오퍼레이터", "text": "이제 더미로 놓인 4기의 적기를 격추해 봐."},
-	],
-}
-const HEAT_WARNING_DIALOGUE := {
-	"schema_version": 1,
-	"id": "stage_01_heat_warning",
-	"dialogue": [
-		{"speaker": "오퍼레이터", "text": "지금 실탄계 무기를 연사를 하는 바람에 기체 온도가 올라가고 있어."},
-		{"speaker": "오퍼레이터", "text": "잠시 연사를 멈추거나, 아니면 다음에는 열도 고려하여 장비 세팅을 하는게 좋을거야."},
-		{"speaker": "오퍼레이터", "text": "열이 감당 불가가 되면 기체는 강제로 방열 상태로 들어가고, 그 동안 열을 발생시키는 모든 행동은 할 수 없게 돼"},
-	],
-}
-const PART_DESTROYED_DIALOGUE := {
-	"schema_version": 1,
-	"id": "stage_01_part_destroyed",
-	"dialogue": [{
-		"speaker": "오퍼레이터",
-		"text": "타겟의 파츠를 파괴했네, 적의 공격 기능이 모두 제거되면 격파 판정이 돼.",
-	}],
-}
-const VICTORY_DIALOGUE := {
-	"schema_version": 1,
-	"id": "stage_01_victory",
-	"dialogue": [
-		{"speaker": "오퍼레이터", "text": "좋아, 기본적 전투 기능은 전부 테스트를 해 본 거 같네."},
-		{"speaker": "오퍼레이터", "text": "다음은 실전을 해보자고."},
-	],
-}
+const STAGE_01_DIALOGUE_PATH := "res://data/scenarios/stage_01_events.json"
+const INTRO_EVENT := &"INTRO"
+const HEAT_WARNING_EVENT := &"HEAT_WARNING"
+const PART_DESTROYED_EVENT := &"PART_DESTROYED"
+const MISSILE_TUTORIAL_EVENT := &"MISSILE_TUTORIAL"
+const VICTORY_EVENT := &"VICTORY"
 
 var heat_warning_played := false
 var part_destroyed_dialogue_played := false
+var missile_tutorial_played := false
 var mission_finishing := false
+var dialogue_events := {}
 var dialogue_queue: Array[Dictionary] = []
 var active_stage_dialogue_id := ""
 
@@ -57,18 +29,21 @@ func _process(delta: float) -> void:
 	):
 		return
 	heat_warning_played = true
-	_queue_stage_dialogue(HEAT_WARNING_DIALOGUE)
+	_queue_stage_dialogue(HEAT_WARNING_EVENT)
 
 
 func _on_combat_bound() -> void:
 	super._on_combat_bound()
+	if not _load_dialogue_events():
+		push_error("Unable to load Stage 01 dialogue events")
 	scenario_dialogue.dialogue_finished.connect(_on_stage_dialogue_finished)
+	combat_player.weapon_fired.connect(_on_player_weapon_fired)
 	var enemies: Array[AiMechAgent] = battle.enemies_for(combat_player)
 	_randomize_dummy_facings(enemies)
 	for enemy in enemies:
 		enemy.part_destroyed.connect(_on_dummy_part_destroyed)
 	if not _is_smoke_test():
-		_queue_stage_dialogue(INTRO_DIALOGUE)
+		_queue_stage_dialogue(INTRO_EVENT)
 	if OS.get_cmdline_user_args().has("--stage-01-smoke"):
 		call_deferred("_run_stage_smoke")
 
@@ -86,7 +61,20 @@ func _on_dummy_part_destroyed(_part_name: StringName) -> void:
 	if part_destroyed_dialogue_played or mission_finishing:
 		return
 	part_destroyed_dialogue_played = true
-	_queue_stage_dialogue(PART_DESTROYED_DIALOGUE)
+	_queue_stage_dialogue(PART_DESTROYED_EVENT)
+
+
+func _on_player_weapon_fired(weapon: WeaponRuntime) -> void:
+	if (
+		missile_tutorial_played
+		or mission_finishing
+		or weapon.part_name != &"RightArm"
+		or combat_player.mech_loadout.right_arm == null
+		or combat_player.mech_loadout.right_arm.part_id != "tempest_rocket"
+	):
+		return
+	missile_tutorial_played = true
+	_queue_stage_dialogue(MISSILE_TUTORIAL_EVENT)
 
 
 func _on_story_battle_finished(winner_team_id: int) -> void:
@@ -96,10 +84,34 @@ func _on_story_battle_finished(winner_team_id: int) -> void:
 	if mission_finished or mission_finishing:
 		return
 	mission_finishing = true
-	_queue_stage_dialogue(VICTORY_DIALOGUE)
+	_queue_stage_dialogue(VICTORY_EVENT)
 
 
-func _queue_stage_dialogue(document: Dictionary) -> void:
+func _load_dialogue_events() -> bool:
+	if not FileAccess.file_exists(STAGE_01_DIALOGUE_PATH):
+		return false
+	var file := FileAccess.open(STAGE_01_DIALOGUE_PATH, FileAccess.READ)
+	if file == null:
+		return false
+	var parser := JSON.new()
+	if parser.parse(file.get_as_text()) != OK or not parser.data is Dictionary:
+		return false
+	var document: Dictionary = parser.data
+	var events = document.get("events")
+	if int(document.get("schema_version", 0)) != 1 or not events is Dictionary:
+		return false
+	dialogue_events = events
+	return true
+
+
+func _queue_stage_dialogue(event_id: StringName) -> void:
+	var event_key := String(event_id)
+	if not dialogue_events.has(event_key) or not dialogue_events[event_key] is Dictionary:
+		push_error("Unknown Stage 01 dialogue event: %s" % event_id)
+		return
+	var document: Dictionary = dialogue_events[event_key]
+	document = document.duplicate(true)
+	document["schema_version"] = 1
 	dialogue_queue.append(document)
 	_play_next_stage_dialogue()
 
@@ -109,7 +121,7 @@ func _play_next_stage_dialogue() -> void:
 		return
 	var document: Dictionary = dialogue_queue.pop_front()
 	active_stage_dialogue_id = str(document["id"])
-	if not scenario_dialogue.play_document(document, "stage_01.gd"):
+	if not scenario_dialogue.play_document(document, STAGE_01_DIALOGUE_PATH):
 		active_stage_dialogue_id = ""
 		_play_next_stage_dialogue()
 
@@ -133,6 +145,7 @@ func _mission_transition_path(success: bool) -> String:
 
 func _run_stage_smoke() -> void:
 	assert(story_stage.initialized)
+	assert(dialogue_events.size() == 5)
 	assert(battle.agents.size() == 5)
 	var player: AiMechAgent = battle.player_agent()
 	assert(player != null)
@@ -164,6 +177,28 @@ func _run_stage_smoke() -> void:
 	assert(team_counts[0] == 1)
 	assert(team_counts[1] == 4)
 	assert(not enemies[0].upper_body.rotation == enemies[1].upper_body.rotation)
+	_queue_stage_dialogue(INTRO_EVENT)
+	assert(scenario_dialogue.current_text() == "갑작스럽지만, 이런 투기장에 배치가 되었으니 싸울 방법은 알려줘야겠지.")
+	for _index in scenario_dialogue.dialogue.size():
+		scenario_dialogue.advance()
+	assert(combat_player.mech_loadout.right_arm.part_id == "tempest_rocket")
+	var missile_weapon: WeaponRuntime
+	for weapon in combat_player.weapons:
+		if weapon.part_name == &"RightArm":
+			missile_weapon = weapon
+	assert(missile_weapon != null)
+	combat_player.weapon_fired.emit(missile_weapon)
+	assert(missile_tutorial_played)
+	assert(
+		scenario_dialogue.current_text().begins_with("미사일은 타겟이 락온되어야 유도가 되서 날아가."),
+		"Unexpected dialogue: %s (queued: %d)" % [
+			scenario_dialogue.current_text(), dialogue_queue.size(),
+		]
+	)
+	for _index in scenario_dialogue.dialogue.size():
+		scenario_dialogue.advance()
+	combat_player.weapon_fired.emit(missile_weapon)
+	assert(not scenario_dialogue.active)
 
 	combat_player.current_heat = AiMechAgent.MAX_HEAT * HEAT_WARNING_RATIO
 	_process(0.0)

@@ -62,6 +62,7 @@ var camera_dynamic_zoom_started := false
 var camera_framed_units := {}
 var target_camera_active := false
 var target_camera_input_was_pressed := false
+var target_camera_subject: AiMechAgent
 
 
 func _ready() -> void:
@@ -272,13 +273,16 @@ func _run_centered_camera_smoke() -> void:
 
 	player.selected_sensor_target = agents[2]
 	target_camera_active = true
+	target_camera_subject = agents[2]
 	_update_camera(0.0)
 	assert(camera.global_position.is_equal_approx(agents[2].global_position))
 	assert(is_equal_approx(camera.zoom.x, centered_camera_zoom))
-	player.selected_sensor_target = null
+	_destroy_agent_body(agents[2])
+	player.selected_sensor_target = agents[3]
 	_update_target_camera_input()
 	_update_camera(0.0)
 	assert(not target_camera_active)
+	assert(player.selected_sensor_target == agents[3])
 	assert(camera.global_position.is_equal_approx(player.global_position))
 
 	_destroy_agent_body(player)
@@ -659,26 +663,43 @@ func _map_fit_zoom() -> float:
 func _update_target_camera_input() -> void:
 	var player := _player_agent()
 	if player == null or player.is_defeated():
-		target_camera_active = false
+		_disable_target_camera()
 		return
-	if not is_instance_valid(player.selected_sensor_target):
-		target_camera_active = false
+	if target_camera_active:
+		if (
+			not is_instance_valid(target_camera_subject)
+			or target_camera_subject.is_defeated()
+			or not player.sensor_snapshot.has_unit(target_camera_subject)
+		):
+			_disable_target_camera()
+		elif not is_instance_valid(player.selected_sensor_target):
+			_disable_target_camera()
+		elif player.selected_sensor_target != target_camera_subject:
+			target_camera_subject = player.selected_sensor_target
 	var focus_pressed := Input.is_physical_key_pressed(KEY_SHIFT)
 	if focus_pressed and not target_camera_input_was_pressed:
-		if is_instance_valid(player.selected_sensor_target):
-			target_camera_active = not target_camera_active
+		if target_camera_active:
+			_disable_target_camera()
+		elif is_instance_valid(player.selected_sensor_target):
+			target_camera_active = true
+			target_camera_subject = player.selected_sensor_target
 	target_camera_input_was_pressed = focus_pressed
+
+
+func _disable_target_camera() -> void:
+	target_camera_active = false
+	target_camera_subject = null
 
 
 func focused_camera_target() -> AiMechAgent:
 	if camera_mode != CameraMode.CENTERED_TARGET or not target_camera_active:
 		return null
 	var player := _player_agent()
-	if player == null or not is_instance_valid(player.selected_sensor_target):
+	if player == null or not is_instance_valid(target_camera_subject):
 		return null
-	if not player.sensor_snapshot.has_unit(player.selected_sensor_target):
+	if target_camera_subject.is_defeated() or not player.sensor_snapshot.has_unit(target_camera_subject):
 		return null
-	return player.selected_sensor_target
+	return target_camera_subject
 
 
 func _update_dynamic_camera(delta: float, snap := false) -> void:

@@ -139,6 +139,13 @@ func _add_part(data: Dictionary) -> bool:
 	part.projectile_track_limit = int(stats.get("projectile_track_limit", part.projectile_track_limit))
 	part.repair_rate = float(stats.get("repair_rate", 0.0))
 	part.repair_power_generation = float(stats.get("repair_power_generation", 0.0))
+	part.missile_speed_multiplier = float(stats.get("missile_speed_multiplier", 1.0))
+	part.missile_preparation_time_override = float(stats.get("missile_preparation_time_override", -1.0))
+	part.missile_reload_duration_override = float(stats.get("missile_reload_duration_override", -1.0))
+	part.missile_seeker_radius = float(stats.get("missile_seeker_radius", 0.0))
+	part.missile_turn_speed_override_degrees = float(stats.get("missile_turn_speed_override_degrees", -1.0))
+	part.missile_max_spread_degrees = float(stats.get("missile_max_spread_degrees", -1.0))
+	part.missile_proximity_fuse_radius_multiplier = float(stats.get("missile_proximity_fuse_radius_multiplier", 1.0))
 
 	var wireframe_paths: Array = WIREFRAME_PATHS[part_type]
 	part.wireframe_art_path = str(data.get("wireframe_art_path", wireframe_paths[0]))

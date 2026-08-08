@@ -20,6 +20,7 @@ var next_muzzle := 0
 var rest_position := Vector2.ZERO
 var fire_rate_multiplier := 1.0
 var reload_duration_multiplier := 1.0
+var reload_duration_override := -1.0
 var reload_remaining := 0.0
 var reload_count := 0
 var reload_completed_count := 0
@@ -132,6 +133,8 @@ func accelerate_reload(speed_multiplier: float) -> bool:
 
 
 func reload_duration() -> float:
+	if reload_duration_override >= 0.0:
+		return reload_duration_override
 	return maxf(spec.reload_duration * reload_duration_multiplier, 0.0)
 
 

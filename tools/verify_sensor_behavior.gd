@@ -10,12 +10,24 @@ func _initialize() -> void:
 	var falcon := part_catalog.parts_by_id["falcon_sensor"] as MechPartSpec
 	var raven := part_catalog.parts_by_id["raven_sensor"] as MechPartSpec
 	var bastion := part_catalog.parts_by_id["bastion_array"] as MechPartSpec
+	var missile_radar := part_catalog.parts_by_id["field_missile_radar_backpack"] as MechPartSpec
 	assert(is_equal_approx(falcon.sensor_period, 0.5))
 	assert(falcon.enemy_track_limit == 2 and falcon.projectile_track_limit == 4)
 	assert(is_equal_approx(raven.sensor_period, 0.25))
 	assert(raven.enemy_track_limit == 4 and raven.projectile_track_limit == 8)
 	assert(is_equal_approx(bastion.sensor_period, 0.125))
 	assert(bastion.enemy_track_limit == 8 and bastion.projectile_track_limit == 16)
+	assert(missile_radar != null and missile_radar.designation == "BP-15")
+	assert(is_equal_approx(missile_radar.sensor_range, 20000.0))
+	assert(is_zero_approx(missile_radar.sensor_period))
+	assert(missile_radar.enemy_track_limit == 8 and missile_radar.projectile_track_limit == 32)
+	assert(is_equal_approx(missile_radar.missile_speed_multiplier, 2.0))
+	assert(is_zero_approx(missile_radar.missile_preparation_time_override))
+	assert(is_equal_approx(missile_radar.missile_reload_duration_override, 5.0))
+	assert(is_equal_approx(missile_radar.missile_seeker_radius, 300.0))
+	assert(is_equal_approx(missile_radar.missile_turn_speed_override_degrees, 180.0))
+	assert(is_equal_approx(missile_radar.missile_max_spread_degrees, 30.0))
+	assert(is_equal_approx(missile_radar.missile_proximity_fuse_radius_multiplier, 3.0))
 	_verify_head_profiles(falcon, raven, bastion, weapon_catalog)
 
 	var projectile_layer := Node2D.new()
@@ -75,6 +87,9 @@ func _initialize() -> void:
 	_verify_freed_projectile_snapshot()
 	_verify_sensor_guided_missile()
 	_verify_target_cycle()
+	_verify_selected_target_persistence(part_catalog, projectile_layer)
+	_verify_missile_radar_sensor(part_catalog, projectile_layer)
+	_verify_missile_radar_guidance(part_catalog, projectile_layer)
 	_verify_backpack_muzzle_positions()
 	assert(not target.is_defeated())
 	target.combat_visuals_enabled = false
@@ -218,6 +233,169 @@ func _verify_target_cycle() -> void:
 	player.free()
 	first.free()
 	second.free()
+
+
+func _verify_selected_target_persistence(
+	part_catalog: MechPartCatalog,
+	projectile_layer: Node2D
+) -> void:
+	var observer_loadout := part_catalog.create_default_loadout()
+	observer_loadout.head = part_catalog.parts_by_id["falcon_sensor"]
+	var target_loadout := part_catalog.create_default_loadout()
+	var observer := _make_agent("LockObserver", projectile_layer, observer_loadout)
+	observer.player_controlled = true
+	observer.position = Vector2.ZERO
+	var nearest := _make_agent("Nearest", projectile_layer, target_loadout)
+	var middle := _make_agent("Middle", projectile_layer, target_loadout)
+	var selected := _make_agent("Selected", projectile_layer, target_loadout)
+	nearest.position = Vector2(100.0, 0.0)
+	middle.position = Vector2(200.0, 0.0)
+	selected.position = Vector2(300.0, 0.0)
+	observer.set_opponents([nearest, middle, selected])
+	observer._scan_sensor()
+	assert(observer.tracked_enemy_count() == 2)
+	observer.selected_sensor_target = selected
+	observer._scan_sensor()
+	assert(observer.tracked_enemy_count() == 2)
+	assert(observer.sensor_snapshot.has_unit(selected))
+	assert(observer.selected_sensor_target == selected)
+	middle.position = Vector2(50.0, 0.0)
+	observer._scan_sensor()
+	assert(observer.sensor_snapshot.has_unit(selected))
+	assert(observer.selected_sensor_target == selected)
+	selected.part_durability[&"Body"] = 0.0
+	observer._update_player_target_selection()
+	assert(observer.selected_sensor_target == middle)
+	selected.position = Vector2(observer.sensor_range() + 1.0, 0.0)
+	observer._scan_sensor()
+	assert(observer.selected_sensor_target != selected)
+	observer.free()
+	nearest.free()
+	middle.free()
+	selected.free()
+
+
+func _verify_missile_radar_sensor(
+	part_catalog: MechPartCatalog,
+	projectile_layer: Node2D
+) -> void:
+	var loadout := part_catalog.create_default_loadout()
+	loadout.backpack = part_catalog.parts_by_id["field_missile_radar_backpack"]
+	var observer := _make_agent("RadarObserver", projectile_layer, loadout)
+	observer.player_controlled = true
+	assert(is_equal_approx(observer.sensor_range(), 20000.0))
+	assert(is_zero_approx(observer.sensor_period()))
+	assert(observer.enemy_track_limit() == 8)
+	assert(observer.projectile_track_limit() == 32)
+	observer.sensor_scan_count = 0
+	assert(observer._update_sensor(0.0))
+	assert(observer.sensor_scan_count == 1)
+	assert(observer._update_sensor(0.0))
+	assert(observer.sensor_scan_count == 2)
+	observer.part_durability[&"Backpack"] = 0.0
+	assert(is_equal_approx(observer.sensor_range(), loadout.head.sensor_range))
+	observer.part_durability[&"Head"] = 0.0
+	assert(is_zero_approx(observer.sensor_range()))
+	observer.free()
+
+
+func _verify_missile_radar_guidance(
+	part_catalog: MechPartCatalog,
+	projectile_layer: Node2D
+) -> void:
+	var loadout := part_catalog.create_default_loadout()
+	loadout.backpack = part_catalog.parts_by_id["field_missile_radar_backpack"]
+	var observer := _make_agent("GuidanceObserver", projectile_layer, loadout)
+	observer.combat_visuals_enabled = false
+	var missile_part := part_catalog.parts_by_id["tempest_guided_arm"] as MechPartSpec
+	var missile_runtime := _weapon_runtime(missile_part.weapon, &"RightArm")
+	assert(is_zero_approx(observer.effective_weapon_preparation_time(missile_runtime)))
+	observer._update_missile_reload_override(missile_runtime)
+	assert(is_equal_approx(missile_runtime.reload_duration(), 5.0))
+	assert(is_equal_approx(observer.effective_weapon_volley_arc_degrees(missile_runtime), 30.0))
+	var near_target := _make_agent("NearTarget", projectile_layer, part_catalog.create_default_loadout())
+	var far_target := _make_agent("FarTarget", projectile_layer, part_catalog.create_default_loadout())
+	near_target.position = Vector2(0.0, 100.0)
+	far_target.position = Vector2(0.0, 250.0)
+	observer.set_opponents([far_target, near_target])
+	observer.sensor_snapshot.units.assign([
+		{"target": far_target, "position": far_target.position, "velocity": Vector2.ZERO, "dashing": false},
+		{"target": near_target, "position": near_target.position, "velocity": Vector2.ZERO, "dashing": false},
+	])
+	var projectile_spec := ProjectileSpec.new()
+	projectile_spec.speed = 100.0
+	projectile_spec.homing = true
+	projectile_spec.homing_turn_speed_degrees = 30.0
+	projectile_spec.proximity_fuse_radius = 10.0
+	var projectile := BallisticProjectile.new()
+	projectile.configure(
+		projectile_spec,
+		Vector2.RIGHT,
+		1000.0,
+		observer,
+		&"RightArm",
+		1,
+		0.0,
+		WeaponSpec.WeaponFamily.MISSILE,
+		null,
+		Vector2.ZERO,
+		Vector2.ZERO,
+		false,
+		false,
+		false,
+		false,
+		2.0,
+		300.0,
+		180.0,
+		3.0
+	)
+	assert(is_equal_approx(projectile.effective_speed(), 200.0))
+	assert(is_equal_approx(
+		projectile.effective_proximity_fuse_radius(),
+		30.0
+	))
+	assert(projectile.homing_target == null)
+	projectile._update_homing_direction(0.25)
+	assert(projectile.direction.is_equal_approx(Vector2.RIGHT))
+	projectile_layer.add_child(projectile)
+	observer._update_owned_missile_observations()
+	assert(projectile.homing_target == near_target)
+	assert(projectile.terminal_seeker_activated)
+	assert(is_equal_approx(projectile.homing_turn_speed_override_degrees, 180.0))
+	projectile._update_homing_direction(0.25)
+	assert(projectile.direction.angle() > 0.0)
+	assert(projectile.direction.angle() <= deg_to_rad(45.0) + 0.001)
+	var distant_projectile := BallisticProjectile.new()
+	distant_projectile.configure(
+		projectile_spec,
+		Vector2.RIGHT,
+		1000.0,
+		observer,
+		&"RightArm",
+		2,
+		0.0,
+		WeaponSpec.WeaponFamily.MISSILE,
+		null,
+		Vector2.ZERO,
+		Vector2.ZERO,
+		false,
+		false,
+		false,
+		false,
+		2.0,
+		300.0,
+		180.0
+	)
+	projectile_layer.add_child(distant_projectile)
+	distant_projectile.global_position = Vector2(1000.0, 0.0)
+	observer._update_owned_missile_observations()
+	assert(distant_projectile.homing_target == null)
+	projectile.queue_free()
+	distant_projectile.queue_free()
+	_free_weapon_runtime(missile_runtime)
+	observer.free()
+	near_target.free()
+	far_target.free()
 
 
 func _verify_backpack_muzzle_positions() -> void:

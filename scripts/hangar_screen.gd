@@ -9,6 +9,8 @@ const MUTED := Color("718b8e")
 const CYAN := Color("5ce1d0")
 const AMBER := Color("f5bd55")
 const RED := Color("e05a55")
+const NEWS_GREEN := Color("62ed8c")
+const NEWS_DISPLAY_SECONDS := 5.0
 const PARTS_DATA_PATH := "res://data/mech_parts.json"
 const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
 const SKIRMISH_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
@@ -20,6 +22,10 @@ const STAGE_02_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_02_hangar.jso
 const STAGE_03_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_03_hangar.json"
 const STAGE_04_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_04_hangar.json"
 const SCENARIO_DIALOGUE_SCENE := preload("res://scenes/scenario_dialogue.tscn")
+const STORY_NEWS_HEADLINES := {
+	"res://scenes/stage_02.tscn": "국경 지역에서 원인 불명의 대규모 폭발 발생",
+	"res://scenes/stage_03.tscn": "국경 사태 악화, 정부가 예비군 동원 절차에 착수",
+}
 
 const SLOT_NAMES := {
 	MechLoadout.MechSlot.BODY: "BODY",
@@ -79,6 +85,9 @@ var _pending_part: MechPartSpec
 var _active_slot := MechLoadout.MechSlot.BODY
 var _confirmed := false
 var _scenario_dialogue: ScenarioDialogue
+var _news_banner: PanelContainer
+var _news_label: Label
+var _news_timer: Timer
 
 
 func _ready() -> void:
@@ -98,27 +107,33 @@ func _ready() -> void:
 		GameSession.player_mech_loadout = _part_catalog.create_default_loadout()
 	_working_loadout = _initial_loadout()
 	_build_interface()
+	_build_news_banner()
 	_refresh()
 	_scenario_dialogue = SCENARIO_DIALOGUE_SCENE.instantiate() as ScenarioDialogue
 	add_child(_scenario_dialogue)
+	_scenario_dialogue.dialogue_finished.connect(_on_hangar_dialogue_finished)
+	var dialogue_started := false
 	if (
 		GameSession.selected_game_mode == GameSession.GameMode.ENDLESS
 		and not GameSession.endless_intro_shown
 		and _scenario_dialogue.play_file(ENDLESS_INTRO_PATH)
 	):
+		dialogue_started = true
 		GameSession.endless_intro_shown = true
 	elif _is_stage_02_story_deployment():
-		_scenario_dialogue.play_file(STAGE_02_HANGAR_DIALOGUE_PATH)
+		dialogue_started = _scenario_dialogue.play_file(STAGE_02_HANGAR_DIALOGUE_PATH)
 	elif (
 		GameSession.selected_game_mode == GameSession.GameMode.STORY
 		and GameSession.story_deployment_scene_path == "res://scenes/stage_03.tscn"
 	):
-		_scenario_dialogue.play_file(STAGE_03_HANGAR_DIALOGUE_PATH)
+		dialogue_started = _scenario_dialogue.play_file(STAGE_03_HANGAR_DIALOGUE_PATH)
 	elif (
 		GameSession.selected_game_mode == GameSession.GameMode.STORY
 		and GameSession.story_deployment_scene_path == "res://scenes/stage_04.tscn"
 	):
-		_scenario_dialogue.play_file(STAGE_04_HANGAR_DIALOGUE_PATH)
+		dialogue_started = _scenario_dialogue.play_file(STAGE_04_HANGAR_DIALOGUE_PATH)
+	if not dialogue_started:
+		_show_story_news_headline()
 	queue_redraw()
 	if OS.get_cmdline_user_args().has("--scene-transition-smoke"):
 		call_deferred("_confirm_loadout")
@@ -167,6 +182,11 @@ func _run_story_hangar_smoke() -> void:
 	assert(_scenario_dialogue.current_speaker() == "오퍼레이터")
 	assert(_scenario_dialogue.current_text() == "아레나의 보스에 도전할 기회를 얻었네 축하해.")
 	assert(_scenario_dialogue.dialogue.size() == 4)
+	for _index in _scenario_dialogue.dialogue.size():
+		_scenario_dialogue.advance()
+	assert(_news_banner.visible)
+	assert(_news_label.text == "NEWS // 국경 사태 악화, 정부가 예비군 동원 절차에 착수")
+	assert(is_equal_approx(_news_timer.wait_time, NEWS_DISPLAY_SECONDS))
 	print("STORY_HANGAR_CHECK passed")
 	get_tree().quit(0)
 
@@ -201,6 +221,11 @@ func _run_story_hangar_stage_02_smoke() -> void:
 		assert(_scenario_dialogue.current_text() == expected_text)
 		_scenario_dialogue.advance()
 	assert(not _scenario_dialogue.active)
+	assert(_news_banner.visible)
+	assert(_news_label.text == "NEWS // 국경 지역에서 원인 불명의 대규모 폭발 발생")
+	assert(is_equal_approx(_news_timer.wait_time, NEWS_DISPLAY_SECONDS))
+	_news_timer.timeout.emit()
+	assert(not _news_banner.visible)
 	print("STORY_HANGAR_STAGE_02_CHECK passed")
 	get_tree().quit(0)
 
@@ -220,8 +245,65 @@ func _run_story_hangar_stage_04_smoke() -> void:
 		assert(_scenario_dialogue.current_text() == expected_text)
 		_scenario_dialogue.advance()
 	assert(not _scenario_dialogue.active)
+	assert(not _news_banner.visible)
 	print("STORY_HANGAR_STAGE_04_CHECK passed")
 	get_tree().quit(0)
+
+
+func _build_news_banner() -> void:
+	_news_banner = PanelContainer.new()
+	_news_banner.name = "NewsBanner"
+	_news_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_news_banner.offset_left = -190.0
+	_news_banner.offset_top = 4.0
+	_news_banner.offset_right = 190.0
+	_news_banner.offset_bottom = 28.0
+	_news_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_news_banner.z_index = 100
+	_news_banner.visible = false
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.0, 0.0, 0.0, 0.94)
+	panel_style.border_color = NEWS_GREEN
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(2)
+	panel_style.content_margin_left = 8.0
+	panel_style.content_margin_right = 8.0
+	panel_style.content_margin_top = 3.0
+	panel_style.content_margin_bottom = 3.0
+	_news_banner.add_theme_stylebox_override("panel", panel_style)
+	add_child(_news_banner)
+
+	_news_label = Label.new()
+	_news_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_news_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_news_label.add_theme_font_size_override("font_size", 9)
+	_news_label.add_theme_color_override("font_color", NEWS_GREEN)
+	_news_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_news_banner.add_child(_news_label)
+
+	_news_timer = Timer.new()
+	_news_timer.name = "NewsTimer"
+	_news_timer.one_shot = true
+	_news_timer.wait_time = NEWS_DISPLAY_SECONDS
+	_news_timer.timeout.connect(_hide_story_news_headline)
+	add_child(_news_timer)
+
+
+func _on_hangar_dialogue_finished(_scenario_id: String) -> void:
+	_show_story_news_headline()
+
+
+func _show_story_news_headline() -> void:
+	var headline := str(STORY_NEWS_HEADLINES.get(GameSession.story_deployment_scene_path, ""))
+	if headline.is_empty():
+		return
+	_news_label.text = "NEWS // %s" % headline
+	_news_banner.visible = true
+	_news_timer.start()
+
+
+func _hide_story_news_headline() -> void:
+	_news_banner.visible = false
 
 
 func _draw() -> void:
@@ -538,7 +620,7 @@ func _update_candidate_details() -> void:
 		_pending_part.power_generation - _pending_part.power_draw,
 		_pending_part.mobility,
 	]
-	if _pending_part.part_type == MechPartSpec.PartType.HEAD:
+	if _pending_part.sensor_range > 0.0:
 		_detail_stats.text += "\nSENSOR %.0f / %.2fs   TRACK %d/%d" % [
 			_pending_part.sensor_range,
 			_pending_part.sensor_period,

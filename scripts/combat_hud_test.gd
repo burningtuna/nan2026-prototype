@@ -214,6 +214,23 @@ func _run_hud_spectator_smoke() -> void:
 
 
 func _run_targeting_solution_smoke() -> void:
+	var cursor_label_size := Vector2(CombatOverlay.CURSOR_LABEL_WIDTH, 40.0)
+	var right_cursor := Vector2(20.0, 100.0)
+	var right_label := overlay._cursor_label_position(right_cursor, cursor_label_size, Rect2())
+	assert(is_equal_approx(right_label.x, right_cursor.x + 10.0))
+	var left_cursor := Vector2(overlay.size.x - 4.0, 100.0)
+	var left_label := overlay._cursor_label_position(left_cursor, cursor_label_size, Rect2())
+	assert(is_equal_approx(left_label.x + cursor_label_size.x, left_cursor.x - 10.0))
+	combat_player.hit_confirmed.emit(false)
+	assert(is_equal_approx(overlay.hit_marker_remaining, CombatOverlay.HIT_MARKER_DURATION))
+	assert(not overlay.kill_marker_active)
+	overlay._process(0.25)
+	assert(overlay.hit_marker_remaining > 0.0)
+	combat_player.hit_confirmed.emit(true)
+	assert(overlay.kill_marker_active)
+	overlay._process(CombatOverlay.HIT_MARKER_DURATION)
+	assert(is_zero_approx(overlay.hit_marker_remaining))
+	assert(not overlay.kill_marker_active)
 	var target := battle.agents[2] as AiMechAgent
 	assert(overlay._enemy_roster().size() == 2)
 	target.unit_class = AiMechAgent.UnitClass.DRONE

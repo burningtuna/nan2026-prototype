@@ -33,6 +33,7 @@ const REPAIR_PART_ORDER: Array[StringName] = [
 signal hit_received(part_name: StringName, aspect: StringName)
 signal part_destroyed(part_name: StringName)
 signal hit_landed(weapon_family: WeaponSpec.WeaponFamily)
+signal hit_confirmed(target_defeated: bool)
 signal weapon_fired(weapon: WeaponRuntime)
 signal defeated
 signal parts_repaired
@@ -258,29 +259,53 @@ func is_ally_of(other: Node) -> bool:
 
 
 func sensor_range() -> float:
+	var sensor_part := _active_sensor_part()
+	if sensor_part != null:
+		return maxf(sensor_part.sensor_range, 0.0)
 	if is_part_destroyed(&"Head"):
 		return 0.0
-	if mech_loadout != null and mech_loadout.head != null:
-		return maxf(mech_loadout.head.sensor_range, 0.0)
 	return DEFAULT_SENSOR_RANGE
 
 
 func sensor_period() -> float:
-	if mech_loadout != null and mech_loadout.head != null:
-		return maxf(mech_loadout.head.sensor_period, 0.01)
+	var sensor_part := _active_sensor_part()
+	if sensor_part != null:
+		return maxf(sensor_part.sensor_period, 0.0)
 	return DEFAULT_SENSOR_PERIOD
 
 
 func enemy_track_limit() -> int:
-	if mech_loadout != null and mech_loadout.head != null:
-		return maxi(mech_loadout.head.enemy_track_limit, 0)
+	var sensor_part := _active_sensor_part()
+	if sensor_part != null:
+		return maxi(sensor_part.enemy_track_limit, 0)
 	return DEFAULT_ENEMY_TRACK_LIMIT
 
 
 func projectile_track_limit() -> int:
-	if mech_loadout != null and mech_loadout.head != null:
-		return maxi(mech_loadout.head.projectile_track_limit, 0)
+	var sensor_part := _active_sensor_part()
+	if sensor_part != null:
+		return maxi(sensor_part.projectile_track_limit, 0)
 	return DEFAULT_PROJECTILE_TRACK_LIMIT
+
+
+func _active_sensor_part() -> MechPartSpec:
+	if mech_loadout == null or is_part_destroyed(&"Head"):
+		return null
+	var missile_radar := _active_missile_radar()
+	if missile_radar != null:
+		return missile_radar
+	return mech_loadout.head
+
+
+func _active_missile_radar() -> MechPartSpec:
+	if (
+		mech_loadout == null
+		or mech_loadout.backpack == null
+		or mech_loadout.backpack.part_id != "field_missile_radar_backpack"
+		or is_part_destroyed(&"Backpack")
+	):
+		return null
+	return mech_loadout.backpack
 
 
 func tracked_enemy_count() -> int:
@@ -463,12 +488,17 @@ func observed_projectile_position(projectile: BallisticProjectile) -> Vector2:
 
 
 func _update_sensor(delta: float) -> bool:
+	var period := sensor_period()
+	if period <= 0.0:
+		sensor_time_remaining = 0.0
+		_scan_sensor()
+		return true
 	sensor_time_remaining -= delta
 	if sensor_time_remaining > 0.0:
 		return false
-	sensor_time_remaining += sensor_period()
+	sensor_time_remaining += period
 	if sensor_time_remaining <= 0.0:
-		sensor_time_remaining = sensor_period()
+		sensor_time_remaining = period
 	_scan_sensor()
 	return true
 
@@ -506,20 +536,44 @@ func _scan_sensor() -> void:
 			return (a["target"] as Node).get_instance_id() < (b["target"] as Node).get_instance_id()
 		return float(a["distance_squared"]) < float(b["distance_squared"])
 	)
-	unit_contacts.resize(mini(unit_contacts.size(), enemy_track_limit()))
+	var selected_contact := {}
+	if player_controlled and is_instance_valid(selected_sensor_target):
+		for contact in unit_contacts:
+			if contact.get("target") == selected_sensor_target:
+				selected_contact = contact
+				break
+	var track_limit := enemy_track_limit()
+	unit_contacts.resize(mini(unit_contacts.size(), track_limit))
+	if not selected_contact.is_empty() and track_limit > 0:
+		var selected_is_tracked := false
+		for contact in unit_contacts:
+			if contact.get("target") == selected_sensor_target:
+				selected_is_tracked = true
+				break
+		if not selected_is_tracked:
+			if unit_contacts.size() >= track_limit:
+				unit_contacts[track_limit - 1] = selected_contact
+			else:
+				unit_contacts.append(selected_contact)
 	sensor_snapshot.units.assign(unit_contacts)
 	if player_controlled:
-		for contact in unit_contacts:
-			var target_value = contact.get("target")
-			if not is_instance_valid(target_value):
-				continue
-			var newly_detected := target_value as AiMechAgent
-			if (
-				newly_detected != null
-				and not previously_detected.has(newly_detected.get_instance_id())
-			):
-				selected_sensor_target = newly_detected
-				break
+		var had_selected_target := is_instance_valid(selected_sensor_target)
+		if not is_instance_valid(selected_sensor_target) or not sensor_snapshot.has_unit(selected_sensor_target):
+			selected_sensor_target = null
+			if had_selected_target:
+				_select_nearest_sensor_target()
+			else:
+				for contact in unit_contacts:
+					var target_value = contact.get("target")
+					if not is_instance_valid(target_value):
+						continue
+					var newly_detected := target_value as AiMechAgent
+					if (
+						newly_detected != null
+						and not previously_detected.has(newly_detected.get_instance_id())
+					):
+						selected_sensor_target = newly_detected
+						break
 
 	if not is_instance_valid(projectile_layer):
 		return
@@ -535,7 +589,7 @@ func _scan_sensor() -> void:
 		var distance_squared := global_position.distance_squared_to(projectile.global_position)
 		if distance_squared > maximum_distance_squared:
 			continue
-		var projectile_velocity := projectile.direction * projectile.spec.speed
+		var projectile_velocity := projectile.direction * projectile.effective_speed()
 		var relative_position := projectile.global_position - global_position
 		var relative_velocity := projectile_velocity - velocity
 		var relative_speed_squared := relative_velocity.length_squared()
@@ -580,8 +634,29 @@ func _update_owned_missile_observations() -> void:
 		if (
 			projectile == null
 			or projectile.source_mech != self
-			or not is_instance_valid(projectile.homing_target)
 		):
+			continue
+		if (
+			is_instance_valid(projectile.homing_target)
+			and projectile.homing_target.has_method("is_defeated")
+			and projectile.homing_target.is_defeated()
+		):
+			projectile.homing_target = null
+			projectile.homing_observation_valid = false
+			projectile.terminal_seeker_activated = false
+		if (
+			projectile.terminal_seeker_radius > 0.0
+			and not projectile.terminal_seeker_activated
+		):
+			_acquire_terminal_missile_target(projectile)
+		if not is_instance_valid(projectile.homing_target):
+			continue
+		if projectile.terminal_seeker_radius > 0.0:
+			projectile.update_homing_observation(
+				projectile.homing_target.global_position,
+				projectile.homing_target.velocity,
+				projectile.homing_target.is_dashing()
+			)
 			continue
 		var contact := sensor_snapshot.unit_contact(projectile.homing_target)
 		if contact.is_empty():
@@ -591,6 +666,34 @@ func _update_owned_missile_observations() -> void:
 			contact["velocity"],
 			bool(contact["dashing"])
 		)
+
+
+func _acquire_terminal_missile_target(projectile: BallisticProjectile) -> void:
+	var nearest_target: AiMechAgent
+	var nearest_distance_squared := projectile.terminal_seeker_radius ** 2
+	for target in opponents:
+		if not is_instance_valid(target) or target.is_defeated():
+			continue
+		var distance_squared := projectile.global_position.distance_squared_to(target.global_position)
+		if distance_squared > nearest_distance_squared:
+			continue
+		if (
+			is_equal_approx(distance_squared, nearest_distance_squared)
+			and is_instance_valid(nearest_target)
+			and target.get_instance_id()
+			>= nearest_target.get_instance_id()
+		):
+			continue
+		nearest_distance_squared = distance_squared
+		nearest_target = target
+	if not is_instance_valid(nearest_target):
+		return
+	projectile.activate_terminal_homing(
+		nearest_target,
+		nearest_target.global_position,
+		nearest_target.velocity,
+		nearest_target.is_dashing()
+	)
 
 
 func _update_sensor_missile_evasion() -> void:
@@ -884,6 +987,10 @@ func _classify_hit_aspect(incoming_direction: Vector2) -> StringName:
 func register_landed_hit(family: WeaponSpec.WeaponFamily) -> void:
 	landed_hits[family] = landed_hits.get(family, 0) + 1
 	hit_landed.emit(family)
+
+
+func register_hit_confirmation(target_defeated: bool) -> void:
+	hit_confirmed.emit(target_defeated)
 
 
 func landed_hits_for(family: WeaponSpec.WeaponFamily) -> int:
@@ -1438,6 +1545,7 @@ func force_reload_selected_weapons() -> int:
 	var reloads_started := 0
 	for weapon_index in weapons.size():
 		var weapon := weapons[weapon_index]
+		_update_missile_reload_override(weapon)
 		if (_weapon_selection_bit(weapon) & selected_weapon_mask) == 0 or not weapon.force_reload():
 			continue
 		reloads_started += 1
@@ -1449,6 +1557,7 @@ func force_reload_selected_weapons() -> int:
 
 
 func _update_player_target_selection() -> void:
+	var selected_target_lost := false
 	if not is_instance_valid(selected_sensor_target):
 		selected_sensor_target = null
 	elif (
@@ -1456,6 +1565,9 @@ func _update_player_target_selection() -> void:
 		or not sensor_snapshot.has_unit(selected_sensor_target)
 	):
 		selected_sensor_target = null
+		selected_target_lost = true
+	if selected_target_lost:
+		_select_nearest_sensor_target()
 	var select_pressed := Input.is_physical_key_pressed(KEY_TAB)
 	if select_pressed and not target_select_input_was_pressed:
 		_cycle_sensor_target()
@@ -1476,6 +1588,21 @@ func _cycle_sensor_target() -> void:
 		return
 	var current_index := targets.find(selected_sensor_target)
 	selected_sensor_target = targets[(current_index + 1) % targets.size()]
+
+
+func _select_nearest_sensor_target() -> void:
+	var nearest_target: AiMechAgent
+	var nearest_distance_squared := INF
+	for contact in sensor_snapshot.units:
+		var target := contact.get("target") as AiMechAgent
+		if not is_instance_valid(target) or target.is_defeated():
+			continue
+		var observed_position: Vector2 = contact.get("position", target.global_position)
+		var distance_squared := global_position.distance_squared_to(observed_position)
+		if distance_squared < nearest_distance_squared:
+			nearest_distance_squared = distance_squared
+			nearest_target = target
+	selected_sensor_target = nearest_target
 
 
 func _weapon_selection_bit(weapon: WeaponRuntime) -> int:
@@ -1809,6 +1936,13 @@ func _finish_preparation() -> void:
 func effective_weapon_preparation_time(weapon: WeaponRuntime) -> float:
 	if ignore_weapon_preparation:
 		return 0.0
+	var missile_radar := _active_missile_radar()
+	if (
+		missile_radar != null
+		and weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+		and missile_radar.missile_preparation_time_override >= 0.0
+	):
+		return missile_radar.missile_preparation_time_override
 	return maxf(weapon.spec.preparation_time * weapon_range_multiplier, 0.0)
 
 
@@ -1818,10 +1952,35 @@ func effective_preparation_move_speed_multiplier(weapon: WeaponRuntime) -> float
 	return weapon.spec.preparation_move_speed_multiplier
 
 
+func effective_weapon_spread_degrees(weapon: WeaponRuntime, distance: float) -> float:
+	var spread_degrees := weapon.spec.spread_at_distance(distance)
+	var missile_radar := _active_missile_radar()
+	if (
+		missile_radar != null
+		and weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+		and missile_radar.missile_max_spread_degrees >= 0.0
+	):
+		return minf(spread_degrees, missile_radar.missile_max_spread_degrees)
+	return spread_degrees
+
+
+func effective_weapon_volley_arc_degrees(weapon: WeaponRuntime) -> float:
+	var volley_arc_degrees := weapon.spec.volley_arc_degrees
+	var missile_radar := _active_missile_radar()
+	if (
+		missile_radar != null
+		and weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+		and missile_radar.missile_max_spread_degrees >= 0.0
+	):
+		return minf(volley_arc_degrees, missile_radar.missile_max_spread_degrees)
+	return volley_arc_degrees
+
+
 func _fire_weapon(weapon: WeaponRuntime) -> void:
 	var weapon_index := weapons.find(weapon)
 	if not _can_execute_weapon(weapon_index):
 		return
+	_update_missile_reload_override(weapon)
 	var muzzle := weapon.fire()
 	if muzzle == null:
 		return
@@ -1831,15 +1990,28 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 	if weapon.spec.heat_cost > 0.0:
 		_add_heat(weapon.spec.heat_cost)
 
-	var aim_vector := _aim_target_position() - muzzle.global_position
+	var missile_radar := _active_missile_radar()
+	var enhanced_missile := (
+		missile_radar != null
+		and weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+	)
+	var aim_position := _aim_target_position()
+	var aim_vector := aim_position - muzzle.global_position
 	if aim_vector.length_squared() <= 1.0:
 		aim_vector = muzzle.global_transform.x
 
-	var spread_degrees := weapon.spec.spread_at_distance(
+	var spread_degrees := effective_weapon_spread_degrees(
+		weapon,
 		aim_vector.length() / maxf(weapon_range_multiplier, 0.001)
 	)
 	var volley_size := maxi(weapon.spec.projectiles_per_shot, 1)
-	var base_direction := aim_vector.normalized()
+	var volley_arc_degrees := effective_weapon_volley_arc_degrees(weapon)
+	var base_direction := (
+		muzzle.global_transform.x.normalized()
+		if enhanced_missile
+		else aim_vector.normalized()
+	)
+	var launch_offset_degrees := 0.0 if enhanced_missile else weapon.spec.launch_offset_degrees
 	var projectile_target := opponent
 	if player_controlled and weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE:
 		projectile_target = (
@@ -1847,18 +2019,20 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 			if is_instance_valid(selected_sensor_target)
 			else _nearest_opponent(manual_aim_position)
 		)
+	if enhanced_missile:
+		projectile_target = null
 	var volley_rng := RandomNumberGenerator.new()
 	volley_rng.seed = rng.randi()
 	for projectile_index in volley_size:
 		var arc_offset_degrees := 0.0
 		if volley_size > 1:
 			arc_offset_degrees = lerpf(
-				-weapon.spec.volley_arc_degrees * 0.5,
-				weapon.spec.volley_arc_degrees * 0.5,
+				-volley_arc_degrees * 0.5,
+				volley_arc_degrees * 0.5,
 				float(projectile_index) / float(volley_size - 1)
 			)
 		var launch_angle := deg_to_rad(
-			weapon.spec.launch_offset_degrees
+			launch_offset_degrees
 			+ arc_offset_degrees
 			+ volley_rng.randf_range(-spread_degrees, spread_degrees)
 		)
@@ -1872,7 +2046,7 @@ func _fire_weapon(weapon: WeaponRuntime) -> void:
 			projectile_target
 		)
 		projectile_count += 1
-	var flash_direction := base_direction.rotated(deg_to_rad(weapon.spec.launch_offset_degrees))
+	var flash_direction := base_direction.rotated(deg_to_rad(launch_offset_degrees))
 	_spawn_muzzle_flash(weapon.spec, muzzle.global_position, flash_direction)
 	_spawn_casing(weapon, flash_direction, volley_rng.randi())
 	_spawn_vapor(weapon, flash_direction, volley_rng.randi())
@@ -1938,6 +2112,11 @@ func _spawn_projectile(
 	var observed_velocity := Vector2.ZERO
 	var observed_dashing := false
 	var observation_valid := false
+	var missile_radar := _active_missile_radar()
+	var enhanced_missile := (
+		missile_radar != null
+		and weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+	)
 	if is_instance_valid(target):
 		var contact := sensor_snapshot.unit_contact(target)
 		if not contact.is_empty():
@@ -1960,10 +2139,24 @@ func _spawn_projectile(
 		observed_dashing,
 		observation_valid,
 		weapon.spec.projectiles_per_shot > 1,
-		_endless_projectile_penetrates_targets(weapon)
+		_endless_projectile_penetrates_targets(weapon),
+		missile_radar.missile_speed_multiplier if enhanced_missile else 1.0,
+		missile_radar.missile_seeker_radius if enhanced_missile else 0.0,
+		missile_radar.missile_turn_speed_override_degrees if enhanced_missile else -1.0,
+		missile_radar.missile_proximity_fuse_radius_multiplier if enhanced_missile else 1.0
 	)
 	projectile_layer.add_child(projectile)
 	projectile.global_position = spawn_position
+
+
+func _update_missile_reload_override(weapon: WeaponRuntime) -> void:
+	weapon.reload_duration_override = -1.0
+	var missile_radar := _active_missile_radar()
+	if (
+		missile_radar != null
+		and weapon.spec.weapon_family == WeaponSpec.WeaponFamily.MISSILE
+	):
+		weapon.reload_duration_override = missile_radar.missile_reload_duration_override
 
 
 func _endless_projectile_penetrates_targets(weapon: WeaponRuntime) -> bool:

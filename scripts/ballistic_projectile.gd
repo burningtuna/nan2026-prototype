@@ -44,6 +44,11 @@ var penetrated_mech_ids: Dictionary = {}
 var visuals_enabled := true
 var multi_projectile_launch := false
 var penetrates_targets := false
+var speed_multiplier := 1.0
+var terminal_seeker_radius := 0.0
+var homing_turn_speed_override_degrees := -1.0
+var terminal_seeker_activated := false
+var proximity_fuse_radius_multiplier := 1.0
 
 
 func configure(
@@ -61,7 +66,11 @@ func configure(
 	target_was_dashing := false,
 	observation_valid := false,
 	launched_in_multi_projectile_volley := false,
-	target_penetration_enabled := false
+	target_penetration_enabled := false,
+	projectile_speed_multiplier := 1.0,
+	seeker_radius := 0.0,
+	turn_speed_override_degrees := -1.0,
+	fuse_radius_multiplier := 1.0
 ) -> void:
 	spec = projectile_spec
 	direction = launch_direction.normalized()
@@ -78,6 +87,10 @@ func configure(
 	weapon_family = family
 	multi_projectile_launch = launched_in_multi_projectile_volley
 	penetrates_targets = target_penetration_enabled
+	speed_multiplier = maxf(projectile_speed_multiplier, 0.0)
+	terminal_seeker_radius = maxf(seeker_radius, 0.0)
+	homing_turn_speed_override_degrees = turn_speed_override_degrees
+	proximity_fuse_radius_multiplier = maxf(fuse_radius_multiplier, 0.0)
 	homing_target = target
 	if is_instance_valid(target) and observation_valid:
 		update_homing_observation(observed_position, observed_velocity, target_was_dashing)
@@ -90,6 +103,27 @@ func update_homing_observation(position_value: Vector2, velocity_value: Vector2,
 	homing_observation_age = 0.0
 	homing_observation_valid = true
 	homing_observation_enabled = not dashing
+
+
+func activate_terminal_homing(
+	target: Node2D,
+	observed_position: Vector2,
+	observed_velocity: Vector2,
+	target_was_dashing: bool
+) -> void:
+	if not is_instance_valid(target):
+		return
+	homing_target = target
+	terminal_seeker_activated = true
+	update_homing_observation(observed_position, observed_velocity, target_was_dashing)
+
+
+func effective_speed() -> float:
+	return spec.speed * speed_multiplier
+
+
+func effective_proximity_fuse_radius() -> float:
+	return spec.proximity_fuse_radius * proximity_fuse_radius_multiplier
 
 
 func _ready() -> void:
@@ -128,7 +162,7 @@ func _physics_process(delta: float) -> void:
 	_update_homing_direction(delta)
 	elapsed_time += delta
 	var remaining_distance := maxf(max_distance - traveled_distance, 0.0)
-	var frame_distance := minf(spec.speed * delta, remaining_distance)
+	var frame_distance := minf(effective_speed() * delta, remaining_distance)
 	var start_position := global_position
 	var end_position := start_position + direction * frame_distance
 	var mask_hit = _projectile_mask_hit(start_position, end_position)
@@ -164,7 +198,12 @@ func _update_homing_direction(delta: float) -> void:
 		return
 	var next_direction := target_direction.normalized()
 	var turn_angle := direction.angle_to(next_direction)
-	var max_turn := deg_to_rad(spec.homing_turn_speed_degrees) * delta
+	var turn_speed_degrees := (
+		homing_turn_speed_override_degrees
+		if homing_turn_speed_override_degrees >= 0.0
+		else spec.homing_turn_speed_degrees
+	)
+	var max_turn := deg_to_rad(turn_speed_degrees) * delta
 	var applied_turn := turn_angle if max_turn <= 0.0 else clampf(turn_angle, -max_turn, max_turn)
 	if not homing_reported and absf(applied_turn) > 0.001:
 		homing_reported = true
@@ -250,9 +289,10 @@ func _apply_projectile_mask_hit(hit_position: Vector2) -> void:
 
 
 func _check_proximity_fuse(start_position: Vector2, end_position: Vector2) -> bool:
+	var fuse_radius := effective_proximity_fuse_radius()
 	if (
 		weapon_family != WeaponSpec.WeaponFamily.MISSILE
-		or spec.proximity_fuse_radius <= 0.0
+		or fuse_radius <= 0.0
 		or not is_instance_valid(homing_target)
 		or homing_target == source_mech
 		or _is_allied_target(homing_target)
@@ -265,7 +305,7 @@ func _check_proximity_fuse(start_position: Vector2, end_position: Vector2) -> bo
 	)
 	if (
 		fuse_position.distance_squared_to(homing_target.global_position)
-		> spec.proximity_fuse_radius ** 2
+		> fuse_radius ** 2
 	):
 		return false
 	_detonate(fuse_position, homing_target)
@@ -336,6 +376,11 @@ func _apply_hit(hitbox: Area2D, hit_position: Vector2) -> bool:
 	hitbox.mech.register_hit(hitbox.part_name, direction, spec.damage)
 	if is_instance_valid(source_mech) and source_mech.has_method("register_landed_hit"):
 		source_mech.register_landed_hit(weapon_family)
+		if source_mech.has_method("register_hit_confirmation"):
+			var target_defeated := false
+			if hitbox.mech.has_method("is_defeated"):
+				target_defeated = bool(hitbox.mech.is_defeated())
+			source_mech.register_hit_confirmation(target_defeated)
 	if penetrates_targets:
 		_record_penetrated_mech(hitbox.mech)
 		return false
@@ -385,6 +430,7 @@ func _detonate(
 	if play_impact_sound:
 		_spawn_impact_sound(hit_position, primary_target)
 	var damaged_hitboxes := 0
+	var target_defeated := false
 	var splash_shape := CircleShape2D.new()
 	splash_shape.radius = spec.splash_radius
 	var query := PhysicsShapeQueryParameters2D.new()
@@ -411,12 +457,16 @@ func _detonate(
 			impact_direction = direction
 		target.register_hit(hitbox.part_name, impact_direction, spec.damage)
 		damaged_hitboxes += 1
+		if target.has_method("is_defeated"):
+			target_defeated = target_defeated or bool(target.is_defeated())
 	if (
 		damaged_hitboxes > 0
 		and is_instance_valid(source_mech)
 		and source_mech.has_method("register_landed_hit")
 	):
 		source_mech.register_landed_hit(weapon_family)
+		if source_mech.has_method("register_hit_confirmation"):
+			source_mech.register_hit_confirmation(target_defeated)
 	queue_free()
 
 

@@ -35,6 +35,13 @@ enum PartType {
 @export var projectile_track_limit := 0
 @export var repair_rate := 0.0
 @export var repair_power_generation := 0.0
+@export var missile_speed_multiplier := 1.0
+@export var missile_preparation_time_override := -1.0
+@export var missile_reload_duration_override := -1.0
+@export var missile_seeker_radius := 0.0
+@export var missile_turn_speed_override_degrees := -1.0
+@export var missile_max_spread_degrees := -1.0
+@export var missile_proximity_fuse_radius_multiplier := 1.0
 
 
 func provides_weapon() -> bool:
