@@ -29,6 +29,7 @@ script = ExtResource("2_screen")
 automatic_return_to_hangar = false
 tutorial_enabled = false
 finish_from_team_result = false
+next_story_stage_path = "res://scenes/stage_05.tscn"
 
 [node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
 arena = Rect2(-2800, -1630, 6000, 3260)

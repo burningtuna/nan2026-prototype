@@ -5,7 +5,7 @@ const HANGAR_PATH := "res://scenes/hangar_screen.tscn"
 const STAGE_05_CUTSCENE_PATH := "res://scenes/stage_05_cutscene.tscn"
 const STAGES := [
 	["STAGE 01", "STATIC TARGETS // 1 VS 4", "res://scenes/stage_01.tscn", false],
-	["STAGE 02", "TEAM ENGAGEMENT // 2 VS 2", "res://scenes/stage_02.tscn", false],
+	["STAGE 02", "TEAM ENGAGEMENT // 2 VS 2", "res://scenes/stage_02.tscn", true],
 	["STAGE 03", "BOSS ENGAGEMENT // 2 VS 1", "res://scenes/stage_03.tscn", true],
 	["STAGE 04", "FIELD ADVANCE // RESCUE 4 ALLIES", "res://scenes/stage_04.tscn", true],
 	["STAGE 05", "SURVIVAL // 20 DRONES + VERTICAL BEAM", "res://scenes/stage_05.tscn", true],
@@ -29,7 +29,7 @@ func _ready() -> void:
 	queue_redraw()
 	if OS.get_cmdline_user_args().has("--story-select-smoke"):
 		assert(get_tree().get_nodes_in_group("story_stage_button").size() == STAGES.size())
-		assert(not bool(STAGES[0][3]) and not bool(STAGES[1][3]))
+		assert(not bool(STAGES[0][3]) and bool(STAGES[1][3]))
 		assert(bool(STAGES[2][3]) and bool(STAGES[3][3]) and bool(STAGES[4][3]))
 		assert(not bool(STAGES[5][3]) and str(STAGES[5][2]) == STAGE_05_CUTSCENE_PATH)
 		print("STORY_STAGE_SELECT_CHECK passed")

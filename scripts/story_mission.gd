@@ -2,9 +2,11 @@ class_name StoryMission
 extends "res://scripts/story_combat_test.gd"
 
 const STAGE_SELECT_PATH := "res://scenes/story_stage_select.tscn"
+const STORY_HANGAR_PATH := "res://scenes/hangar_screen.tscn"
 const RESULT_DELAY_SECONDS := 2.5
 
 @export var finish_from_team_result := true
+@export_file("*.tscn") var next_story_stage_path := ""
 
 var mission_finished := false
 
@@ -19,6 +21,8 @@ func finish_mission(success: bool, message := "") -> void:
 	if mission_finished:
 		return
 	mission_finished = true
+	if success and not next_story_stage_path.is_empty():
+		_prepare_story_continuation(next_story_stage_path)
 	if not message.is_empty():
 		system_messages.push_message(message)
 	if success:
@@ -28,11 +32,21 @@ func finish_mission(success: bool, message := "") -> void:
 	if _is_smoke_test():
 		return
 	await get_tree().create_timer(RESULT_DELAY_SECONDS).timeout
-	SceneTransition.transition_to(STAGE_SELECT_PATH)
+	SceneTransition.transition_to(_mission_transition_path(success))
 
 
 func _on_story_battle_finished(winner_team_id: int) -> void:
 	finish_mission(winner_team_id == 0, "MISSION COMPLETE" if winner_team_id == 0 else "MISSION FAILED")
+
+
+func _mission_transition_path(_success: bool) -> String:
+	return STORY_HANGAR_PATH if _success and not next_story_stage_path.is_empty() else STAGE_SELECT_PATH
+
+
+func _prepare_story_continuation(stage_path: String) -> void:
+	GameSession.selected_game_mode = GameSession.GameMode.STORY
+	GameSession.story_deployment_scene_path = stage_path
+	GameSession.story_stage_selected_directly = false
 
 
 func _is_smoke_test() -> bool:

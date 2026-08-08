@@ -1,6 +1,7 @@
 extends StoryMission
 
 const STAGE_03_INTRO_PATH := "res://data/scenarios/stage_03_events.json"
+const STAGE_04_PATH := "res://scenes/stage_04.tscn"
 const BOSS_ARMORED_PARTS: Array[StringName] = [
 	&"Body", &"Head", &"LeftArm", &"RightArm", &"Backpack",
 ]
@@ -176,7 +177,8 @@ func _on_stage_end_dialogue_finished(scenario_id: String) -> void:
 
 
 func _finish_stage_03() -> void:
-	var error := SceneTransition.transition_to(STAGE_SELECT_PATH)
+	_prepare_story_continuation(STAGE_04_PATH)
+	var error := SceneTransition.transition_to(STORY_HANGAR_PATH)
 	if error != OK:
 		push_error("Unable to finish Stage 03: %s" % error_string(error))
 		_play_stage_end_dialogue()
@@ -209,7 +211,7 @@ func _run_stage_smoke() -> void:
 	assert(boss.mech_loadout.body.part_id == "swift_core")
 	assert(boss.mech_loadout.head.part_id == "falcon_sensor")
 	assert(boss.mech_loadout.left_arm.part_id == "cyclone_flechette_arm")
-	assert(boss.mech_loadout.right_arm == null)
+	assert(boss.mech_loadout.right_arm.part_id == "cyclone_flechette_arm")
 	assert(boss.mech_loadout.backpack.part_id == "grid_generator")
 	assert(boss.mech_loadout.legs.part_id == "courier_legs")
 	assert(is_equal_approx(boss.movement_speed_multiplier, 2.0))
@@ -281,5 +283,8 @@ func _run_stage_smoke() -> void:
 	assert(stage_end_ready)
 	assert(not stage_end_dialogue.active)
 	assert(battle.process_mode == Node.PROCESS_MODE_DISABLED)
+	_prepare_story_continuation(STAGE_04_PATH)
+	assert(GameSession.story_deployment_scene_path == STAGE_04_PATH)
+	assert(STORY_HANGAR_PATH == "res://scenes/hangar_screen.tscn")
 	print("STAGE_03_CHECK passed")
 	get_tree().quit(0)

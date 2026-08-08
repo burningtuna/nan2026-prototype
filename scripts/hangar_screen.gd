@@ -14,7 +14,9 @@ const MAIN_MENU_SCENE_PATH := "res://scenes/main_menu.tscn"
 const SKIRMISH_SCENE_PATH := "res://scenes/combat_hud_test.tscn"
 const ENDLESS_SCENE_PATH := "res://scenes/endless_combat.tscn"
 const STORY_STAGE_SELECT_PATH := "res://scenes/story_stage_select.tscn"
+const STAGE_02_PATH := "res://scenes/stage_02.tscn"
 const ENDLESS_INTRO_PATH := "res://data/scenarios/endless_intro.json"
+const STAGE_02_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_02_hangar.json"
 const STAGE_03_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_03_hangar.json"
 const STAGE_04_HANGAR_DIALOGUE_PATH := "res://data/scenarios/stage_04_hangar.json"
 const SCENARIO_DIALOGUE_SCENE := preload("res://scenes/scenario_dialogue.tscn")
@@ -35,6 +37,22 @@ const SLOT_ORDER := [
 	MechLoadout.MechSlot.BACKPACK,
 	MechLoadout.MechSlot.LEGS,
 ]
+const STAGE_02_ALLOWED_PART_IDS := {
+	MechLoadout.MechSlot.BODY: ["kestrel_core"],
+	MechLoadout.MechSlot.HEAD: ["falcon_sensor"],
+	MechLoadout.MechSlot.LEFT_ARM: ["rx_autocannon", "tempest_rocket", "arc_pulse"],
+	MechLoadout.MechSlot.RIGHT_ARM: ["rx_autocannon", "tempest_rocket", "arc_pulse"],
+	MechLoadout.MechSlot.BACKPACK: ["grid_generator", "heat_sink_array"],
+	MechLoadout.MechSlot.LEGS: ["strider_legs"],
+}
+const STAGE_02_FALLBACK_PART_IDS := {
+	MechLoadout.MechSlot.BODY: "kestrel_core",
+	MechLoadout.MechSlot.HEAD: "falcon_sensor",
+	MechLoadout.MechSlot.LEFT_ARM: "rx_autocannon",
+	MechLoadout.MechSlot.RIGHT_ARM: "rx_autocannon",
+	MechLoadout.MechSlot.BACKPACK: "grid_generator",
+	MechLoadout.MechSlot.LEGS: "strider_legs",
+}
 
 @onready var mech_preview: MechWireframePreview = $MechPreview
 
@@ -65,7 +83,10 @@ var _scenario_dialogue: ScenarioDialogue
 
 func _ready() -> void:
 	var user_args := OS.get_cmdline_user_args()
-	if user_args.has("--story-hangar-stage-04-smoke"):
+	if user_args.has("--story-hangar-stage-02-smoke"):
+		GameSession.selected_game_mode = GameSession.GameMode.STORY
+		GameSession.story_deployment_scene_path = STAGE_02_PATH
+	elif user_args.has("--story-hangar-stage-04-smoke"):
 		GameSession.selected_game_mode = GameSession.GameMode.STORY
 		GameSession.story_deployment_scene_path = "res://scenes/stage_04.tscn"
 	elif user_args.has("--story-hangar-smoke") or user_args.has("--story-deploy-smoke"):
@@ -73,6 +94,8 @@ func _ready() -> void:
 		GameSession.story_deployment_scene_path = "res://scenes/stage_03.tscn"
 	if not _build_catalog():
 		return
+	if user_args.has("--story-hangar-stage-02-smoke"):
+		GameSession.player_mech_loadout = _part_catalog.create_default_loadout()
 	_working_loadout = _initial_loadout()
 	_build_interface()
 	_refresh()
@@ -84,6 +107,8 @@ func _ready() -> void:
 		and _scenario_dialogue.play_file(ENDLESS_INTRO_PATH)
 	):
 		GameSession.endless_intro_shown = true
+	elif _is_stage_02_story_deployment():
+		_scenario_dialogue.play_file(STAGE_02_HANGAR_DIALOGUE_PATH)
 	elif (
 		GameSession.selected_game_mode == GameSession.GameMode.STORY
 		and GameSession.story_deployment_scene_path == "res://scenes/stage_03.tscn"
@@ -112,6 +137,8 @@ func _ready() -> void:
 		get_tree().quit(0)
 	if OS.get_cmdline_user_args().has("--story-hangar-smoke"):
 		call_deferred("_run_story_hangar_smoke")
+	if user_args.has("--story-hangar-stage-02-smoke"):
+		call_deferred("_run_story_hangar_stage_02_smoke")
 	if user_args.has("--story-hangar-stage-04-smoke"):
 		call_deferred("_run_story_hangar_stage_04_smoke")
 	if OS.get_cmdline_user_args().has("--story-deploy-smoke"):
@@ -141,6 +168,40 @@ func _run_story_hangar_smoke() -> void:
 	assert(_scenario_dialogue.current_text() == "아레나의 보스에 도전할 기회를 얻었네 축하해.")
 	assert(_scenario_dialogue.dialogue.size() == 4)
 	print("STORY_HANGAR_CHECK passed")
+	get_tree().quit(0)
+
+
+func _run_story_hangar_stage_02_smoke() -> void:
+	assert(_is_stage_02_story_deployment())
+	assert(_deployment_scene_path() == STAGE_02_PATH)
+	assert(_loadout_matches_deployment_policy(_working_loadout))
+	for slot in SLOT_ORDER:
+		assert(_working_loadout.part_for_slot(slot).part_id == STAGE_02_FALLBACK_PART_IDS[slot])
+		_open_part_picker(slot)
+		var actual_ids: Array[String] = []
+		for part_value in _candidate_parts.values():
+			var part := part_value as MechPartSpec
+			actual_ids.append(part.part_id if part != null else "")
+		var expected_ids: Array[String] = []
+		expected_ids.assign(STAGE_02_ALLOWED_PART_IDS[slot])
+		if _is_optional(slot):
+			expected_ids.append("")
+		actual_ids.sort()
+		expected_ids.sort()
+		assert(actual_ids == expected_ids)
+	_close_part_picker()
+	assert(_scenario_dialogue.current_speaker() == "오퍼레이터")
+	var expected_texts := [
+		"여기는 출격 전에 사용 가능한 무장을 선택 가능한 격납고야.",
+		"가장 중요한건 최소한 하나의 무장을 선택해야 한다는 것과, 다리가 허용 가능한 중량 내에서 조합을 해야 한다는 거지.",
+		"기체가 무거워질수록 회피 거리가 짧아지고, 기동력이 줄어들수록 기동력과 회피 속도가 느려져서 미사일을 피하기가 어려워져.",
+		"이제 원하는 대로 기체를 세트후 에 출격해.",
+	]
+	for expected_text in expected_texts:
+		assert(_scenario_dialogue.current_text() == expected_text)
+		_scenario_dialogue.advance()
+	assert(not _scenario_dialogue.active)
+	print("STORY_HANGAR_STAGE_02_CHECK passed")
 	get_tree().quit(0)
 
 
@@ -354,9 +415,48 @@ func _build_catalog() -> bool:
 
 func _initial_loadout() -> MechLoadout:
 	var saved_loadout := GameSession.load_saved_player_loadout(_part_catalog)
-	if saved_loadout != null:
+	if saved_loadout != null and _loadout_matches_deployment_policy(saved_loadout):
 		return saved_loadout
+	if _is_stage_02_story_deployment():
+		var fallback := _create_stage_02_fallback_loadout()
+		GameSession.player_mech_loadout = fallback.copy()
+		return fallback
 	return _part_catalog.create_default_loadout()
+
+
+func _is_stage_02_story_deployment() -> bool:
+	return (
+		GameSession.selected_game_mode == GameSession.GameMode.STORY
+		and GameSession.story_deployment_scene_path == STAGE_02_PATH
+	)
+
+
+func _loadout_matches_deployment_policy(loadout: MechLoadout) -> bool:
+	if not _is_stage_02_story_deployment():
+		return true
+	if loadout == null or not loadout.is_valid():
+		return false
+	for slot in SLOT_ORDER:
+		if not _is_part_allowed_for_deployment(slot, loadout.part_for_slot(slot)):
+			return false
+	return true
+
+
+func _is_part_allowed_for_deployment(slot: MechLoadout.MechSlot, part: MechPartSpec) -> bool:
+	if not _is_stage_02_story_deployment():
+		return true
+	if part == null:
+		return _is_optional(slot)
+	return part.part_id in STAGE_02_ALLOWED_PART_IDS[slot]
+
+
+func _create_stage_02_fallback_loadout() -> MechLoadout:
+	var loadout := MechLoadout.new()
+	for slot in SLOT_ORDER:
+		var part_id: String = STAGE_02_FALLBACK_PART_IDS[slot]
+		loadout.set_part(slot, _part_catalog.parts_by_id[part_id])
+	assert(loadout.is_valid())
+	return loadout
 
 
 func _open_part_picker(slot: MechLoadout.MechSlot) -> void:
@@ -371,7 +471,8 @@ func _open_part_picker(slot: MechLoadout.MechSlot) -> void:
 		_add_candidate_button(null)
 	var expected_type := _part_type_for_slot(slot)
 	for part: MechPartSpec in _catalog.get(expected_type, []):
-		_add_candidate_button(part)
+		if _is_part_allowed_for_deployment(slot, part):
+			_add_candidate_button(part)
 	_pending_part = _working_loadout.part_for_slot(_active_slot)
 	_update_candidate_details()
 	_overlay.visible = true
@@ -478,6 +579,9 @@ func _close_part_picker() -> void:
 
 
 func _confirm_loadout() -> void:
+	if not _loadout_matches_deployment_policy(_working_loadout):
+		_working_loadout = _create_stage_02_fallback_loadout()
+		_refresh()
 	if not _working_loadout.is_valid():
 		return
 	GameSession.confirm_player_loadout(_working_loadout)

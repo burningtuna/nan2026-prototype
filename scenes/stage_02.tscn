@@ -10,6 +10,7 @@
 script = ExtResource("2_screen")
 automatic_return_to_hangar = false
 tutorial_enabled = false
+next_story_stage_path = "res://scenes/stage_03.tscn"
 
 [node name="SampleAssembly" parent="CombatContainer/CombatViewport" index="0"]
 arena = Rect2(-1500, -1000, 3000, 2000)
@@ -44,14 +45,21 @@ script = ExtResource("5_spawn")
 unit_id = "PLAYER"
 team_id = 0
 player_controlled = true
+use_session_loadout = true
 team_color = Color(0.443137, 0.85098, 0.909804, 1)
+head_id = "falcon_sensor"
+body_id = "kestrel_core"
+left_arm_id = "rx_autocannon"
+right_arm_id = "rx_autocannon"
+backpack_id = "grid_generator"
+legs_id = "strider_legs"
 
 [node name="AllySpawn" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
 position = Vector2(-950, 280)
 script = ExtResource("5_spawn")
 unit_id = "ALLY-01"
 team_id = 0
-movement_type = 1
+movement_type = 0
 random_seed = 9119
 team_color = Color(0.560784, 0.682353, 1, 1)
 
@@ -60,7 +68,7 @@ position = Vector2(950, -280)
 rotation = 3.14159
 script = ExtResource("5_spawn")
 unit_id = "ENEMY-01"
-movement_type = 1
+movement_type = 0
 random_seed = 17038
 
 [node name="Enemy02" type="Marker2D" parent="CombatContainer/CombatViewport/StoryStage/Spawns"]
@@ -68,7 +76,7 @@ position = Vector2(950, 280)
 rotation = 3.14159
 script = ExtResource("5_spawn")
 unit_id = "ENEMY-02"
-movement_type = 1
+movement_type = 0
 random_seed = 24957
 team_color = Color(1, 0.690196, 0.372549, 1)
 

@@ -467,6 +467,8 @@ func _run_stage_04_smoke() -> void:
 	GameSession.delete_story_progress()
 	_finish_success()
 	assert(GameSession.story_flag(&"stage_04_survivors", -1) == 1)
+	assert(GameSession.story_deployment_scene_path == "res://scenes/stage_05.tscn")
+	assert(_mission_transition_path(true) == STORY_HANGAR_PATH)
 	GameSession.delete_story_progress()
 	GameSession.story_progress.clear()
 	GameSession.story_progress_path = original_path
