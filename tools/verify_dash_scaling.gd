@@ -174,9 +174,9 @@ func _initialize() -> void:
 	agent.dash_speed = 0.0
 	assert(not agent._consume_dash_resources())
 
-	assert(is_equal_approx(weapon_catalog.projectiles_by_id["projectile_missile_rapid"].damage, 0.9))
-	assert(is_equal_approx(weapon_catalog.projectiles_by_id["projectile_missile_standard"].damage, 3.75))
-	assert(is_equal_approx(weapon_catalog.projectiles_by_id["projectile_missile_heavy"].damage, 7.5))
+	assert(is_equal_approx(weapon_catalog.projectiles_by_id["projectile_missile_rapid"].damage, 30.99))
+	assert(is_equal_approx(weapon_catalog.projectiles_by_id["projectile_missile_standard"].damage, 48.56))
+	assert(is_equal_approx(weapon_catalog.projectiles_by_id["projectile_missile_heavy"].damage, 74.9))
 
 	agent.free()
 	print("DASH_SCALING_CHECK passed")

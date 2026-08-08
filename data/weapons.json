@@ -100,7 +100,7 @@
 	{
 	  "collision_radius": 1.0,
 	  "color": "ffd37aff",
-	  "damage": 14.0,
+	  "damage": 23.97,
 	  "damage_type": "kinetic",
 	  "homing": false,
 	  "homing_turn_speed_degrees": 0.0,
@@ -116,7 +116,7 @@
 	{
 	  "collision_radius": 1.8,
 	  "color": "ffb450ff",
-	  "damage": 100.0,
+	  "damage": 177.94,
 	  "damage_type": "kinetic",
 	  "homing": false,
 	  "homing_turn_speed_degrees": 0.0,
@@ -164,7 +164,7 @@
 	{
 	  "collision_radius": 2.0,
 	  "color": "bff1ffff",
-	  "damage": 200.0,
+	  "damage": 219.54,
 	  "damage_type": "energy",
 	  "homing": false,
 	  "homing_turn_speed_degrees": 0.0,
@@ -181,7 +181,7 @@
 	{
 	  "collision_radius": 1.2,
 	  "color": "ffc750ff",
-	  "damage": 0.9,
+	  "damage": 30.99,
 	  "damage_type": "explosive",
 	  "homing": true,
 	  "homing_turn_speed_degrees": 300.0,
@@ -198,7 +198,7 @@
 	{
 	  "collision_radius": 2.0,
 	  "color": "ffb02eff",
-	  "damage": 3.75,
+	  "damage": 48.56,
 	  "damage_type": "explosive",
 	  "homing": true,
 	  "homing_turn_speed_degrees": 200.0,
@@ -215,7 +215,7 @@
 	{
 	  "collision_radius": 3.0,
 	  "color": "ff871eff",
-	  "damage": 7.5,
+	  "damage": 74.9,
 	  "damage_type": "explosive",
 	  "homing": true,
 	  "homing_turn_speed_degrees": 90.0,
@@ -265,7 +265,7 @@
 	{
 	  "collision_radius": 1.2,
 	  "color": "ffa040ff",
-	  "damage": 10.0,
+	  "damage": 28.08,
 	  "damage_type": "kinetic",
 	  "homing": false,
 	  "homing_turn_speed_degrees": 0.0,

@@ -30,9 +30,9 @@ func _initialize() -> void:
 	assert(is_equal_approx(missile_radar.missile_proximity_fuse_radius_multiplier, 3.0))
 	assert(is_equal_approx(missile_radar.missile_damage_multiplier, 1.5))
 	assert(missile_radar.missile_ignores_evasion)
-	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_rapid").projectile.damage, 0.9))
-	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_standard").projectile.damage, 3.75))
-	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_heavy").projectile.damage, 7.5))
+	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_rapid").projectile.damage, 30.99))
+	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_standard").projectile.damage, 48.56))
+	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_heavy").projectile.damage, 74.9))
 	assert(is_equal_approx(weapon_catalog.weapon("weapon_missile_sniper_backpack").projectile.damage, 200.0))
 	_verify_head_profiles(falcon, raven, bastion, weapon_catalog)
 
